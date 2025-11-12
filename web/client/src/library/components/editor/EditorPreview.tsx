@@ -1,5 +1,5 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Tab } from '@headlessui/react'
+import { Fragment, Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { TabGroup, TabPanel, TabPanels } from '@headlessui/react'
 import clsx from 'clsx'
 import { includes, isArrayEmpty, isFalse, isNotNil } from '~/utils'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
@@ -9,7 +9,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { EnumFileExtensions } from '@models/file'
 import { CodeEditorDefault } from './EditorCode'
 import { EnumRoutes } from '~/routes'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import TableDiff from '@components/tableDiff/TableDiff'
 import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
@@ -155,7 +155,8 @@ export default function EditorPreview({
           <h3 className="text-md">No Data To Preview</h3>
         </div>
       ) : (
-        <Tab.Group
+        <TabGroup
+          as={Fragment}
           key={tab.id}
           onChange={setActiveTabIndex}
           selectedIndex={activeTabIndex}
@@ -186,9 +187,9 @@ export default function EditorPreview({
               </Button>
             </div>
           </TabList>
-          <Tab.Panels className="h-full w-full overflow-hidden">
+          <TabPanels className="h-full w-full overflow-hidden">
             {isNotNil(previewTable) && (
-              <Tab.Panel
+              <TabPanel
                 unmount={false}
                 className={clsx(
                   'w-full h-full pt-4 relative px-2',
@@ -196,10 +197,10 @@ export default function EditorPreview({
                 )}
               >
                 <Table data={previewTable} />
-              </Tab.Panel>
+              </TabPanel>
             )}
             {isNotNil(previewQuery) && tab.file.isRemote && (
-              <Tab.Panel
+              <TabPanel
                 unmount={false}
                 className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
               >
@@ -211,10 +212,11 @@ export default function EditorPreview({
                     className="text-xs"
                   />
                 </div>
-              </Tab.Panel>
+              </TabPanel>
             )}
             {showLineage && (
-              <Tab.Panel
+              <TabPanel
+                as="div"
                 unmount={false}
                 className={clsx(
                   'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
@@ -227,10 +229,11 @@ export default function EditorPreview({
                 >
                   <ModelLineage model={model} />
                 </Suspense>
-              </Tab.Panel>
+              </TabPanel>
             )}
             {isNotNil(previewDiff?.row_diff) && (
-              <Tab.Panel
+              <TabPanel
+                as="div"
                 unmount={false}
                 className={clsx(
                   'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
@@ -240,10 +243,10 @@ export default function EditorPreview({
                   key={tab.id}
                   diff={previewDiff}
                 />
-              </Tab.Panel>
+              </TabPanel>
             )}
             {showErrors && (
-              <Tab.Panel
+              <TabPanel
                 unmount={false}
                 className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2"
               >
@@ -262,10 +265,10 @@ export default function EditorPreview({
                       </li>
                     ))}
                 </ul>
-              </Tab.Panel>
+              </TabPanel>
             )}
-          </Tab.Panels>
-        </Tab.Group>
+          </TabPanels>
+        </TabGroup>
       )}
     </div>
   )

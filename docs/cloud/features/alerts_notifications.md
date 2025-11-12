@@ -32,8 +32,6 @@ Tobiko Cloud sends an alert based on a *trigger*. There are two types of trigger
 
 Events are tied to steps in the SQLMesh `plan` and `run` processes. For example, you could alert whenever a `plan` succeeded or a `run` failed.
 
-Measures are based on either [automatically calculated measures](../../guides/observer.md#measures) like run time or [custom measure you define](../../guides/observer.md#custom-measures) via SQL queries.
-
 Choose whether the alert will be triggered by a Measure or Event in the alert's Trigger Type field.
 
 ![Image showing the add Alert page trigger type field](./alerts_notifications/add_alert_trigger_type.png)
@@ -63,7 +61,7 @@ Finally, choose a Notification Target where the alert should be sent (described 
 
 ### Measure triggers
 
-Tobiko Cloud Alerts can be triggered when a [measure](../../guides/observer.md#measures) exceeds a threshold or meets a condition.
+Tobiko Cloud Alerts can be triggered when a measure exceeds a threshold or meets a condition.
 
 To configure a measure alert, first build the condition that triggers the measure. Choose the measure of interest, the comparison operator, and a threshold value.
 
@@ -74,8 +72,6 @@ Now specify the alert Artifact field.
 Some measures, like run time, are most useful when accumulated over an entire `plan` or `run`. For example, you might want to alert whenever a `run`'s total run time is longer than four hours.
 
 Configure a cumulative measure alert by choosing an Artifact type of Plan or Run.
-
-Other measure alerts are useful when applied to individual models or steps in a `plan` or `run`. For example, you might know that your `users` model should process around 1000 new users each day. You could [create a measure](../../guides/observer.md#custom-measures) to track the number of new users and an alert that notifies you if that number drops below 500.
 
 Configure a non-cumulative measure alert by choosing an Artifact type of Measure.
 

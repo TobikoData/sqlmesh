@@ -4,13 +4,17 @@ import typing as t
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
+import logging
 
 from pydantic import Field
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model
+from sqlmesh.core.model.common import ParsableSql
+from sqlmesh.core.node import DbtNodeInfo
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -20,11 +24,13 @@ from sqlmesh.dbt.common import (
     DbtConfig,
     Dependencies,
     GeneralConfig,
+    RAW_CODE_KEY,
     SqlStr,
     sql_str_validator,
 )
 from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
@@ -35,6 +41,9 @@ if t.TYPE_CHECKING:
 
 
 BMC = t.TypeVar("BMC", bound="BaseModelConfig")
+
+
+logger = logging.getLogger(__name__)
 
 
 class Materialization(str, Enum):
@@ -48,6 +57,12 @@ class Materialization(str, Enum):
 
     # Snowflake, https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
     DYNAMIC_TABLE = "dynamic_table"
+
+    CUSTOM = "custom"
+
+    @classmethod
+    def _missing_(cls, value):  # type: ignore
+        return cls.CUSTOM
 
 
 class SnapshotStrategy(str, Enum):
@@ -73,7 +88,7 @@ class Hook(DbtConfig):
     """
 
     sql: SqlStr
-    transaction: bool = True  # TODO not yet supported
+    transaction: bool = True
 
     _sql_validator = sql_str_validator
 
@@ -113,8 +128,10 @@ class BaseModelConfig(GeneralConfig):
     grain: t.Union[str, t.List[str]] = []
 
     # DBT configuration fields
+    unique_id: str = ""
     name: str = ""
     package_name: str = ""
+    fqn_: t.List[str] = Field(default_factory=list, alias="fqn")
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
@@ -124,6 +141,7 @@ class BaseModelConfig(GeneralConfig):
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: t.Dict[str, t.Optional[bool]] = {}
+    event_time: t.Optional[str] = None
 
     version: t.Optional[int] = None
     latest_version: t.Optional[int] = None
@@ -148,7 +166,11 @@ class BaseModelConfig(GeneralConfig):
 
     @field_validator("grants", mode="before")
     @classmethod
-    def _validate_grants(cls, v: t.Dict[str, str]) -> t.Dict[str, t.List[str]]:
+    def _validate_grants(
+        cls, v: t.Optional[t.Dict[str, str]]
+    ) -> t.Optional[t.Dict[str, t.List[str]]]:
+        if v is None:
+            return None
         return {key: ensure_list(value) for key, value in v.items()}
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -161,14 +183,6 @@ class BaseModelConfig(GeneralConfig):
             "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
-
-    @property
-    def sql_no_config(self) -> SqlStr:
-        return SqlStr("")
-
-    @property
-    def sql_embedded_config(self) -> SqlStr:
-        return SqlStr("")
 
     @property
     def table_schema(self) -> str:
@@ -224,6 +238,12 @@ class BaseModelConfig(GeneralConfig):
         else:
             relation_type = RelationType.Table
 
+        extras = {}
+        if DBT_VERSION >= (1, 9, 0) and self.event_time:
+            extras["event_time_filter"] = {
+                "field_name": self.event_time,
+            }
+
         return AttributeDict(
             {
                 "database": self.database,
@@ -231,6 +251,7 @@ class BaseModelConfig(GeneralConfig):
                 "identifier": self.table_name,
                 "type": relation_type.value,
                 "quote_policy": AttributeDict(self.quoting),
+                **extras,
             }
         )
 
@@ -244,12 +265,9 @@ class BaseModelConfig(GeneralConfig):
         dependencies.macros = []
         return dependencies
 
-    def check_for_circular_test_refs(self, context: DbtContext) -> None:
+    def remove_tests_with_invalid_refs(self, context: DbtContext) -> None:
         """
-        Checks for direct circular references between two models and raises an exception if found.
-        This addresses the most common circular reference seen when importing a dbt project -
-        relationship tests in both directions. In the future, we may want to increase coverage by
-        checking for indirect circular references.
+        Removes tests that reference models or sources that do not exist in the context in order to match dbt behavior.
 
         Args:
             context: The dbt context this model resides within.
@@ -257,36 +275,24 @@ class BaseModelConfig(GeneralConfig):
         Returns:
             None
         """
-        for test in self.tests:
-            for ref in test.dependencies.refs:
-                model = context.refs[ref]
-                if ref == self.name or ref in self.dependencies.refs:
-                    continue
-                elif self.name in model.dependencies.refs:
-                    raise ConfigError(
-                        f"Test '{test.name}' for model '{self.name}' depends on downstream model '{model.name}'."
-                        " Move the test to the downstream model to avoid circular references."
-                    )
-                elif self.name in model.tests_ref_source_dependencies.refs:
-                    circular_test = next(
-                        test.name for test in model.tests if ref in test.dependencies.refs
-                    )
-                    raise ConfigError(
-                        f"Circular reference detected between tests for models '{self.name}' and '{model.name}':"
-                        f" '{test.name}' ({self.name}), '{circular_test}' ({model.name})."
-                    )
+        self.tests = [
+            test
+            for test in self.tests
+            if all(ref in context.refs for ref in test.dependencies.refs)
+            and all(source in context.sources for source in test.dependencies.sources)
+        ]
+
+    @property
+    def fqn(self) -> str:
+        return ".".join(self.fqn_)
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "storage_format"}
 
     @property
-    def node_name(self) -> str:
-        resource_type = getattr(self, "resource_type", "model")
-        node_name = f"{resource_type}.{self.package_name}.{self.name}"
-        if self.version:
-            node_name += f".v{self.version}"
-        return node_name
+    def node_info(self) -> DbtNodeInfo:
+        return DbtNodeInfo(unique_id=self.unique_id, name=self.name, fqn=self.fqn, alias=self.alias)
 
     def sqlmesh_model_kwargs(
         self,
@@ -294,48 +300,58 @@ class BaseModelConfig(GeneralConfig):
         column_types_override: t.Optional[t.Dict[str, ColumnConfig]] = None,
     ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
-        self.check_for_circular_test_refs(context)
+        self.remove_tests_with_invalid_refs(context)
+
+        dependencies = self.dependencies.copy()
+        if dependencies.has_dynamic_var_names:
+            # Include ALL variables as dependencies since we couldn't determine
+            # precisely which variables are referenced in the model
+            dependencies.variables |= set(context.variables)
+
+        if (
+            getattr(self, "model_materialization", None) == Materialization.CUSTOM
+            and hasattr(self, "_get_custom_materialization")
+            and (custom_mat := self._get_custom_materialization(context))
+        ):
+            # include custom materialization dependencies as they might use macros
+            dependencies = dependencies.union(custom_mat.dependencies)
+
         model_dialect = self.dialect(context)
+
+        # Only keep refs and sources that exist in the context to match dbt behavior
+        dependencies.refs.intersection_update(context.refs)
+        dependencies.sources.intersection_update(context.sources)
         model_context = context.context_for_dependencies(
-            self.dependencies.union(self.tests_ref_source_dependencies)
+            dependencies.union(self.tests_ref_source_dependencies)
         )
         jinja_macros = model_context.jinja_macros.trim(
-            self.dependencies.macros, package=self.package_name
+            dependencies.macros, package=self.package_name
         )
+        jinja_macros.add_globals(self._model_jinja_context(model_context, dependencies))
 
-        model_node: AttributeDict[str, t.Any] = AttributeDict(
-            {
-                k: v
-                for k, v in context._manifest._manifest.nodes[self.node_name].to_dict().items()
-                if k in self.dependencies.model_attrs
-            }
-            if context._manifest and self.node_name in context._manifest._manifest.nodes
-            else {}
-        )
-
-        jinja_macros.add_globals(
-            {
-                "this": self.relation_info,
-                "model": model_node,
-                "schema": self.table_schema,
-                "config": self.config_attribute_dict,
-                **model_context.jinja_globals,  # type: ignore
-            }
-        )
-        return {
-            "audits": [(test.name, {}) for test in self.tests],
-            "columns": column_types_to_sqlmesh(
-                column_types_override or self.columns, self.dialect(context)
-            )
-            or None,
+        model_kwargs = {
+            "audits": [(test.canonical_name, {}) for test in self.tests],
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()
-            }.union({source.canonical_name(context) for source in model_context.sources.values()}),
+            }.union(
+                {
+                    source.canonical_name(context)
+                    for source in model_context.sources.values()
+                    if source.fqn not in context.model_fqns
+                    # Allow dbt projects to reference a model as a source without causing a cycle
+                },
+            ),
             "jinja_macros": jinja_macros,
             "path": self.path,
-            "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
-            "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
+            "pre_statements": [
+                ParsableSql(sql=d.jinja_statement(hook.sql).sql(), transaction=hook.transaction)
+                for hook in self.pre_hook
+            ],
+            "post_statements": [
+                ParsableSql(sql=d.jinja_statement(hook.sql).sql(), transaction=hook.transaction)
+                for hook in self.post_hook
+            ],
             "tags": self.tags,
             "physical_schema_mapping": context.sqlmesh_config.physical_schema_mapping,
             "default_catalog": context.target.database,
@@ -343,8 +359,54 @@ class BaseModelConfig(GeneralConfig):
             **self.sqlmesh_config_kwargs,
         }
 
+        # dbt doesn't respect the data_type field for DDL statements– instead, it optionally uses
+        # it to validate the actual data types at runtime through contracts or external plugins.
+        # Only the `columns_types` config of seed models is actually respected. We don't set the
+        # columns attribute to self.columns intentionally in all other cases, as that could result
+        # in unfaithful types when models are materialized.
+        #
+        # See:
+        # - https://docs.getdbt.com/reference/resource-properties/columns
+        # - https://docs.getdbt.com/reference/resource-configs/contract
+        # - https://docs.getdbt.com/reference/resource-configs/column_types
+        if column_types_override:
+            model_kwargs["columns"] = (
+                column_types_to_sqlmesh(column_types_override, self.dialect(context)) or None
+            )
+
+        return model_kwargs
+
     @abstractmethod
     def to_sqlmesh(
-        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+        self,
+        context: DbtContext,
+        audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Model:
         """Convert DBT model into sqlmesh Model"""
+
+    def _model_jinja_context(
+        self, context: DbtContext, dependencies: Dependencies
+    ) -> t.Dict[str, t.Any]:
+        if context._manifest and self.unique_id in context._manifest._manifest.nodes:
+            attributes = context._manifest._manifest.nodes[self.unique_id].to_dict()
+            if dependencies.model_attrs.all_attrs:
+                model_node: AttributeDict[str, t.Any] = AttributeDict(attributes)
+            else:
+                model_node = AttributeDict(
+                    filter(lambda kv: kv[0] in dependencies.model_attrs.attrs, attributes.items())
+                )
+
+            # We exclude the raw SQL code to reduce the payload size. It's still accessible through
+            # the JinjaQuery instance stored in the resulting SQLMesh model's `query` field.
+            model_node.pop(RAW_CODE_KEY, None)
+        else:
+            model_node = AttributeDict({})
+
+        return {
+            "this": self.relation_info,
+            "model": model_node,
+            "schema": self.table_schema,
+            "config": self.config_attribute_dict,
+            **context.jinja_globals,
+        }

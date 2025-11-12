@@ -12,6 +12,7 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,10 @@ class FileCache(t.Generic[T]):
         threshold = to_datetime("1 week ago").timestamp()
         # delete all old cache files
         for file in self._path.glob("*"):
+            if IS_WINDOWS:
+                # the file.stat() call below will fail on windows if the :file name is longer than 260 chars
+                file = fix_windows_path(file)
+
             if not file.stem.startswith(self._cache_version) or file.stat().st_atime < threshold:
                 file.unlink(missing_ok=True)
 
@@ -132,4 +137,8 @@ class FileCache(t.Generic[T]):
 
     def _cache_entry_path(self, name: str, entry_id: str = "") -> Path:
         entry_file_name = "__".join(p for p in (self._cache_version, name, entry_id) if p)
-        return self._path / sanitize_name(entry_file_name)
+        full_path = self._path / sanitize_name(entry_file_name, include_unicode=True)
+        if IS_WINDOWS:
+            # handle paths longer than 260 chars
+            full_path = fix_windows_path(full_path)
+        return full_path

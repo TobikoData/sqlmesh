@@ -16,29 +16,45 @@ This section describes the other root level configuration parameters.
 
 Configuration options for SQLMesh project directories.
 
-| Option             | Description                                                                                                        |     Type     | Required |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------ | :----------: | :------: |
-| `ignore_patterns`  | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`) | list[string] |    N     |
-| `project`          | The project name of this config. Used for [multi-repo setups](../guides/multi_repo.md).                            | string       |    N     |
+| Option             | Description                                                                                                                 |     Type     | Required |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- | :----------: | :------: |
+| `ignore_patterns`  | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`)          | list[string] |    N     |
+| `project`          | The project name of this config. Used for [multi-repo setups](../guides/multi_repo.md).                                     | string       |    N     |
+| `cache_dir`        | The directory to store the SQLMesh cache. Can be an absolute path or relative to the project directory. (Default: `.cache`) | string       |    N     |
+| `log_limit`        | The default number of historical log files to keep (Default: `20`)                                                          | int          |    N     |
 
-### Environments
+### Database (Physical Layer)
 
-Configuration options for SQLMesh environment creation and promotion.
+Configuration options for how SQLMesh manages database objects in the [physical layer](../concepts/glossary.md#physical-layer).
 
 | Option                        | Description                                                                                                                                                                                                                                                                                        | Type                 | Required |
 |-------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
 | `snapshot_ttl`                | The period of time that a model snapshot not a part of any environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`) | string               | N        |
-| `environment_ttl`             | The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`)                      | string               | N        |
-| `pinned_environments`         | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               | list[string]         | N        |
-| `time_column_format`          | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        | string               | N        |
-| `default_target_environment`  | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   | string               | N        |
 | `physical_schema_override`    | (Deprecated) Use `physical_schema_mapping` instead. A mapping from model schema names to names of schemas in which physical tables for the corresponding models will be placed.                                                                                                                    | dict[string, string] | N        |
 | `physical_schema_mapping`     | A mapping from regular expressions to names of schemas in which physical tables for the corresponding models [will be placed](../guides/configuration.md#physical-table-schemas). (Default physical schema name: `sqlmesh__[model schema]`)                                                        | dict[string, string] | N        |
-| `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                 | string               | N        |
-| `environment_catalog_mapping` | A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.                                                                                                                                                             | dict[string, string] | N        |
-| `log_limit`                   | The default number of logs to keep (Default: `20`)                                                                                                                                                                                                                                                 | int                  | N        |
+| `physical_table_naming_convention`| Sets which parts of the model name are included in the physical table names. Options are `schema_and_table`, `table_only` or `hash_md5` - [additional details](../guides/configuration.md#physical-table-naming-convention). (Default: `schema_and_table`)                                     | string               | N        |
 
-### Model defaults
+### Environments (Virtual Layer)
+
+Configuration options for how SQLMesh manages environment creation and promotion in the [virtual layer](../concepts/glossary.md#virtual-layer).
+
+| Option                        | Description                                                                                                                                                                                                                                                                                        | Type                 | Required |
+|-------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
+| `environment_ttl`             | The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`)                      | string               | N        |
+| `pinned_environments`         | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               | list[string]         | N        |
+| `default_target_environment`  | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   | string               | N        |
+| `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema`, `table` or `catalog` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                      | string               | N        |
+| `gateway_managed_virtual_layer`   | Whether SQLMesh views of the virtual layer will be created by the default gateway or model specified gateways - [additional details](../guides/multi_engine.md#gateway-managed-virtual-layer). (Default: False)                                                                                | boolean              | N        |
+| `environment_catalog_mapping` | A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.                                                                                                                                                             | dict[string, string] | N        |
+| `virtual_environment_mode` | Determines the Virtual Data Environment (VDE) mode. If set to `full`, VDE is used in both production and development environments. The `dev_only` option enables VDE only in development environments, while in production, no virtual layer is used and models are materialized directly using their original names (i.e., no versioned physical tables). (Default: `full`) | string | N |
+
+### Models
+
+| Option                        | Description                                                                                                                                                                                                                                                                                        | Type                 | Required |
+|-------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
+| `time_column_format`          | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        | string               | N        |
+| `infer_python_dependencies`   | Whether SQLMesh will statically analyze Python code to automatically infer Python package requirements. (Default: True)                                                                                                                                                                            | boolean              | N        |
+| `model_defaults`              | Default [properties](./model_configuration.md#model-defaults) to set on each model. At a minimum, `dialect` must be set.                                                                                                                                                                           | dict[string, any]    | Y        |
 
 The `model_defaults` key is **required** and must contain a value for the `dialect` key.
 
@@ -78,6 +94,7 @@ Configuration for the `sqlmesh plan` command.
 | `enable_preview`          | Indicates whether to enable [data preview](../concepts/plans.md#data-preview) for forward-only models when targeting a development environment (Default: True, except for dbt projects where the target engine does not support cloning)                | Boolean              | N        |
 | `no_diff`                 | Don't show diffs for changed models (Default: False)                                                                                                                                                                                                    | boolean              | N        |
 | `no_prompts`              | Disables interactive prompts in CLI (Default: True)                                                                                                                                                                                                     | boolean              | N        |
+| `always_recreate_environment`              | Always recreates the target environment from the environment specified in `create_from` (by default `prod`) (Default: False)                                                                                                                                                                                                     | boolean              | N        |
 
 ## Run
 
@@ -103,6 +120,17 @@ Formatting settings for the `sqlmesh format` command and UI.
 | `append_newline`      | Whether to append a newline to the end of the file (Default: False)                            | boolean |    N     |
 | `no_rewrite_casts`    | Preserve the existing casts, without rewriting them to use the :: syntax. (Default: False)                  | boolean |    N     |
 
+
+## Janitor
+
+Configuration for the `sqlmesh janitor` command.
+
+| Option                          | Description                                                                                                                | Type    | Required |
+|---------------------------------|----------------------------------------------------------------------------------------------------------------------------|:-------:|:--------:|
+| `warn_on_delete_failure`        | Whether to warn instead of erroring if the janitor fails to delete the expired environment schema / views (Default: False) | boolean | N        |
+| `expired_snapshots_batch_size`  | Maximum number of expired snapshots to clean in a single batch (Default: 200)                                              | int     | N        |
+
+
 ## UI
 
 SQLMesh UI settings.
@@ -115,7 +143,7 @@ SQLMesh UI settings.
 
 The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler.
 
-It takes one or more named `gateway` configuration keys, each of which can define its own connections. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
+It takes one or more named `gateway` configuration keys, each of which can define its own connections. **Gateway names are case-insensitive** - SQLMesh normalizes all gateway names to lowercase during configuration validation, allowing you to use any case when referencing gateways. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
 
 For example, a project might configure the `gate1` and `gate2` gateways:
 
@@ -124,7 +152,7 @@ gateways:
   gate1:
     connection:
       ...
-    state_connection: # defaults to `connection` if omitted and not using airflow or google cloud composer scheduler
+    state_connection: # defaults to `connection` if omitted
       ...
     test_connection: # defaults to `connection` if omitted
       ...
@@ -148,7 +176,7 @@ A named gateway key may define any or all of a data warehouse connection, state 
 Some connections use default values if not specified:
 
 - The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
-- The state connection defaults to `connection` unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers, the state connection defaults to the scheduler's database.
+- The state connection defaults to `connection` if omitted.
 - The test connection defaults to `connection` if omitted.
 
 NOTE: Spark and Trino engines may not be used for the state connection.
@@ -201,7 +229,7 @@ These pages describe the connection configuration options for each execution eng
 
 Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md).
 
-By default, the scheduler type is set to `builtin` and uses the gateway's connection to store metadata. Use the `airflow` type to integrate with Airflow.
+By default, the scheduler type is set to `builtin` and uses the gateway's connection to store metadata.
 
 Below is the list of configuration options specific to each corresponding scheduler type. Find additional details in the [configuration overview scheduler section](../guides/configuration.md#scheduler).
 
@@ -210,44 +238,6 @@ Below is the list of configuration options specific to each corresponding schedu
 **Type:** `builtin`
 
 No configuration options are supported by this scheduler type.
-
-#### Airflow
-
-**Type:** `airflow`
-
-See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh.
-
-| Option                            | Description                                                                                                                                                                                                                                                                                                     |  Type   | Required |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-----: | :------: |
-| `airflow_url`                     | The URL of the Airflow Webserver                                                                                                                                                                                                                                                                                | string  |    Y     |
-| `username`                        | The Airflow username                                                                                                                                                                                                                                                                                            | string  |    Y     |
-| `password`                        | The Airflow password                                                                                                                                                                                                                                                                                            | string  |    Y     |
-| `dag_run_poll_interval_secs`      | Determines, in seconds, how often a running DAG can be polled (Default: `10`)                                                                                                                                                                                                                                   |   int   |    N     |
-| `dag_creation_poll_interval_secs` | Determines, in seconds, how often SQLMesh should check whether a DAG has been created (Default: `30`)                                                                                                                                                                                                           |   int   |    N     |
-| `dag_creation_max_retry_attempts` | Determines the maximum number of attempts that SQLMesh will make while checking for whether a DAG has been created (Default: `10`)                                                                                                                                                                              |   int   |    N     |
-| `backfill_concurrent_tasks`       | The number of concurrent tasks used for model backfilling during plan application (Default: `4`)                                                                                                                                                                                                                |   int   |    N     |
-| `ddl_concurrent_tasks`            | The number of concurrent tasks used for DDL operations like table/view creation, deletion, and so forth (Default: `4`)                                                                                                                                                                                          |   int   |    N     |
-| `max_snapshot_ids_per_request`    | The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver (Default: `None`)                                                                                                                                                                                     |   int   |    N     |
-| `use_state_connection`            | Whether to use the `state_connection` configuration to bypass Airflow Webserver and access the SQLMesh state directly (Default: `false`)                                                                                                                                                                        | boolean |    N     |
-| `default_catalog_override`        | Overrides the default catalog value for this project. If specified, this value takes precedence over the default catalog value set on the Airflow side. This only applies in the [multi-repo](../guides/multi_repo.md) setup when different projects require different default catalog values (Default: `None`) | string  |    N     |
-
-
-#### Cloud Composer
-
-**Type:** `cloud_composer`
-
-The Google Cloud Composer scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
-
-#### YC Airflow
-
-**Type:** `yc_airflow`
-
-Yandex Managed Airflow shares similar configuration options with the standard `airflow` type, with the following exceptions:
-
-- `max_snapshot_ids_per_request`: This option is deprecated and not supported.
-- Authentication: YC Airflow requires additional credentials, including both a `token` and a combination of `username` and `password`.
-
-Unlike the `airflow` type, YC Airflow leverages Yandex Cloud's internal authentication mechanisms. Therefore, all requests to the Airflow API must include a valid Yandex Cloud IAM-token for authentication.
 
 ## Gateway/connection defaults
 
@@ -259,7 +249,7 @@ If a configuration contains multiple gateways, SQLMesh will use the first one in
 
 | Option            | Description                                                                                                                  |  Type  | Required |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
-| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option) | string |    N     |
+| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option). Gateway names are case-insensitive. | string |    N     |
 
 ### Default connections/scheduler
 
@@ -270,12 +260,15 @@ For example, you might have a specific connection where your tests should run re
 | Option                    | Description                                                                                                                                            |    Type     | Required |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------: | :------: |
 | `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection  |    N     |
-| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection) |    N     |
+| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database) | connection |    N     |
 | `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          |  scheduler  |    N     |
 
 ## Debug mode
 
-To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".
+Enable debug mode in one of two ways:
+
+- Pass the `--debug` flag between the CLI command and the subcommand. For example, `sqlmesh --debug plan`.
+- Set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".
 
 Enabling this mode ensures that full backtraces are printed when using CLI. The default log level is set to `DEBUG` when this mode is enabled.
 
@@ -284,10 +277,18 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
 === "Bash"
 
     ```bash
+    $ sqlmesh --debug plan
+    ```
+
+    ```bash
     $ SQLMESH_DEBUG=1 sqlmesh plan
     ```
 
 === "MS Powershell"
+
+    ```powershell
+    PS> sqlmesh --debug plan
+    ```
 
     ```powershell
     PS> $env:SQLMESH_DEBUG=1
@@ -297,9 +298,30 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
 === "MS CMD"
 
     ```cmd
+    C:\> sqlmesh --debug plan
+    ```
+
+    ```cmd
     C:\> set SQLMESH_DEBUG=1
     C:\> sqlmesh plan
     ```
+
+## Runtime Environment
+
+SQLMesh can run in different runtime environments. For example, you might run it in a regular command-line terminal, in a Jupyter notebook, or in Github's CI/CD platform.
+
+When it starts up, SQLMesh automatically detects the runtime environment and adjusts its behavior accordingly. For example, it registers `%magic` commands if in a Jupyter notebook and adjusts logging behavior if in a CI/CD environment.
+
+If necessary, you may force SQLMesh to use a specific runtime environment by setting the `SQLMESH_RUNTIME_ENVIRONMENT` environment variable.
+
+It accepts the following values, which will cause SQLMesh to behave as if it were in the runtime environment in parentheses:
+
+- `terminal` (CLI console)
+- `databricks` (Databricks notebook)
+- `google_colab` (Google Colab notebook)
+- `jupyter` (Jupyter notebook)
+- `debugger` (Debugging output)
+- `ci` (CI/CD or other non-interactive environment)
 
 ## Anonymized usage information
 

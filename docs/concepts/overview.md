@@ -68,6 +68,4 @@ SQLMesh automatically runs audits when you apply a `plan` to an environment, or 
 ## Infrastructure and orchestration
 Every company's data infrastructure is different. SQLMesh is flexible with regard to which engines and orchestration frameworks you use &mdash; its only requirement is access to the target SQL/analytics engine.
 
-SQLMesh keeps track of model versions and processed data intervals using your existing infrastructure. If SQLMesh is configured without an external orchestrator (such as Airflow), it automatically creates a `sqlmesh` schema in your data warehouse for its internal metadata.
-
-If SQLMesh is configured with Airflow, then it will store all its metadata in the Airflow database. Read more about how [SQLMesh integrates with Airflow](../integrations/airflow.md).
+SQLMesh keeps track of model versions and processed data intervals using your existing infrastructure. SQLMesh it automatically creates a `sqlmesh` schema in your data warehouse for its internal metadata.

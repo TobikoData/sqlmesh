@@ -5,10 +5,10 @@ gateways:
       type: duckdb
       catalogs:
         memory: ':memory:'
-        testing: 'testing.duckdb'
+        testing: "{{ var('tmp_path') }}/testing.duckdb"
 
   # Databases with docker images available
-  inttest_trino:
+  inttest_trino_hive:
     connection:
       type: trino
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
@@ -17,6 +17,7 @@ gateways:
       catalog: datalake
       http_scheme: http
       retries: 20
+      check_import: false
     state_connection:
       type: duckdb
   inttest_trino_iceberg:
@@ -28,6 +29,7 @@ gateways:
       catalog: datalake_iceberg
       http_scheme: http
       retries: 20
+      check_import: false
     state_connection:
       type: duckdb
   inttest_trino_delta:
@@ -39,6 +41,7 @@ gateways:
       catalog: datalake_delta
       http_scheme: http
       retries: 20
+      check_import: false
     state_connection:
       type: duckdb
   inttest_trino_nessie:
@@ -50,6 +53,7 @@ gateways:
       catalog: datalake_nessie
       http_scheme: http
       retries: 20
+      check_import: false
     state_connection:
       type: duckdb
   inttest_spark:
@@ -57,6 +61,7 @@ gateways:
       type: spark
       config:
         spark.remote: sc://{{ env_var('DOCKER_HOSTNAME', 'localhost') }}
+      check_import: false
     state_connection:
       type: duckdb
   inttest_mssql:
@@ -65,6 +70,7 @@ gateways:
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       user: sa
       password: 1StrongPwd@@
+      check_import: false
   inttest_postgres:
     connection:
       type: postgres
@@ -73,6 +79,7 @@ gateways:
       database: postgres
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 5432
+      check_import: false
   inttest_mysql:
     connection:
       type: mysql
@@ -81,13 +88,15 @@ gateways:
       password: mysql
       port: 3306
       charset: utf8
-  inttest_clickhouse:
+      check_import: false
+  inttest_clickhouse_standalone:
     connection:
       type: clickhouse
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 8123
       username: clickhouse
       password: clickhouse
+      check_import: false
     state_connection:
       type: duckdb
   inttest_clickhouse_cluster:
@@ -98,6 +107,7 @@ gateways:
       username: clickhouse
       password: clickhouse
       cluster: cluster1
+      check_import: false
     state_connection:
       type: duckdb
   inttest_risingwave:
@@ -107,6 +117,7 @@ gateways:
       database: dev
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 4566
+      check_import: false
 
 
   # Cloud databases
@@ -118,6 +129,7 @@ gateways:
       database: {{ env_var('SNOWFLAKE_DATABASE') }}
       user: {{ env_var('SNOWFLAKE_USER') }}
       password: {{ env_var('SNOWFLAKE_PASSWORD') }}
+      check_import: false
     state_connection:
       type: duckdb
 
@@ -128,8 +140,7 @@ gateways:
       server_hostname: {{ env_var('DATABRICKS_SERVER_HOSTNAME') }}
       http_path: {{ env_var('DATABRICKS_HTTP_PATH') }}
       access_token: {{ env_var('DATABRICKS_ACCESS_TOKEN') }}
-    state_connection:
-      type: duckdb
+      check_import: false
 
   inttest_redshift:
     connection:
@@ -138,14 +149,14 @@ gateways:
       user: {{ env_var('REDSHIFT_USER') }}
       password: {{ env_var('REDSHIFT_PASSWORD') }}
       database: {{ env_var('REDSHIFT_DATABASE') }}
-    state_connection:
-      type: duckdb
+      check_import: false
 
   inttest_bigquery:
     connection:
       type: bigquery
       method: service-account
       keyfile: {{ env_var('BIGQUERY_KEYFILE') }}
+      check_import: false
     state_connection:
       type: duckdb
 
@@ -159,6 +170,7 @@ gateways:
       connect_timeout: 30
       connection_pool_options:
         retries: 5
+      check_import: false
     state_connection:
       type: duckdb
 
@@ -170,8 +182,37 @@ gateways:
       region_name: {{ env_var("AWS_REGION") }}
       work_group: {{ env_var("ATHENA_WORK_GROUP", "primary") }}
       s3_warehouse_location: {{ env_var("ATHENA_S3_WAREHOUSE_LOCATION", "") }}
+      check_import: false
     state_connection:
       type: duckdb
+
+  inttest_fabric:
+    connection:
+      type: fabric
+      driver: pyodbc
+      host: {{ env_var("FABRIC_HOST") }}
+      user: {{ env_var("FABRIC_CLIENT_ID") }}
+      password: {{ env_var("FABRIC_CLIENT_SECRET") }}
+      database: {{ env_var("FABRIC_DATABASE") }}
+      tenant_id: {{ env_var("FABRIC_TENANT_ID") }}
+      workspace_id: {{ env_var("FABRIC_WORKSPACE_ID") }}
+      odbc_properties:
+        Authentication: ActiveDirectoryServicePrincipal
+      check_import: false
+    state_connection:
+      type: duckdb
+
+  inttest_gcp_postgres:
+    connection:
+      type: gcp_postgres
+      instance_connection_string: {{ env_var("GCP_POSTGRES_INSTANCE_CONNECTION_STRING") }}
+      user: {{ env_var("GCP_POSTGRES_USER") }}
+      password: {{ env_var("GCP_POSTGRES_PASSWORD") }}
+      keyfile_json: {{ env_var("GCP_POSTGRES_KEYFILE_JSON", "") }}
+      db: {{ env_var("GCP_POSTGRES_DATABASE") }}
+      enable_iam_auth: true
+      check_import: false
+
 
 model_defaults:
     dialect: duckdb

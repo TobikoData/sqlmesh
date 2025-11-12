@@ -4,6 +4,7 @@ import typing as t
 
 import pytest
 from _pytest.fixtures import FixtureRequest
+from unittest.mock import patch, MagicMock
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -11,6 +12,7 @@ from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DatabricksConnectionConfig,
     DuckDBAttachOptions,
+    FabricConnectionConfig,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
     MotherDuckConnectionConfig,
@@ -19,9 +21,13 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
+    MSSQLConnectionConfig,
     _connection_config_validator,
+    _get_engine_import_validator,
+    INIT_DISPLAY_INFO_TO_TYPE,
 )
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import PydanticModel
 
 
 @pytest.fixture
@@ -419,14 +425,162 @@ def test_trino_schema_location_mapping(make_config):
     assert all((isinstance(v, str) for v in config.schema_location_mapping.values()))
 
 
+def test_trino_catalog_type_override(make_config):
+    required_kwargs = dict(
+        type="trino",
+        user="user",
+        host="host",
+        catalog="catalog",
+    )
+
+    config = make_config(
+        **required_kwargs,
+        catalog_type_overrides={"my_catalog": "iceberg"},
+    )
+
+    assert config.catalog_type_overrides is not None
+    assert len(config.catalog_type_overrides) == 1
+
+    assert config.catalog_type_overrides == {"my_catalog": "iceberg"}
+
+
 def test_duckdb(make_config):
     config = make_config(
         type="duckdb",
         database="test",
         connector_config={"foo": "bar"},
+        secrets=[
+            {
+                "type": "s3",
+                "region": "aws_region",
+                "key_id": "aws_access_key",
+                "secret": "aws_secret",
+            }
+        ],
+        filesystems=[
+            {
+                "protocol": "abfs",
+                "storage_options": {
+                    "account_name": "onelake",
+                    "account_host": "onelake.blob.fabric.microsoft.com",
+                    "anon": False,
+                },
+            }
+        ],
     )
+    assert config.connector_config
+    assert config.secrets
+    assert config.filesystems
     assert isinstance(config, DuckDBConnectionConfig)
     assert not config.is_recommended_for_state_sync
+
+
+@patch("duckdb.connect")
+def test_duckdb_multiple_secrets(mock_connect, make_config):
+    """Test that multiple secrets are correctly converted to CREATE SECRET SQL statements."""
+    mock_cursor = MagicMock()
+    mock_connection = MagicMock()
+    mock_connection.cursor.return_value = mock_cursor
+    mock_connection.execute = mock_cursor.execute
+    mock_connect.return_value = mock_connection
+
+    # Create config with 2 secrets
+    config = make_config(
+        type="duckdb",
+        secrets=[
+            {
+                "type": "s3",
+                "region": "us-east-1",
+                "key_id": "my_aws_key",
+                "secret": "my_aws_secret",
+            },
+            {
+                "type": "azure",
+                "account_name": "myaccount",
+                "account_key": "myaccountkey",
+            },
+        ],
+    )
+
+    assert isinstance(config, DuckDBConnectionConfig)
+    assert len(config.secrets) == 2
+
+    # Create cursor which triggers _cursor_init
+    cursor = config.create_engine_adapter().cursor
+
+    execute_calls = [call[0][0] for call in mock_cursor.execute.call_args_list]
+    create_secret_calls = [
+        call for call in execute_calls if call.startswith("CREATE OR REPLACE SECRET")
+    ]
+
+    # Should have exactly 2 CREATE SECRET calls
+    assert len(create_secret_calls) == 2
+
+    # Verify the SQL for the first secret (S3)
+    assert (
+        create_secret_calls[0]
+        == "CREATE OR REPLACE SECRET  (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
+    )
+
+    # Verify the SQL for the second secret (Azure)
+    assert (
+        create_secret_calls[1]
+        == "CREATE OR REPLACE SECRET  (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
+    )
+
+
+@patch("duckdb.connect")
+def test_duckdb_named_secrets(mock_connect, make_config):
+    """Test that named secrets are correctly converted to CREATE SECRET SQL statements."""
+    mock_cursor = MagicMock()
+    mock_connection = MagicMock()
+    mock_connection.cursor.return_value = mock_cursor
+    mock_connection.execute = mock_cursor.execute
+    mock_connect.return_value = mock_connection
+
+    # Create config with named secrets using dictionary format
+    config = make_config(
+        type="duckdb",
+        secrets={
+            "my_s3_secret": {
+                "type": "s3",
+                "region": "us-east-1",
+                "key_id": "my_aws_key",
+                "secret": "my_aws_secret",
+            },
+            "my_azure_secret": {
+                "type": "azure",
+                "account_name": "myaccount",
+                "account_key": "myaccountkey",
+            },
+        },
+    )
+
+    assert isinstance(config, DuckDBConnectionConfig)
+    assert len(config.secrets) == 2
+
+    # Create cursor which triggers _cursor_init
+    cursor = config.create_engine_adapter().cursor
+
+    execute_calls = [call[0][0] for call in mock_cursor.execute.call_args_list]
+    create_secret_calls = [
+        call for call in execute_calls if call.startswith("CREATE OR REPLACE SECRET")
+    ]
+
+    # Should have exactly 2 CREATE SECRET calls
+    assert len(create_secret_calls) == 2
+
+    # Verify the SQL for the first secret (S3) includes the secret name
+    assert (
+        create_secret_calls[0]
+        == "CREATE OR REPLACE SECRET my_s3_secret (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
+    )
+
+    # Verify the SQL for the second secret (Azure) includes the secret name
+    assert (
+        create_secret_calls[1]
+        == "CREATE OR REPLACE SECRET my_azure_secret (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
+    )
 
 
 @pytest.mark.parametrize(
@@ -590,6 +744,53 @@ def test_duckdb_attach_catalog(make_config):
     assert not config.is_recommended_for_state_sync
 
 
+def test_duckdb_attach_ducklake_catalog(make_config):
+    config = make_config(
+        type="duckdb",
+        catalogs={
+            "ducklake": DuckDBAttachOptions(
+                type="ducklake",
+                path="catalog.ducklake",
+                data_path="/tmp/ducklake_data",
+                encrypted=True,
+                data_inlining_row_limit=10,
+            ),
+        },
+    )
+    assert isinstance(config, DuckDBConnectionConfig)
+    ducklake_catalog = config.catalogs.get("ducklake")
+    assert ducklake_catalog is not None
+    assert ducklake_catalog.type == "ducklake"
+    assert ducklake_catalog.path == "catalog.ducklake"
+    assert ducklake_catalog.data_path == "/tmp/ducklake_data"
+    assert ducklake_catalog.encrypted is True
+    assert ducklake_catalog.data_inlining_row_limit == 10
+    # Check that the generated SQL includes DATA_PATH
+    generated_sql = ducklake_catalog.to_sql("ducklake")
+    assert "DATA_PATH '/tmp/ducklake_data'" in generated_sql
+    assert "ENCRYPTED" in generated_sql
+    assert "DATA_INLINING_ROW_LIMIT 10" in generated_sql
+    # Check that the ducklake: prefix is automatically added
+    assert "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake'" in generated_sql
+
+    # Test that a path with existing ducklake: prefix is preserved
+    config_with_prefix = make_config(
+        type="duckdb",
+        catalogs={
+            "ducklake": DuckDBAttachOptions(
+                type="ducklake",
+                path="ducklake:catalog.ducklake",
+                data_path="/tmp/ducklake_data",
+            ),
+        },
+    )
+    ducklake_catalog_with_prefix = config_with_prefix.catalogs.get("ducklake")
+    generated_sql_with_prefix = ducklake_catalog_with_prefix.to_sql("ducklake")
+    assert "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake'" in generated_sql_with_prefix
+    # Ensure we don't have double prefixes
+    assert "'ducklake:catalog.ducklake" in generated_sql_with_prefix
+
+
 def test_duckdb_attach_options():
     options = DuckDBAttachOptions(
         type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
@@ -597,17 +798,89 @@ def test_duckdb_attach_options():
 
     assert (
         options.to_sql(alias="db")
-        == "ATTACH 'dbname=postgres user=postgres host=127.0.0.1' AS db (TYPE POSTGRES, READ_ONLY)"
+        == "ATTACH IF NOT EXISTS 'dbname=postgres user=postgres host=127.0.0.1' AS db (TYPE POSTGRES, READ_ONLY)"
     )
 
     options = DuckDBAttachOptions(type="duckdb", path="test.db", read_only=False)
 
-    assert options.to_sql(alias="db") == "ATTACH 'test.db' AS db"
+    assert options.to_sql(alias="db") == "ATTACH IF NOT EXISTS 'test.db' AS db"
+
+
+def test_ducklake_attach_add_ducklake_prefix():
+    # Test that ducklake: prefix is automatically added when missing
+    options = DuckDBAttachOptions(type="ducklake", path="catalog.ducklake")
+    assert (
+        options.to_sql(alias="my_ducklake")
+        == "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake' AS my_ducklake"
+    )
+
+    # Test that ducklake: prefix is preserved when already present
+    options = DuckDBAttachOptions(type="ducklake", path="ducklake:catalog.ducklake")
+    assert (
+        options.to_sql(alias="my_ducklake")
+        == "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake' AS my_ducklake"
+    )
+
+
+def test_duckdb_config_json_strings(make_config):
+    config = make_config(
+        type="duckdb",
+        extensions='["foo","bar"]',
+        catalogs="""{
+            "test1": "test1.duckdb",
+            "test2": {
+                "type": "duckdb",
+                "path": "test2.duckdb"
+            }
+        }""",
+    )
+    assert isinstance(config, DuckDBConnectionConfig)
+
+    assert config.extensions == ["foo", "bar"]
+
+    assert config.get_catalog() == "test1"
+    assert config.catalogs.get("test1") == "test1.duckdb"
+    assert config.catalogs.get("test2").path == "test2.duckdb"
+
+
+def test_motherduck_attach_catalog(make_config):
+    config = make_config(
+        type="motherduck",
+        catalogs={
+            "test1": "md:test1",
+            "test2": DuckDBAttachOptions(
+                type="motherduck",
+                path="md:test2",
+            ),
+        },
+    )
+    assert isinstance(config, MotherDuckConnectionConfig)
+    assert config.get_catalog() == "test1"
+
+    assert config.catalogs.get("test2").read_only is False
+    assert config.catalogs.get("test2").path == "md:test2"
+    assert not config.is_recommended_for_state_sync
+
+
+def test_motherduck_attach_options():
+    options = DuckDBAttachOptions(
+        type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
+    )
+
+    assert (
+        options.to_sql(alias="db")
+        == "ATTACH IF NOT EXISTS 'dbname=postgres user=postgres host=127.0.0.1' AS db (TYPE POSTGRES, READ_ONLY)"
+    )
+
+    options = DuckDBAttachOptions(type="motherduck", path="md:test.db", read_only=False)
+
+    # Here the alias should be ignored compared to duckdb
+    assert options.to_sql(alias="db") == "ATTACH IF NOT EXISTS 'md:test.db'"
 
 
 def test_duckdb_multithreaded_connection_factory(make_config):
     from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
-    from sqlmesh.utils.connection_pool import ThreadLocalConnectionPool
+    from sqlmesh.utils.connection_pool import ThreadLocalSharedConnectionPool
     from threading import Thread
 
     config = make_config(type="duckdb")
@@ -620,7 +893,7 @@ def test_duckdb_multithreaded_connection_factory(make_config):
     config = make_config(type="duckdb", concurrent_tasks=8)
     adapter = config.create_engine_adapter()
     assert isinstance(adapter, DuckDBEngineAdapter)
-    assert isinstance(adapter._connection_pool, ThreadLocalConnectionPool)
+    assert isinstance(adapter._connection_pool, ThreadLocalSharedConnectionPool)
 
     threads = []
     connection_objects = []
@@ -647,42 +920,110 @@ def test_duckdb_multithreaded_connection_factory(make_config):
 
 
 def test_motherduck_token_mask(make_config):
-    config = make_config(
+    config_1 = make_config(
         type="motherduck",
+        token="short",
+        database="whodunnit",
+    )
+    config_2 = make_config(
+        type="motherduck",
+        token="longtoken123456789",
+        database="whodunnit",
+    )
+    config_3 = make_config(
+        type="motherduck",
+        token="secret1235",
         catalogs={
-            "test2": DuckDBAttachOptions(
-                type="motherduck",
-                path="md:whodunnit?motherduck_token=short",
-            ),
             "test1": DuckDBAttachOptions(
-                type="motherduck", path="md:whodunnit", token="longtoken123456789"
+                type="motherduck",
+                path="md:whodunnit",
             ),
         },
     )
-    assert isinstance(config, MotherDuckConnectionConfig)
 
-    assert config._mask_motherduck_token(config.catalogs["test1"].path) == "md:whodunnit"
+    assert isinstance(config_1, MotherDuckConnectionConfig)
+    assert isinstance(config_2, MotherDuckConnectionConfig)
+    assert isinstance(config_3, MotherDuckConnectionConfig)
+
+    # motherduck format
+    assert config_1._mask_sensitive_data(config_1.database) == "whodunnit"
     assert (
-        config._mask_motherduck_token(config.catalogs["test2"].path)
-        == "md:whodunnit?motherduck_token=*****"
+        config_1._mask_sensitive_data(f"md:{config_1.database}?motherduck_token={config_1.token}")
+        == "md:whodunnit?motherduck_token=********"
     )
     assert (
-        config._mask_motherduck_token("?motherduck_token=secret1235")
-        == "?motherduck_token=**********"
+        config_1._mask_sensitive_data(
+            f"md:{config_1.database}?attach_mode=single&motherduck_token={config_1.token}"
+        )
+        == "md:whodunnit?attach_mode=single&motherduck_token=********"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=short")
-        == "md:whodunnit?motherduck_token=*****"
+        config_2._mask_sensitive_data(f"md:{config_2.database}?motherduck_token={config_2.token}")
+        == "md:whodunnit?motherduck_token=********"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
-        == "md:whodunnit?motherduck_token=******************"
+        config_3._mask_sensitive_data(f"md:?motherduck_token={config_3.token}")
+        == "md:?motherduck_token=********"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=")
+        config_1._mask_sensitive_data("?motherduck_token=secret1235")
+        == "?motherduck_token=********"
+    )
+    assert (
+        config_1._mask_sensitive_data("md:whodunnit?motherduck_token=short")
+        == "md:whodunnit?motherduck_token=********"
+    )
+    assert (
+        config_1._mask_sensitive_data("md:whodunnit?motherduck_token=longtoken123456789")
+        == "md:whodunnit?motherduck_token=********"
+    )
+    assert (
+        config_1._mask_sensitive_data("md:whodunnit?motherduck_token=")
         == "md:whodunnit?motherduck_token="
     )
-    assert config._mask_motherduck_token(":memory:") == ":memory:"
+    assert config_1._mask_sensitive_data(":memory:") == ":memory:"
+
+    # postgres format
+    assert (
+        config_1._mask_sensitive_data(
+            "postgres:dbname=mydb user=myuser password=secret123 host=localhost"
+        )
+        == "postgres:dbname=mydb user=myuser password=******** host=localhost"
+    )
+
+    assert (
+        config_1._mask_sensitive_data(
+            "dbname=postgres user=postgres password=pg_secret host=127.0.0.1"
+        )
+        == "dbname=postgres user=postgres password=******** host=127.0.0.1"
+    )
+    assert (
+        config_1._mask_sensitive_data(
+            "postgres:dbname=testdb password=verylongpassword123 user=admin"
+        )
+        == "postgres:dbname=testdb password=******** user=admin"
+    )
+    assert config_1._mask_sensitive_data("postgres:password=short") == "postgres:password=********"
+    assert (
+        config_1._mask_sensitive_data("postgres:host=localhost password=p@ssw0rd! dbname=db")
+        == "postgres:host=localhost password=******** dbname=db"
+    )
+
+    assert (
+        config_1._mask_sensitive_data("postgres:dbname=mydb user=myuser host=localhost")
+        == "postgres:dbname=mydb user=myuser host=localhost"
+    )
+
+    assert (
+        config_1._mask_sensitive_data("md:db?motherduck_token=token123 postgres:password=secret")
+        == "md:db?motherduck_token=******** postgres:password=********"
+    )
+
+    # MySQL format
+    assert (
+        config_1._mask_sensitive_data("host=localhost user=root password=mysql123 database=mydb")
+        == "host=localhost user=root password=******** database=mydb"
+    )
 
 
 def test_bigquery(make_config):
@@ -691,6 +1032,7 @@ def test_bigquery(make_config):
         project="project",
         execution_project="execution_project",
         quota_project="quota_project",
+        check_import=False,
     )
 
     assert isinstance(config, BigQueryConnectionConfig)
@@ -701,10 +1043,25 @@ def test_bigquery(make_config):
     assert config.is_recommended_for_state_sync is False
 
     with pytest.raises(ConfigError, match="you must also specify the `project` field"):
-        make_config(type="bigquery", execution_project="execution_project")
+        make_config(type="bigquery", execution_project="execution_project", check_import=False)
 
     with pytest.raises(ConfigError, match="you must also specify the `project` field"):
-        make_config(type="bigquery", quota_project="quota_project")
+        make_config(type="bigquery", quota_project="quota_project", check_import=False)
+
+
+def test_bigquery_config_json_string(make_config):
+    config = make_config(
+        type="bigquery",
+        project="project",
+        # these can be present as strings if they came from env vars
+        scopes='["a","b","c"]',
+        keyfile_json='{"foo":"bar"}',
+    )
+
+    assert isinstance(config, BigQueryConnectionConfig)
+
+    assert config.scopes == ("a", "b", "c")
+    assert config.keyfile_json == {"foo": "bar"}
 
 
 def test_postgres(make_config):
@@ -727,6 +1084,7 @@ def test_gcp_postgres(make_config):
         user="user",
         password="password",
         db="database",
+        check_import=False,
     )
     assert isinstance(config, GCPPostgresConnectionConfig)
     assert config.is_recommended_for_state_sync is True
@@ -738,6 +1096,7 @@ def test_gcp_postgres(make_config):
         password="password",
         db="database",
         ip_type="private",
+        check_import=False,
     )
     assert config.ip_type == "private"
 
@@ -748,6 +1107,7 @@ def test_mysql(make_config):
         host="host",
         user="user",
         password="password",
+        check_import=False,
     )
     assert isinstance(config, MySQLConnectionConfig)
     assert config.is_recommended_for_state_sync is True
@@ -764,6 +1124,13 @@ def test_clickhouse(make_config):
         cluster="default",
         use_compression=True,
         connection_settings={"this_setting": "1"},
+        server_host_name="server_host_name",
+        verify=True,
+        ca_cert="ca_cert",
+        client_cert="client_cert",
+        client_cert_key="client_cert_key",
+        https_proxy="https://proxy",
+        connection_pool_options={"pool_option": "value"},
     )
     assert isinstance(config, ClickhouseConnectionConfig)
     assert config.cluster == "default"
@@ -773,6 +1140,14 @@ def test_clickhouse(make_config):
     assert config._static_connection_kwargs["this_setting"] == "1"
     assert config.is_recommended_for_state_sync is False
     assert config.is_forbidden_for_state_sync
+
+    pool = config._connection_factory.keywords["pool_mgr"]
+    assert pool.connection_pool_kw["server_hostname"] == "server_host_name"
+    assert pool.connection_pool_kw["assert_hostname"] == "server_host_name"  # because verify=True
+    assert pool.connection_pool_kw["ca_certs"] == "ca_cert"
+    assert pool.connection_pool_kw["cert_file"] == "client_cert"
+    assert pool.connection_pool_kw["key_file"] == "client_cert_key"
+    assert pool.connection_pool_kw["pool_option"] == "value"
 
     config2 = make_config(
         type="clickhouse",
@@ -914,13 +1289,13 @@ def test_databricks(make_config):
     assert oauth_u2m_config.oauth_client_secret is None
 
     # auth_type must match the AuthType enum if specified
-    with pytest.raises(ValueError, match=r".*nonexist does not match a valid option.*"):
+    with pytest.raises(ConfigError, match=r".*nonexist does not match a valid option.*"):
         make_config(
             type="databricks", server_hostname="dbc-test.cloud.databricks.com", auth_type="nonexist"
         )
 
     # if client_secret is specified, client_id must also be specified
-    with pytest.raises(ValueError, match=r"`oauth_client_id` is required.*"):
+    with pytest.raises(ConfigError, match=r"`oauth_client_id` is required.*"):
         make_config(
             type="databricks",
             server_hostname="dbc-test.cloud.databricks.com",
@@ -929,9 +1304,557 @@ def test_databricks(make_config):
         )
 
     # http_path is still required when auth_type is specified
-    with pytest.raises(ValueError, match=r"`http_path` is still required.*"):
+    with pytest.raises(ConfigError, match=r"`http_path` is still required.*"):
         make_config(
             type="databricks",
             server_hostname="dbc-test.cloud.databricks.com",
             auth_type="databricks-oauth",
         )
+
+
+def test_engine_import_validator():
+    with pytest.raises(
+        ConfigError,
+        match=re.escape(
+            "Failed to import the 'bigquery' engine library. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: `pip install "sqlmesh[bigquery]"`. For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
+        ),
+    ):
+
+        class TestConfigA(PydanticModel):
+            _engine_import_validator = _get_engine_import_validator("missing", "bigquery")
+
+        TestConfigA()
+
+    with pytest.raises(
+        ConfigError,
+        match=re.escape(
+            "Failed to import the 'bigquery' engine library. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: `pip install "sqlmesh[bigquery_extra]"`. For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
+        ),
+    ):
+
+        class TestConfigB(PydanticModel):
+            _engine_import_validator = _get_engine_import_validator(
+                "missing", "bigquery", "bigquery_extra"
+            )
+
+        TestConfigB()
+
+    class TestConfigC(PydanticModel):
+        _engine_import_validator = _get_engine_import_validator("sqlmesh", "bigquery")
+
+    TestConfigC()
+
+
+def test_engine_display_order():
+    """
+    Each engine's ConnectionConfig contains a display_order integer class var that is used to order the
+    interactive `sqlmesh init` engine choices.
+
+    This test ensures that those integers begin with 1, are unique, and are sequential.
+    """
+    display_numbers = [
+        info[0] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
+    ]
+    assert display_numbers == list(range(1, len(display_numbers) + 1))
+
+
+def test_mssql_engine_import_validator():
+    """Test that MSSQL import validator respects driver configuration."""
+
+    # Test PyODBC driver suggests mssql-odbc extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql-odbc\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pyodbc'")
+            MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+
+    # Test PyMSSQL driver suggests mssql extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost", driver="pymssql")
+
+    # Test default driver (pymssql) suggests mssql extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost")  # No driver specified
+
+    # Test successful import works without error
+    with patch("importlib.import_module") as mock_import:
+        mock_import.return_value = None
+        config = MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+        assert config.driver == "pyodbc"
+
+
+def test_mssql_connection_config_parameter_validation(make_config):
+    """Test MSSQL connection config parameter validation."""
+    # Test default driver is pymssql
+    config = make_config(type="mssql", host="localhost", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pymssql"
+
+    # Test explicit pyodbc driver
+    config = make_config(type="mssql", host="localhost", driver="pyodbc", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pyodbc"
+
+    # Test explicit pymssql driver
+    config = make_config(type="mssql", host="localhost", driver="pymssql", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pymssql"
+
+    # Test pyodbc specific parameters
+    config = make_config(
+        type="mssql",
+        host="localhost",
+        driver="pyodbc",
+        driver_name="ODBC Driver 18 for SQL Server",
+        trust_server_certificate=True,
+        encrypt=False,
+        odbc_properties={"Authentication": "ActiveDirectoryServicePrincipal"},
+        check_import=False,
+    )
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver_name == "ODBC Driver 18 for SQL Server"
+    assert config.trust_server_certificate is True
+    assert config.encrypt is False
+    assert config.odbc_properties == {"Authentication": "ActiveDirectoryServicePrincipal"}
+
+    # Test pymssql specific parameters
+    config = make_config(
+        type="mssql",
+        host="localhost",
+        driver="pymssql",
+        tds_version="7.4",
+        conn_properties=["SET ANSI_NULLS ON"],
+        check_import=False,
+    )
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.tds_version == "7.4"
+    assert config.conn_properties == ["SET ANSI_NULLS ON"]
+
+
+def test_mssql_connection_kwargs_keys():
+    """Test _connection_kwargs_keys returns correct keys for each driver variant."""
+    # Test pymssql driver keys
+    config = MSSQLConnectionConfig(host="localhost", driver="pymssql", check_import=False)
+    pymssql_keys = config._connection_kwargs_keys
+    expected_pymssql_keys = {
+        "password",
+        "user",
+        "database",
+        "host",
+        "timeout",
+        "login_timeout",
+        "charset",
+        "appname",
+        "port",
+        "tds_version",
+        "conn_properties",
+        "autocommit",
+    }
+    assert pymssql_keys == expected_pymssql_keys
+
+    # Test pyodbc driver keys
+    config = MSSQLConnectionConfig(host="localhost", driver="pyodbc", check_import=False)
+    pyodbc_keys = config._connection_kwargs_keys
+    expected_pyodbc_keys = {
+        "password",
+        "user",
+        "database",
+        "host",
+        "timeout",
+        "login_timeout",
+        "charset",
+        "appname",
+        "port",
+        "autocommit",
+        "driver_name",
+        "trust_server_certificate",
+        "encrypt",
+        "odbc_properties",
+    }
+    assert pyodbc_keys == expected_pyodbc_keys
+
+    # Verify pyodbc keys don't include pymssql-specific parameters
+    assert "tds_version" not in pyodbc_keys
+    assert "conn_properties" not in pyodbc_keys
+
+
+def test_mssql_pyodbc_connection_string_generation():
+    """Test pyodbc.connect gets invoked with the correct ODBC connection string."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Mock the return value to have the methods we need
+        mock_connection = mock_pyodbc_connect.return_value
+
+        # Create a pyodbc config
+        config = MSSQLConnectionConfig(
+            host="testserver.database.windows.net",
+            port=1433,
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            driver="pyodbc",
+            driver_name="ODBC Driver 18 for SQL Server",
+            trust_server_certificate=True,
+            encrypt=True,
+            login_timeout=30,
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called with the correct connection string
+        mock_pyodbc_connect.assert_called_once()
+        call_args = mock_pyodbc_connect.call_args
+
+        # Check the connection string (first argument)
+        conn_str = call_args[0][0]
+        expected_parts = [
+            "DRIVER={ODBC Driver 18 for SQL Server}",
+            "SERVER=testserver.database.windows.net,1433",
+            "DATABASE=testdb",
+            "Encrypt=YES",
+            "TrustServerCertificate=YES",
+            "Connection Timeout=30",
+            "UID=testuser",
+            "PWD=testpass",
+        ]
+
+        for part in expected_parts:
+            assert part in conn_str
+
+        # Check autocommit parameter
+        assert call_args[1]["autocommit"] is False
+
+
+def test_mssql_pyodbc_connection_string_with_odbc_properties():
+    """Test pyodbc connection string includes custom ODBC properties."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Create a pyodbc config with custom ODBC properties
+        config = MSSQLConnectionConfig(
+            host="testserver.database.windows.net",
+            database="testdb",
+            user="client-id",
+            password="client-secret",
+            driver="pyodbc",
+            odbc_properties={
+                "Authentication": "ActiveDirectoryServicePrincipal",
+                "ClientCertificate": "/path/to/cert.pem",
+                "TrustServerCertificate": "NO",  # This should be ignored since we set it explicitly
+            },
+            trust_server_certificate=True,  # This should take precedence
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called
+        mock_pyodbc_connect.assert_called_once()
+        conn_str = mock_pyodbc_connect.call_args[0][0]
+
+        # Check that custom ODBC properties are included
+        assert "Authentication=ActiveDirectoryServicePrincipal" in conn_str
+        assert "ClientCertificate=/path/to/cert.pem" in conn_str
+
+        # Verify that explicit trust_server_certificate takes precedence
+        assert "TrustServerCertificate=YES" in conn_str
+
+        # Should not have the conflicting property from odbc_properties
+        assert conn_str.count("TrustServerCertificate") == 1
+
+
+def test_mssql_pyodbc_connection_string_minimal():
+    """Test pyodbc connection string with minimal configuration."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pyodbc",
+            autocommit=True,
+            check_import=False,
+        )
+
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        mock_pyodbc_connect.assert_called_once()
+        conn_str = mock_pyodbc_connect.call_args[0][0]
+
+        # Check basic required parts
+        assert "DRIVER={ODBC Driver 18 for SQL Server}" in conn_str
+        assert "SERVER=localhost,1433" in conn_str
+        assert "Encrypt=YES" in conn_str  # Default encrypt=True
+        assert "Connection Timeout=60" in conn_str  # Default timeout
+
+        # Check autocommit parameter
+        assert mock_pyodbc_connect.call_args[1]["autocommit"] is True
+
+
+def test_mssql_pymssql_connection_factory():
+    """Test pymssql connection factory returns correct function."""
+    # Mock the import of pymssql at the module level
+    import sys
+    from unittest.mock import MagicMock
+
+    # Create a mock pymssql module
+    mock_pymssql = MagicMock()
+    sys.modules["pymssql"] = mock_pymssql
+
+    try:
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pymssql",
+            check_import=False,
+        )
+
+        factory = config._connection_factory
+
+        # Verify the factory returns pymssql.connect
+        assert factory is mock_pymssql.connect
+    finally:
+        # Clean up the mock module
+        if "pymssql" in sys.modules:
+            del sys.modules["pymssql"]
+
+
+def test_mssql_pyodbc_connection_datetimeoffset_handling():
+    """Test that the MSSQL pyodbc connection properly handles DATETIMEOFFSET conversion."""
+    from datetime import datetime, timezone, timedelta
+    import struct
+    from unittest.mock import Mock, patch
+
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Track calls to add_output_converter
+        converter_calls = []
+
+        def mock_add_output_converter(sql_type, converter_func):
+            converter_calls.append((sql_type, converter_func))
+
+        # Create a mock connection that will be returned by pyodbc.connect
+        mock_connection = Mock()
+        mock_connection.add_output_converter = mock_add_output_converter
+        mock_pyodbc_connect.return_value = mock_connection
+
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pyodbc",  # DATETIMEOFFSET handling is pyodbc-specific
+            check_import=False,
+        )
+
+        # Get the connection factory and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify that add_output_converter was called for SQL type -155 (DATETIMEOFFSET)
+        assert len(converter_calls) == 1
+        sql_type, converter_func = converter_calls[0]
+        assert sql_type == -155
+
+        # Test the converter function with actual DATETIMEOFFSET binary data
+        # Create a test DATETIMEOFFSET value: 2023-12-25 15:30:45.123456789 +05:30
+        year, month, day = 2023, 12, 25
+        hour, minute, second = 15, 30, 45
+        nanoseconds = 123456789
+        tz_hour_offset, tz_minute_offset = 5, 30
+
+        # Pack the binary data according to the DATETIMEOFFSET format
+        binary_data = struct.pack(
+            "<6hI2h",
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanoseconds,
+            tz_hour_offset,
+            tz_minute_offset,
+        )
+
+        # Convert using the registered converter
+        result = converter_func(binary_data)
+
+        # Verify the result
+        expected_dt = datetime(
+            2023,
+            12,
+            25,
+            15,
+            30,
+            45,
+            123456,  # microseconds = nanoseconds // 1000
+            timezone(timedelta(hours=5, minutes=30)),
+        )
+        assert result == expected_dt
+        assert result.tzinfo == timezone(timedelta(hours=5, minutes=30))
+
+
+def test_mssql_pyodbc_connection_negative_timezone_offset():
+    """Test DATETIMEOFFSET handling with negative timezone offset at connection level."""
+    from datetime import datetime, timezone, timedelta
+    import struct
+    from unittest.mock import Mock, patch
+
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        converter_calls = []
+
+        def mock_add_output_converter(sql_type, converter_func):
+            converter_calls.append((sql_type, converter_func))
+
+        mock_connection = Mock()
+        mock_connection.add_output_converter = mock_add_output_converter
+        mock_pyodbc_connect.return_value = mock_connection
+
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pyodbc",  # DATETIMEOFFSET handling is pyodbc-specific
+            check_import=False,
+        )
+
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Get the converter function
+        _, converter_func = converter_calls[0]
+
+        # Test with negative timezone offset: 2023-01-01 12:00:00.0 -08:00
+        year, month, day = 2023, 1, 1
+        hour, minute, second = 12, 0, 0
+        nanoseconds = 0
+        tz_hour_offset, tz_minute_offset = -8, 0
+
+        binary_data = struct.pack(
+            "<6hI2h",
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanoseconds,
+            tz_hour_offset,
+            tz_minute_offset,
+        )
+
+        result = converter_func(binary_data)
+
+        expected_dt = datetime(2023, 1, 1, 12, 0, 0, 0, timezone(timedelta(hours=-8, minutes=0)))
+        assert result == expected_dt
+        assert result.tzinfo == timezone(timedelta(hours=-8))
+
+
+def test_fabric_connection_config_defaults(make_config):
+    """Test Fabric connection config defaults to pyodbc and autocommit=True."""
+    config = make_config(
+        type="fabric",
+        host="localhost",
+        workspace_id="test-workspace-id",
+        tenant_id="test-tenant-id",
+        check_import=False,
+    )
+    assert isinstance(config, FabricConnectionConfig)
+    assert config.driver == "pyodbc"
+    assert config.autocommit is True
+
+    # Ensure it creates the FabricEngineAdapter
+    from sqlmesh.core.engine_adapter.fabric import FabricEngineAdapter
+
+    assert isinstance(config.create_engine_adapter(), FabricEngineAdapter)
+
+
+def test_fabric_connection_config_parameter_validation(make_config):
+    """Test Fabric connection config parameter validation."""
+    # Test that FabricConnectionConfig correctly handles pyodbc-specific parameters.
+    config = make_config(
+        type="fabric",
+        host="localhost",
+        driver_name="ODBC Driver 18 for SQL Server",
+        trust_server_certificate=True,
+        encrypt=False,
+        odbc_properties={"Authentication": "ActiveDirectoryServicePrincipal"},
+        workspace_id="test-workspace-id",
+        tenant_id="test-tenant-id",
+        check_import=False,
+    )
+    assert isinstance(config, FabricConnectionConfig)
+    assert config.driver == "pyodbc"  # Driver is fixed to pyodbc
+    assert config.driver_name == "ODBC Driver 18 for SQL Server"
+    assert config.trust_server_certificate is True
+    assert config.encrypt is False
+    assert config.odbc_properties == {"Authentication": "ActiveDirectoryServicePrincipal"}
+
+    # Test that specifying a different driver for Fabric raises an error
+    with pytest.raises(ConfigError, match=r"Input should be 'pyodbc'"):
+        make_config(type="fabric", host="localhost", driver="pymssql", check_import=False)
+
+
+def test_fabric_pyodbc_connection_string_generation():
+    """Test that the Fabric pyodbc connection gets invoked with the correct ODBC connection string."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Create a Fabric config
+        config = FabricConnectionConfig(
+            host="testserver.datawarehouse.fabric.microsoft.com",
+            port=1433,
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            driver_name="ODBC Driver 18 for SQL Server",
+            trust_server_certificate=True,
+            encrypt=True,
+            login_timeout=30,
+            workspace_id="test-workspace-id",
+            tenant_id="test-tenant-id",
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called with the correct connection string
+        mock_pyodbc_connect.assert_called_once()
+        call_args = mock_pyodbc_connect.call_args
+
+        # Check the connection string (first argument)
+        conn_str = call_args[0][0]
+        expected_parts = [
+            "DRIVER={ODBC Driver 18 for SQL Server}",
+            "SERVER=testserver.datawarehouse.fabric.microsoft.com,1433",
+            "DATABASE=testdb",
+            "Encrypt=YES",
+            "TrustServerCertificate=YES",
+            "Connection Timeout=30",
+            "UID=testuser",
+            "PWD=testpass",
+        ]
+
+        for part in expected_parts:
+            assert part in conn_str
+
+        # Check autocommit parameter, should default to True for Fabric
+        assert call_args[1]["autocommit"] is True
+
+
+def test_schema_differ_overrides(make_config) -> None:
+    default_config = make_config(type="duckdb")
+    assert default_config.schema_differ_overrides is None
+    default_adapter = default_config.create_engine_adapter()
+    assert default_adapter._schema_differ_overrides is None
+    assert default_adapter.schema_differ.parameterized_type_defaults != {}
+
+    override: t.Dict[str, t.Any] = {"parameterized_type_defaults": {}}
+    config = make_config(type="duckdb", schema_differ_overrides=override)
+    assert config.schema_differ_overrides == override
+    adapter = config.create_engine_adapter()
+    assert adapter._schema_differ_overrides == override
+    assert adapter.schema_differ.parameterized_type_defaults == {}

@@ -138,14 +138,11 @@ dmypy.json
 *~
 *#
 
-# Airflow example
-examples/airflow/Dockerfile
-examples/airflow/docker-compose.yaml
-examples/airflow/airflow.sh
-examples/airflow/.env
-examples/airflow/logs
-examples/airflow/plugins
-examples/airflow/warehouse
+# Vim
+*.swp
+*.swo
+.null-ls*
+
 
 *.duckdb
 *.duckdb.wal
@@ -164,3 +161,7 @@ tests/_version.py
 # spark
 metastore_db/
 spark-warehouse/
+
+# claude
+.claude/
+

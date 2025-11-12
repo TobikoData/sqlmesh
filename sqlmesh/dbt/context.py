@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -8,10 +9,11 @@ from dbt.adapters.base import BaseRelation
 
 from sqlmesh.core.config import Config as SQLMeshConfig
 from sqlmesh.dbt.builtin import _relation_info_to_relation
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, MissingModelError, MissingSourceError
 from sqlmesh.utils.jinja import (
     JinjaGlobalAttribute,
     JinjaMacroRegistry,
@@ -22,11 +24,12 @@ from sqlmesh.utils.jinja import (
 if t.TYPE_CHECKING:
     from jinja2 import Environment
 
-    from sqlmesh.dbt.basemodel import Dependencies
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.relation import Policy
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,6 +37,8 @@ class DbtContext:
     """Context for DBT environment"""
 
     project_root: Path = Path()
+    profiles_dir: t.Optional[Path] = None
+    """Optional override to specify the directory where profiles.yml is located, if not at the :project_root"""
     target_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
@@ -48,6 +53,7 @@ class DbtContext:
     _project_name: t.Optional[str] = None
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
+    _model_fqns: t.Set[str] = field(default_factory=set)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
     _refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = field(default_factory=dict)
@@ -101,9 +107,10 @@ class DbtContext:
         self._jinja_environment = None
 
     def set_and_render_variables(self, variables: t.Dict[str, t.Any], package: str) -> None:
-        self.variables = variables
-
-        jinja_environment = self.jinja_macros.build_environment(**self.jinja_globals)
+        package_macros = self.jinja_macros.copy(
+            update={"top_level_packages": [*self.jinja_macros.top_level_packages, package]}
+        )
+        jinja_environment = package_macros.build_environment(**self.jinja_globals)
 
         def _render_var(value: t.Any) -> t.Any:
             if isinstance(value, str):
@@ -124,7 +131,7 @@ class DbtContext:
             try:
                 rendered_variables[k] = _render_var(v)
             except Exception as ex:
-                raise ConfigError(f"Failed to render variable '{k}', value '{v}': {ex}") from ex
+                logger.warning(f"Failed to render variable '{k}', value '{v}': {ex}")
 
         self.variables = rendered_variables
 
@@ -140,12 +147,19 @@ class DbtContext:
     def models(self, models: t.Dict[str, ModelConfig]) -> None:
         self._models = {}
         self._refs = {}
+        self._model_fqns = set()
         self.add_models(models)
 
     def add_models(self, models: t.Dict[str, ModelConfig]) -> None:
         self._refs = {}
         self._models.update(models)
         self._jinja_environment = None
+
+    @property
+    def model_fqns(self) -> t.Set[str]:
+        if not self._model_fqns:
+            self._model_fqns = {model.fqn for model in self._models.values()}
+        return self._model_fqns
 
     @property
     def seeds(self) -> t.Dict[str, SeedConfig]:
@@ -242,6 +256,9 @@ class DbtContext:
         # pass user-specified default dialect if we have already loaded the config
         if self.sqlmesh_config.dialect:
             output["dialect"] = self.sqlmesh_config.dialect
+        # Pass flat graph structure like dbt
+        if self._manifest is not None:
+            output["flat_graph"] = AttributeDict(self.manifest.flat_graph)
         return output
 
     def context_for_dependencies(self, dependencies: Dependencies) -> DbtContext:
@@ -262,13 +279,13 @@ class DbtContext:
                 else:
                     models[ref] = t.cast(ModelConfig, model)
             else:
-                raise ConfigError(f"Model '{ref}' was not found.")
+                raise MissingModelError(ref)
 
         for source in dependencies.sources:
             if source in self.sources:
                 sources[source] = self.sources[source]
             else:
-                raise ConfigError(f"Source '{source}' was not found.")
+                raise MissingSourceError(source)
 
         variables = {k: v for k, v in self.variables.items() if k in dependencies.variables}
 

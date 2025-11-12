@@ -102,10 +102,6 @@ Models needing backfill (missing dates):
 ├── sushi_dataset_sqlmesh.incremental_sushi_types: 2024-10-03 - 2024-10-03
 └── sushi_dataset_sqlmesh.incremental_waiters: 2024-10-03 - 2024-10-03
 Apply - Backfill Tables [y/n]: y
-Creating physical table ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
-
-All model versions have been created successfully
-
 [1/1] sushi_dataset_sqlmesh.incremental__dlt_loads evaluated in 0.01s
 [1/1] sushi_dataset_sqlmesh.incremental_sushi_types evaluated in 0.00s
 [1/1] sushi_dataset_sqlmesh.incremental_waiters evaluated in 0.01s

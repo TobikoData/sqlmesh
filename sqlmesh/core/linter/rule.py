@@ -1,16 +1,69 @@
 from __future__ import annotations
 
 import abc
-
-import operator as op
-from collections.abc import Iterator, Iterable, Set, Mapping, Callable
-from functools import reduce
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from sqlmesh.core.model import Model
 
 from typing import Type
 
 import typing as t
+
+from sqlmesh.utils.pydantic import PydanticModel
+
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import GenericContext
+
+
+class RuleLocation(PydanticModel):
+    """The location of a rule in a file."""
+
+    file_path: str
+    start_line: t.Optional[int] = None
+
+
+@dataclass(frozen=True)
+class Position:
+    """The position of a rule violation in a file, the position follows the LSP standard."""
+
+    line: int
+    character: int
+
+
+@dataclass(frozen=True)
+class Range:
+    """The range of a rule violation in a file. The range follows the LSP standard."""
+
+    start: Position
+    end: Position
+
+
+@dataclass(frozen=True)
+class TextEdit:
+    """A text edit to apply to a file."""
+
+    path: Path
+    range: Range
+    new_text: str
+
+
+@dataclass(frozen=True)
+class CreateFile:
+    """Create a new file with the provided text."""
+
+    path: Path
+    text: str
+
+
+@dataclass(frozen=True)
+class Fix:
+    """A fix that can be applied to resolve a rule violation."""
+
+    title: str
+    edits: t.List[TextEdit] = field(default_factory=list)
+    create_files: t.List[CreateFile] = field(default_factory=list)
 
 
 class _Rule(abc.ABCMeta):
@@ -24,8 +77,13 @@ class Rule(abc.ABC, metaclass=_Rule):
 
     name = "rule"
 
+    def __init__(self, context: GenericContext):
+        self.context = context
+
     @abc.abstractmethod
-    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+    def check_model(
+        self, model: Model
+    ) -> t.Optional[t.Union[RuleViolation, t.List[RuleViolation]]]:
         """The evaluation function that'll check for a violation of this rule."""
 
     @property
@@ -33,65 +91,61 @@ class Rule(abc.ABC, metaclass=_Rule):
         """A summary of what this rule checks for."""
         return self.__doc__ or ""
 
-    def violation(self, violation_msg: t.Optional[str] = None) -> RuleViolation:
+    def violation(
+        self,
+        violation_msg: t.Optional[str] = None,
+        violation_range: t.Optional[Range] = None,
+        fixes: t.Optional[t.List[Fix]] = None,
+    ) -> RuleViolation:
         """Create a RuleViolation instance for this rule"""
-        return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
+        return RuleViolation(
+            rule=self,
+            violation_msg=violation_msg or self.summary,
+            violation_range=violation_range,
+            fixes=fixes,
+        )
+
+    def get_definition_location(self) -> RuleLocation:
+        """Return the file path and position information for this rule.
+
+        This method returns information about where this rule is defined,
+        which can be used in diagnostics to link to the rule's documentation.
+
+        Returns:
+            A dictionary containing file path and position information.
+        """
+        import inspect
+
+        # Get the file where the rule class is defined
+        file_path = inspect.getfile(self.__class__)
+
+        try:
+            # Get the source code and line number
+            source_lines, start_line = inspect.getsourcelines(self.__class__)
+            return RuleLocation(
+                file_path=file_path,
+                start_line=start_line,
+            )
+        except (IOError, TypeError):
+            # Fall back to just returning the file path if we can't get source lines
+            return RuleLocation(file_path=file_path)
 
     def __repr__(self) -> str:
         return self.name
 
 
 class RuleViolation:
-    def __init__(self, rule: Rule, violation_msg: str) -> None:
+    def __init__(
+        self,
+        rule: Rule,
+        violation_msg: str,
+        violation_range: t.Optional[Range] = None,
+        fixes: t.Optional[t.List[Fix]] = None,
+    ) -> None:
         self.rule = rule
         self.violation_msg = violation_msg
+        self.violation_range = violation_range
+        self.fixes = fixes or []
 
     def __repr__(self) -> str:
         return f"{self.rule.name}: {self.violation_msg}"
-
-
-class RuleSet(Mapping[str, type[Rule]]):
-    def __init__(self, rules: Iterable[type[Rule]] = ()) -> None:
-        self._underlying = {rule.name: rule for rule in rules}
-
-    def check_model(self, model: Model) -> t.List[RuleViolation]:
-        violations = []
-
-        for rule in self._underlying.values():
-            violation = rule().check_model(model)
-
-            if violation:
-                violations.append(violation)
-
-        return violations
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._underlying)
-
-    def __len__(self) -> int:
-        return len(self._underlying)
-
-    def __getitem__(self, rule: str | type[Rule]) -> type[Rule]:
-        key = rule if isinstance(rule, str) else rule.name
-        return self._underlying[key]
-
-    def __op(
-        self,
-        op: Callable[[Set[type[Rule]], Set[type[Rule]]], Set[type[Rule]]],
-        other: RuleSet,
-        /,
-    ) -> RuleSet:
-        rules = set()
-        for rule in op(set(self.values()), set(other.values())):
-            rules.add(other[rule] if rule in other else self[rule])
-
-        return RuleSet(rules)
-
-    def union(self, *others: RuleSet) -> RuleSet:
-        return reduce(lambda lhs, rhs: lhs.__op(op.or_, rhs), (self, *others))
-
-    def intersection(self, *others: RuleSet) -> RuleSet:
-        return reduce(lambda lhs, rhs: lhs.__op(op.and_, rhs), (self, *others))
-
-    def difference(self, *others: RuleSet) -> RuleSet:
-        return reduce(lambda lhs, rhs: lhs.__op(op.sub, rhs), (self, *others))

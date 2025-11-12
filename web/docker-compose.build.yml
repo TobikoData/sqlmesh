@@ -1,5 +1,6 @@
-version: "3.11"
 services:
   app:
-    command: bash -c "npm --prefix /app ci && npm --prefix /app run build"
+    command:
+      bash -c "cd ../.. && npm install -g pnpm && pnpm install --frozen-lockfile
+      && cd web/client && pnpm run build"
     networks: []

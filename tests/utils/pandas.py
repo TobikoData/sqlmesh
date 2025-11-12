@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import typing as t
 
-import numpy as np
-import pandas as pd
+import numpy as np  # noqa: TID253
+import pandas as pd  # noqa: TID253
 
 
 def create_df(data: t.Sequence[t.Tuple], schema: t.Dict[str, str]) -> pd.DataFrame:

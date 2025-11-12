@@ -1,7 +1,7 @@
 import Documentation from '@components/documentation/Documentation'
 import ModelLineage from '@components/graph/ModelLineage'
 import { useStoreContext } from '@context/context'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import NotFound from '../root/NotFound'
 import { EnumRoutes } from '~/routes'
 import LineageFlowProvider from '@components/graph/context'

@@ -12,7 +12,11 @@ from sqlmesh.core.dialect import (
     select_from_values_for_batch_range,
     text_diff,
 )
+import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.config.connection import DIALECT_TO_TYPE
+
+pytestmark = pytest.mark.dialect_isolated
 
 
 def test_format_model_expressions():
@@ -26,6 +30,7 @@ def test_format_model_expressions():
      a,
      (b, c) as d,
      ),  -- c
+       @macro_prop_with_comment(proper := 'foo'), -- k
      audits [
     not_null(columns=[
       foo_id,
@@ -91,6 +96,7 @@ def test_format_model_expressions():
   name a.b, /* a */
   kind FULL, /* b */
   references (a, (b, c) AS d), /* c */
+  @macro_prop_with_comment(proper := 'foo'), /* k */
   audits ARRAY(
     NOT_NULL(
       columns = ARRAY(
@@ -205,7 +211,7 @@ SELECT
         parse(
             """
             MODEL(name foo);
-            SELECT 1::INT AS bla
+            SELECT CAST(1 AS INT) AS bla
             """
         ),
         rewrite_casts=False,
@@ -269,7 +275,7 @@ def test_format_body_macros():
         format_model_expressions(
             parse(
                 """
-    Model ( name foo );
+    Model ( name foo , @macro_dialect(), @properties_macro(prop_1 := 'max', prop_2 := 33));
     @WITH(TRUE) x AS (SELECT 1)
     SELECT col::int
     FROM foo
@@ -281,7 +287,9 @@ def test_format_body_macros():
             )
         )
         == """MODEL (
-  name foo
+  name foo,
+  @macro_dialect(),
+  @properties_macro(prop_1 := 'max', prop_2 := 33)
 );
 
 @WITH(TRUE) x AS (
@@ -639,9 +647,6 @@ def test_model_normalization_quote_flexibility():
         normalize_model_name('"catalog"."db"."table"', default_catalog=None, dialect="spark")
         == '"catalog"."db"."table"'
     )
-    # It doesn't work the other way which is what we currently expect
-    with pytest.raises(ParseError):
-        normalize_model_name("`catalog`.`db`.`table`", default_catalog=None, dialect=None)
 
 
 def test_macro_parse():
@@ -695,3 +700,35 @@ def test_model_name_cannot_be_string():
         )
 
     assert "\\'name\\' property cannot be a string value" in str(parse_error)
+
+
+def test_parse_snowflake_create_schema_ddl():
+    assert parse_one("CREATE SCHEMA d.s", dialect="snowflake").sql() == "CREATE SCHEMA d.s"
+
+
+@pytest.mark.parametrize("dialect", sorted(set(DIALECT_TO_TYPE.values())))
+def test_sqlglot_extended_correctly(dialect: str) -> None:
+    # MODEL is a SQLMesh extension and not part of SQLGlot
+    # If we can roundtrip an expression containing MODEL across every dialect, then the SQLMesh extensions have been registered correctly
+    ast = d.parse_one("MODEL (name foo)", dialect=dialect)
+    assert isinstance(ast, d.Model)
+    name_prop = ast.find(exp.Property)
+    assert isinstance(name_prop, exp.Property)
+    assert name_prop.this == "name"
+    value = name_prop.args["value"]
+    assert isinstance(value, exp.Table)
+    assert value.sql() == "foo"
+    assert ast.sql(dialect=dialect) == "MODEL (\nname foo\n)"
+
+
+def test_connected_identifier():
+    ast = d.parse_one("""SELECT ("x"at time zone 'utc')::timestamp as x""", "redshift")
+    assert ast.sql("redshift") == """SELECT CAST(("x" AT TIME ZONE 'utc') AS TIMESTAMP) AS x"""
+
+
+def test_pipe_syntax():
+    ast = d.parse_one("SELECT * FROM (FROM t2 |> SELECT id)", "bigquery")
+    assert (
+        ast.sql("bigquery")
+        == "SELECT * FROM (WITH __tmp1 AS (SELECT id FROM t2) SELECT * FROM __tmp1)"
+    )

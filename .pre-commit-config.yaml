@@ -7,7 +7,7 @@ repos:
         language: python
         types_or: [python, pyi]
         require_serial: true
-        files: &files ^(sqlmesh/|tests/|web/|examples/|setup.py)
+        files: &files ^(sqlmesh/|sqlmesh_dbt/|tests/|web/|examples/|setup.py)
       - id: ruff-format
         name: ruff-format
         entry: ruff format --force-exclude --line-length 100
@@ -23,35 +23,8 @@ repos:
         files: *files
         require_serial: true
         exclude: ^(tests/fixtures)
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: "fc26039"
-    hooks:
-      - id: prettier
-        name: prettier
-        files: ^(web/client)
-        entry: prettier --write --ignore-path web/client/.prettierignore
-        exclude: ^(web/client/node_modules)
-        require_serial: true
-        language: node
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: "4620ec5"
-    hooks:
-      - id: eslint
-        name: eslint
-        files: ^(web/client)
-        exclude: ^(web/client/node_modules)
-        entry: eslint --fix
-        additional_dependencies:
-          [
-            "@typescript-eslint/eslint-plugin@6.5.0",
-            "@typescript-eslint/parser@6.5.0",
-            eslint@8.48.0,
-            eslint-config-prettier@9.0.0,
-            eslint-config-standard-with-typescript@39.0.0,
-            eslint-plugin-import@2.28.1,
-            eslint-plugin-n@16.0.2,
-            eslint-plugin-promise@6.1.1,
-            eslint-plugin-react@7.33.2,
-          ]
-        require_serial: true
-        language: node
+      - id: valid migrations
+        name: valid migrations
+        entry: tooling/validating_migration_numbers.sh
+        language: system
+        pass_filenames: false

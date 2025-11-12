@@ -6,6 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.utils.connection_pool import (
     SingletonConnectionPool,
     ThreadLocalConnectionPool,
+    ThreadLocalSharedConnectionPool,
 )
 
 
@@ -207,3 +208,118 @@ def test_thread_local_connection_pool_transaction(mocker: MockerFixture):
     assert cursor_mock_thread_one.rollback.call_count == 1
 
     assert cursor_mock_thread_two.begin.call_count == 1
+
+
+def test_thread_local_connection_pool_attributes(mocker: MockerFixture):
+    pool = ThreadLocalConnectionPool(connection_factory=lambda: mocker.Mock())
+
+    pool.set_attribute("foo", "bar")
+    current_threadid = get_ident()
+
+    def _in_thread(pool: ThreadLocalConnectionPool):
+        assert get_ident() != current_threadid
+        pool.set_attribute("foo", "baz")
+
+    with ThreadPoolExecutor() as executor:
+        future = executor.submit(_in_thread, pool)
+        assert not future.exception()
+
+    assert pool.get_all_attributes("foo") == ["bar", "baz"]
+    assert pool.get_attribute("foo") == "bar"
+
+    pool.close_all()
+
+    assert pool.get_all_attributes("foo") == []
+    assert pool.get_attribute("foo") is None
+
+
+def test_thread_local_shared_connection_pool(mocker: MockerFixture):
+    cursor_mock_thread_one = mocker.Mock()
+    cursor_mock_thread_two = mocker.Mock()
+    connection_mock = mocker.Mock()
+    connection_mock.cursor.side_effect = [
+        cursor_mock_thread_one,
+        cursor_mock_thread_two,
+        cursor_mock_thread_one,
+    ]
+
+    test_thread_id = get_ident()
+
+    connection_factory_mock = mocker.Mock(return_value=connection_mock)
+    pool = ThreadLocalSharedConnectionPool(connection_factory_mock)
+
+    assert pool.get_cursor() == cursor_mock_thread_one
+    assert pool.get_cursor() == cursor_mock_thread_one
+    assert pool.get() == connection_mock
+    assert pool.get() == connection_mock
+
+    def thread():
+        assert pool.get_cursor() == cursor_mock_thread_two
+        assert pool.get_cursor() == cursor_mock_thread_two
+        assert pool.get() == connection_mock
+        assert pool.get() == connection_mock
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        executor.submit(thread).result()
+
+    assert pool._connection is not None
+    assert len(pool._thread_cursors) == 2
+
+    pool.close_all(exclude_calling_thread=True)
+
+    assert pool._connection is not None
+    assert len(pool._thread_cursors) == 1
+    assert test_thread_id in pool._thread_cursors
+
+    pool.close_cursor()
+    pool.close()
+
+    assert pool.get_cursor() == cursor_mock_thread_one
+
+    pool.close_all()
+
+    assert connection_factory_mock.call_count == 1
+
+    assert cursor_mock_thread_one.close.call_count == 2
+    assert connection_mock.cursor.call_count == 3
+    assert connection_mock.close.call_count == 1
+
+
+def test_thread_local_shared_connection_pool_close(mocker: MockerFixture):
+    connection_mock = mocker.Mock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    connection_factory_mock = mocker.Mock(return_value=connection_mock)
+    pool = ThreadLocalSharedConnectionPool(connection_factory_mock)
+
+    # First time we get a connection
+    pool.get()
+    pool.get()
+    pool.get_cursor()
+    pool.get_cursor()
+
+    # This shouldn't close the connection, only the cursor
+    pool.close()
+    pool.get()
+    pool.get()
+    pool.get_cursor()
+
+    pool.get_cursor()
+    # This shouldn't close the connection either
+    pool.close_all(exclude_calling_thread=True)
+
+    pool.get()
+    pool.get()
+    # Now this should close the connection
+    pool.close_all()
+
+    # Re-open the connection
+    pool.get()
+    pool.get()
+    # Close it again
+    pool.close_all()
+
+    assert cursor_mock.close.call_count == 2
+    assert connection_factory_mock.call_count == 2
+    assert connection_mock.close.call_count == 2

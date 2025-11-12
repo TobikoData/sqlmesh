@@ -1,7 +1,8 @@
 # type: ignore
 import typing as t
+from datetime import datetime
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from google.cloud import bigquery
 from pytest_mock.plugin import MockerFixture
@@ -12,15 +13,19 @@ from sqlglot.helper import ensure_list
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import select_partitions_expr
+from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = [pytest.mark.bigquery, pytest.mark.engine]
 
 
 @pytest.fixture
-def adapter(make_mocked_engine_adapter: t.Callable) -> BigQueryEngineAdapter:
-    return make_mocked_engine_adapter(BigQueryEngineAdapter)
+def adapter(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture) -> BigQueryEngineAdapter:
+    mocked_adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    mocker.patch("sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute")
+    return mocked_adapter
 
 
 def test_insert_overwrite_by_time_partition_query(
@@ -37,7 +42,7 @@ def test_insert_overwrite_by_time_partition_query(
         end="2022-01-05",
         time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("string"),
         },
@@ -67,7 +72,7 @@ def test_insert_overwrite_by_partition_query(
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
         },
@@ -110,15 +115,13 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("unknown"),
             "ds": exp.DataType.build("UNKNOWN"),
         },
     )
 
-    columns_mock.assert_called_once_with(
-        exp.to_table(f"test_schema.__temp_test_table_{temp_table_id}")
-    )
+    columns_mock.assert_called_once_with(table_name)
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
@@ -177,7 +180,7 @@ def test_insert_overwrite_by_time_partition_pandas(
         end="2022-01-05",
         time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("string"),
         },
@@ -206,7 +209,7 @@ def test_insert_overwrite_by_time_partition_pandas(
     assert load_temp_table.kwargs["job_config"].write_disposition is None
     assert (
         merge_sql.sql(dialect="bigquery")
-        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT `a`, `ds` FROM (SELECT `a`, `ds` FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
+        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT `a`, `ds` FROM (SELECT CAST(`a` AS INT64) AS `a`, CAST(`ds` AS STRING) AS `ds` FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
     )
     assert (
         drop_temp_table_sql.sql(dialect="bigquery")
@@ -296,7 +299,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     ]
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT `a`, `b` FROM `project`.`dataset`.`temp_table`) AS `_subquery`",
+        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM `project`.`dataset`.`temp_table`) AS `_subquery`",
         "DROP TABLE IF EXISTS `project`.`dataset`.`temp_table`",
     ]
 
@@ -432,7 +435,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.merge(
         target_table="target",
         source_table=parse_one("SELECT id, ts, val FROM source"),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.Type.INT,
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
@@ -485,11 +488,17 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     retry_resp_call.errors = None
     retry_mock.return_value = retry_resp
     db_call_mock.return_value = AttributeDict({"errors": None})
-    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    df = pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "ts": ["2025-01-01 00:00:00", "2025-01-01 00:00:00", "2025-01-01 00:00:00"],
+            "val": [7, 8, 9],
+        }
+    )
     adapter.merge(
         target_table="target",
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("INT"),
@@ -499,7 +508,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
 
     sql_calls = _to_sql_calls(execute_mock, identify=False)
     assert sql_calls == [
-        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT `id`, `ts`, `val` FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
+        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT CAST(`id` AS INT64) AS `id`, CAST(`ts` AS DATETIME) AS `ts`, CAST(`val` AS INT64) AS `val` FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
         "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
         "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)",
         "DROP TABLE IF EXISTS project.dataset.temp_table",
@@ -533,6 +542,7 @@ def test_begin_end_session(mocker: MockerFixture):
 
     adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
 
+    # starting a session without session properties
     with adapter.session({}):
         assert adapter._connection_pool.get_attribute("session_id") is not None
         adapter.execute("SELECT 2;")
@@ -553,17 +563,40 @@ def test_begin_end_session(mocker: MockerFixture):
     assert execute_b_call[1]["query"] == "SELECT 3;"
     assert not execute_b_call[1]["job_config"].connection_properties
 
+    # starting a new session with session property query_label and array value
+    with adapter.session({"query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]")}):
+        adapter.execute("SELECT 4;")
+    begin_new_session_call = connection_mock._client.query.call_args_list[3]
+    assert begin_new_session_call[0][0] == 'SET @@query_label = "key1:value1,key2:value2";SELECT 1;'
+
+    # starting a new session with session property query_label and Paren value
+    with adapter.session({"query_label": parse_one("(('key1', 'value1'))")}):
+        adapter.execute("SELECT 5;")
+    begin_new_session_call = connection_mock._client.query.call_args_list[5]
+    assert begin_new_session_call[0][0] == 'SET @@query_label = "key1:value1";SELECT 1;'
+
+    # test invalid query_label value
+    with pytest.raises(
+        SQLMeshError,
+        match="Invalid value for `session_properties.query_label`. Must be an array or tuple.",
+    ):
+        with adapter.session({"query_label": parse_one("'key1:value1'")}):
+            adapter.execute("SELECT 6;")
+
 
 def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
+    if isinstance(execute_mock, BigQueryEngineAdapter):
+        execute_mock = execute_mock.execute
     output = []
     for call in execute_mock.call_args_list:
-        value = call[0][0]
-        sql = (
-            value.sql(dialect="bigquery", identify=identify)
-            if isinstance(value, exp.Expression)
-            else str(value)
-        )
-        output.append(sql)
+        values = ensure_list(call[0][0])
+        for value in values:
+            sql = (
+                value.sql(dialect="bigquery", identify=identify)
+                if isinstance(value, exp.Expression)
+                else str(value)
+            )
+            output.append(sql)
     return output
 
 
@@ -713,14 +746,14 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
 
     adapter.create_table(
         "test_table",
-        columns_to_types=nested_columns_to_types,
+        target_columns_to_types=nested_columns_to_types,
         column_descriptions=long_column_descriptions,
     )
 
     adapter.ctas(
         "test_table",
         parse_one("SELECT * FROM source_table"),
-        columns_to_types=nested_columns_to_types,
+        target_columns_to_types=nested_columns_to_types,
         column_descriptions=long_column_descriptions,
     )
 
@@ -1033,7 +1066,7 @@ def test_get_alter_expressions_includes_catalog(
     )
     get_data_objects_mock.return_value = []
 
-    adapter.get_alter_expressions("catalog1.foo.bar", "catalog2.bar.bing")
+    adapter.get_alter_operations("catalog1.foo.bar", "catalog2.bar.bing")
 
     assert get_data_objects_mock.call_count == 2
 
@@ -1052,3 +1085,298 @@ def test_get_alter_expressions_includes_catalog(
     assert schema.db == "bar"
     assert schema.sql(dialect="bigquery") == "catalog2.bar"
     assert tables == {"bing"}
+
+
+def test_job_cancellation_on_keyboard_interrupt_job_still_running(mocker: MockerFixture):
+    # Create a mock connection
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    cursor_mock.connection = connection_mock
+    connection_mock.cursor.return_value = cursor_mock
+
+    # Mock the query job
+    mock_job = mocker.Mock()
+    mock_job.project = "test-project"
+    mock_job.location = "us-central1"
+    mock_job.job_id = "test-job-123"
+    mock_job.done.return_value = False  # Job is still running
+    mock_job.result.side_effect = KeyboardInterrupt()
+    mock_job._query_results = mocker.Mock()
+    mock_job._query_results.total_rows = 0
+    mock_job._query_results.schema = []
+
+    # Set up the client to return our mock job
+    connection_mock._client.query.return_value = mock_job
+
+    # Create adapter with the mocked connection
+    adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
+
+    # Execute a query and expect KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        adapter.execute("SELECT 1")
+
+    # Ensure the adapter's closed, so that the job can be aborted
+    adapter.close()
+
+    # Verify the job was created
+    connection_mock._client.query.assert_called_once()
+
+    # Verify job status was checked and cancellation was called
+    mock_job.done.assert_called_once()
+    mock_job.cancel.assert_called_once()
+
+
+def test_job_cancellation_on_keyboard_interrupt_job_already_done(mocker: MockerFixture):
+    # Create a mock connection
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    cursor_mock.connection = connection_mock
+    connection_mock.cursor.return_value = cursor_mock
+
+    # Mock the query job
+    mock_job = mocker.Mock()
+    mock_job.project = "test-project"
+    mock_job.location = "us-central1"
+    mock_job.job_id = "test-job-456"
+    mock_job.done.return_value = True  # Job is already done
+    mock_job.result.side_effect = KeyboardInterrupt()
+    mock_job._query_results = mocker.Mock()
+    mock_job._query_results.total_rows = 0
+    mock_job._query_results.schema = []
+
+    # Set up the client to return our mock job
+    connection_mock._client.query.return_value = mock_job
+
+    # Create adapter with the mocked connection
+    adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
+
+    # Execute a query and expect KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        adapter.execute("SELECT 1")
+
+    # Ensure the adapter's closed, so that the job can be aborted
+    adapter.close()
+
+    # Verify the job was created
+    connection_mock._client.query.assert_called_once()
+
+    # Verify job status was checked but cancellation was NOT called
+    mock_job.done.assert_called_once()
+    mock_job.cancel.assert_not_called()
+
+
+def test_drop_cascade(adapter: BigQueryEngineAdapter):
+    adapter.drop_table("foo", cascade=True)
+    adapter.drop_table("foo", cascade=False)
+
+    # BigQuery doesnt support DROP CASCADE for tables
+    # ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_table_statement
+    assert _to_sql_calls(adapter) == ["DROP TABLE IF EXISTS `foo`", "DROP TABLE IF EXISTS `foo`"]
+    adapter.execute.reset_mock()  # type: ignore
+
+    # But, it does for schemas
+    adapter.drop_schema("foo", cascade=True)
+    adapter.drop_schema("foo", cascade=False)
+
+    assert _to_sql_calls(adapter) == [
+        "DROP SCHEMA IF EXISTS `foo` CASCADE",
+        "DROP SCHEMA IF EXISTS `foo`",
+    ]
+
+
+def test_scd_type_2_by_partitioning(adapter: BigQueryEngineAdapter):
+    adapter.scd_type_2_by_time(
+        target_table="target",
+        source_table=t.cast(
+            exp.Select, parse_one("SELECT id, name, price, test_UPDATED_at FROM source")
+        ),
+        unique_key=[
+            exp.to_column("id"),
+        ],
+        updated_at_col=exp.column("test_UPDATED_at", quoted=True),
+        valid_from_col=exp.to_column("valid_from", quoted=True),
+        valid_to_col=exp.to_column("valid_to", quoted=True),
+        target_columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_UPDATED_at": exp.DataType.build("TIMESTAMP"),
+            "valid_from": exp.DataType.build("TIMESTAMP"),
+            "valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        partitioned_by=[parse_one("TIMESTAMP_TRUNC(valid_from, DAY)")],
+    )
+
+    calls = _to_sql_calls(adapter)
+
+    # Initial call to create the table and then another to replace since it is self-referencing
+    assert len(calls) == 2
+    # Both calls should contain the partition logic (the scd logic is already covered by other tests)
+    assert "PARTITION BY TIMESTAMP_TRUNC(`valid_from`, DAY)" in calls[0]
+    assert "PARTITION BY TIMESTAMP_TRUNC(`valid_from`, DAY)" in calls[1]
+
+
+def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("project.dataset.test_table", dialect="bigquery")
+    new_grants_config = {
+        "roles/bigquery.dataViewer": ["user:analyst@example.com", "group:data-team@example.com"],
+        "roles/bigquery.dataEditor": ["user:admin@example.com"],
+    }
+    current_grants = [
+        ("roles/bigquery.dataViewer", "user:old_analyst@example.com"),
+        ("roles/bigquery.admin", "user:old_admin@example.com"),
+    ]
+
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    execute_mock = mocker.patch.object(adapter, "execute")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="project")
+    mocker.patch.object(adapter.client, "location", "us-central1")
+
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="bigquery")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM `project`.`region-us-central1`.`INFORMATION_SCHEMA.OBJECT_PRIVILEGES` AS OBJECT_PRIVILEGES "
+        "WHERE object_schema = 'dataset' AND object_name = 'test_table' AND SPLIT(grantee, ':')[OFFSET(1)] <> session_user()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = _to_sql_calls(execute_mock)
+
+    assert len(sql_calls) == 4
+    assert (
+        "REVOKE `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_analyst@example.com'"
+        in sql_calls
+    )
+    assert (
+        "REVOKE `roles/bigquery.admin` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_admin@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` TO 'user:analyst@example.com', 'group:data-team@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataEditor` ON TABLE `project`.`dataset`.`test_table` TO 'user:admin@example.com'"
+        in sql_calls
+    )
+
+
+def test_sync_grants_config_with_overlaps(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("project.dataset.test_table", dialect="bigquery")
+    new_grants_config = {
+        "roles/bigquery.dataViewer": [
+            "user:analyst1@example.com",
+            "user:analyst2@example.com",
+            "user:analyst3@example.com",
+        ],
+        "roles/bigquery.dataEditor": ["user:analyst2@example.com", "user:editor@example.com"],
+    }
+    current_grants = [
+        ("roles/bigquery.dataViewer", "user:analyst1@example.com"),  # Keep
+        ("roles/bigquery.dataViewer", "user:old_analyst@example.com"),  # Remove
+        ("roles/bigquery.dataEditor", "user:analyst2@example.com"),  # Keep
+        ("roles/bigquery.admin", "user:admin@example.com"),  # Remove
+    ]
+
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    execute_mock = mocker.patch.object(adapter, "execute")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="project")
+    mocker.patch.object(adapter.client, "location", "us-central1")
+
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="bigquery")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM `project`.`region-us-central1`.`INFORMATION_SCHEMA.OBJECT_PRIVILEGES` AS OBJECT_PRIVILEGES "
+        "WHERE object_schema = 'dataset' AND object_name = 'test_table' AND SPLIT(grantee, ':')[OFFSET(1)] <> session_user()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = _to_sql_calls(execute_mock)
+
+    assert len(sql_calls) == 4
+    assert (
+        "REVOKE `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_analyst@example.com'"
+        in sql_calls
+    )
+    assert (
+        "REVOKE `roles/bigquery.admin` ON TABLE `project`.`dataset`.`test_table` FROM 'user:admin@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` TO 'user:analyst2@example.com', 'user:analyst3@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataEditor` ON TABLE `project`.`dataset`.`test_table` TO 'user:editor@example.com'"
+        in sql_calls
+    )
+
+
+@pytest.mark.parametrize(
+    "table_type, expected_keyword",
+    [
+        (DataObjectType.TABLE, "TABLE"),
+        (DataObjectType.VIEW, "VIEW"),
+        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
+    ],
+)
+def test_sync_grants_config_object_kind(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+    table_type: DataObjectType,
+    expected_keyword: str,
+) -> None:
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("project.dataset.test_object", dialect="bigquery")
+
+    mocker.patch.object(adapter, "fetchall", return_value=[])
+    execute_mock = mocker.patch.object(adapter, "execute")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="project")
+    mocker.patch.object(adapter.client, "location", "us-central1")
+
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
+    adapter.sync_grants_config(
+        relation, {"roles/bigquery.dataViewer": ["user:test@example.com"]}, table_type
+    )
+
+    executed_exprs = execute_mock.call_args[0][0]
+    sql_calls = [expr.sql(dialect="bigquery") for expr in executed_exprs]
+    assert sql_calls == [
+        f"GRANT `roles/bigquery.dataViewer` ON {expected_keyword} project.dataset.test_object TO 'user:test@example.com'"
+    ]
+
+
+def test_sync_grants_config_no_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("test_table", dialect="bigquery")
+    new_grants_config = {
+        "roles/bigquery.dataViewer": ["user:analyst@example.com"],
+        "roles/bigquery.dataEditor": ["user:editor@example.com"],
+    }
+
+    with pytest.raises(ValueError, match="Table test_table does not have a schema \\(dataset\\)"):
+        adapter.sync_grants_config(relation, new_grants_config)

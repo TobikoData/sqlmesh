@@ -122,6 +122,58 @@ Under the hood, SQLMesh stores temporary data in the database to perform the com
 The default schema for these temporary tables is `sqlmesh_temp` but can be changed with the `--temp-schema` option.
 The schema can be specified as a `CATALOG.SCHEMA` or `SCHEMA`.
 
+
+## Diffing multiple models across environments
+
+SQLMesh allows you to compare multiple models across environments at once using model selection expressions. This is useful when you want to validate changes across a set of related models or the entire project.
+
+To diff multiple models, use the `--select-model` (or `-m` for short) option with the table diff command:
+
+```bash
+sqlmesh table_diff prod:dev --select-model "sqlmesh_example.*"
+```
+
+When diffing multiple models, SQLMesh will:
+
+1. Show the models returned by the selector that exist in both environments and have differences
+2. Compare these models and display the data diff of each model
+
+> Note: Models will only be data diffed if there's a breaking change that impacts them.
+
+The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
+
+> Note: Surround your selection pattern in single or double quotes. Ex: `'*'`, `"sqlmesh_example.*"`
+
+Here are some common examples:
+
+```bash
+# Select all models in a schema
+sqlmesh table_diff prod:dev -m "sqlmesh_example.*"
+
+# Select a model and its dependencies
+sqlmesh table_diff prod:dev -m "+model_name"  # include upstream deps
+sqlmesh table_diff prod:dev -m "model_name+"  # include downstream deps
+
+# Select models by tag
+sqlmesh table_diff prod:dev -m "tag:finance"
+
+# Select models with git changes
+sqlmesh table_diff prod:dev -m "git:feature"
+
+# Use logical operators for complex selections
+sqlmesh table_diff prod:dev -m "(metrics.* & ^tag:deprecated)"  # models in the metrics schema that aren't deprecated
+
+# Combine multiple selectors
+sqlmesh table_diff prod:dev -m "tag:finance" -m "metrics.*_daily"
+```
+
+When multiple selectors are provided, they are combined with OR logic, meaning a model matching any of the selectors will be included.
+
+!!! note
+    All models being compared must have their `grain` defined that is unique and not null, as this is used to perform the join between the tables in the two environments.
+
+    If the `--warn-grain-check` option is used, this requirement is not enforced. Instead of raising an error, a warning is displayed for the models without a defined grain and diffs are computed for the remaining models.
+
 ## Diffing tables or views
 
 Compare specific tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.
@@ -162,7 +214,7 @@ The output matches, with the exception of the column labels in the `COMMON ROWS 
 
 !!! info "Tobiko Cloud Feature"
 
-    Cross-database table diffing is available in [Tobiko Cloud](./observer.md#installation).
+    Cross-database table diffing is available in [Tobiko Cloud](../cloud/features/xdb_diffing.md).
 
 SQLMesh executes a project's models with a single database system, specified as a [gateway](../guides/connections.md#overview) in the project configuration.
 
@@ -177,122 +229,4 @@ The [within-database table diff](#diffing-models-across-environments) tool canno
 
 SQLMesh's cross-database table diff tool is built for just this scenario. Its comparison algorithm efficiently diffs tables without moving them from one system to the other and automatically addresses differences in data types.
 
-### Configuration and syntax
-
-To diff tables across systems, first configure [Gateways](../reference/configuration#Gateways) for each database system in your SQLMesh configuration file.
-
-This example configures `bigquery` and `snowflake` gateways:
-
-```yaml linenums="1"
-gateways:
-  bigquery:
-    connection:
-      type: bigquery
-      [other connection parameters]
-
-  snowflake:
-    connection:
-      type: snowflake
-      [other connection parameters]
-```
-
-Then, specify each table's gateway in the `table_diff` command with this syntax: `[source_gateway]|[source table]:[target_gateway]|[target table]`.
-
-For example, we could diff the `landing.table` table across `bigquery` and `snowflake` gateways like this:
-
-```sh
-$ sqlmesh table_diff 'bigquery|landing.table:snowflake|lake.table'
-```
-
-This syntax tells SQLMesh to use the cross-database diffing algorithm instead of the normal within-database diffing algorithm.
-
-After adding gateways to the table names, use `table_diff` as described above - the same options apply for specifying the join keys, decimal precision, etc. See `sqlmesh table_diff --help` for a [full list of options](../reference/cli.md#table_diff).
-
-!!! warning
-
-    Cross-database diff works for data objects (tables / views).
-
-    Diffing _models_ is not supported because we do not assume that both the source and target databases are managed by SQLMesh.
-
-### Example output
-
-A cross-database diff is broken up into two stages.
-
-The first stage is a schema diff. This example shows that differences in column name case across the two tables are identified as schema differences:
-
-```bash
-$ sqlmesh table_diff 'bigquery|sqlmesh_example.full_model:snowflake|sqlmesh_example.full_model' --on item_id --show-sample
-
-Schema Diff Between 'BIGQUERY|SQLMESH_EXAMPLE.FULL_MODEL' and 'SNOWFLAKE|SQLMESH_EXAMPLE.FULL_MODEL':
-├── Added Columns:
-│   ├── ITEM_ID (DECIMAL(38, 0))
-│   └── NUM_ORDERS (DECIMAL(38, 0))
-└── Removed Columns:
-    ├── item_id (BIGINT)
-    └── num_orders (BIGINT)
-Schema has differences; continue comparing rows? [y/n]:
-```
-
-SQLMesh prompts you before comparing data values across table rows. The prompt provides an opportunity to discontinue the comparison if the schemas are vastly different (potentially indicating a mistake) or you need to exclude columns from the diff because you know they won't match.
-
-The second stage of the diff is comparing data values across tables. Within each system, SQLMesh divides the data into chunks, evaluates each chunk, and compares the outputs across systems. If a difference is found, it performs a row-level diff on that chunk by reading a sample of mismatched rows from each system.
-
-This example shows that 2 rows were present in each system but had different values, one row was in Bigquery only, and one row was in Snowflake only:
-
-```bash
-Dividing source dataset into 10 chunks (based on 10947709 total records)
-Checking chunks against target dataset
-Chunk 1 hash mismatch!
-Starting row-level comparison for the range (1 -> 3)
-Identifying individual record hashes that don't match
-Comparing
-
-Row Counts:
-├──  PARTIAL MATCH: 2 rows (66.67%)
-├──  BIGQUERY ONLY: 1 rows (16.67%)
-└──  SNOWFLAKE ONLY: 1 rows (16.67%)
-
-COMMON ROWS column comparison stats:
-            pct_match
-num_orders        0.0
-
-
-COMMON ROWS sample data differences:
-Column: num_orders
-┏━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┓
-┃ item_id ┃ BIGQUERY ┃ SNOWFLAKE ┃
-┡━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━┩
-│ 1       │ 5        │ 7         │
-│ 2       │ 1        │ 2         │
-└─────────┴──────────┴───────────┘
-
-BIGQUERY ONLY sample rows:
-item_id num_orders
-      7          4
-
-
-SNOWFLAKE ONLY sample rows:
-item_id num_orders
-      4          6
-```
-
-If there are no differences found between chunks, the source and target datasets can be considered equal:
-
-```bash
-Chunk 1 (1094771 rows) matches!
-Chunk 2 (1094771 rows) matches!
-...
-Chunk 10 (1094770 rows) matches!
-
-All 10947709 records match between 'bigquery|sqlmesh_example.full_model' and 'snowflake|TEST.SQLMESH_EXAMPLE.FULL_MODEL'
-```
-
-!!! info
-
-    Don't forget to specify the `--show-sample` option if you'd like to see a sample of the actual mismatched data!
-
-    Otherwise, only high level statistics for the mismatched rows will be printed.
-
-### Supported engines
-
-Cross-database diffing is supported on all execution engines that [SQLMesh supports](../integrations/overview.md#execution-engines).
+Learn more about cross-database table diffing in our [Tobiko Cloud docs](../cloud/features/xdb_diffing.md).

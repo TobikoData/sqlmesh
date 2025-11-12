@@ -6,7 +6,6 @@ import io
 import typing as t
 from pathlib import Path, PurePath
 
-import pandas as pd
 import pyarrow as pa  # type: ignore
 from fastapi import Depends, HTTPException
 from starlette.responses import StreamingResponse
@@ -16,6 +15,10 @@ from sqlmesh.core import constants as c
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import Settings, get_context, get_settings
+from sqlmesh.utils.windows import IS_WINDOWS
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 R = t.TypeVar("R")
 
@@ -63,11 +66,10 @@ def validate_path(path: str, settings: Settings = Depends(get_settings)) -> str:
     if any(
         full_path.match(pattern)
         for pattern in (
-            context.config_for_path(Path(path)).ignore_patterns if context else c.IGNORE_PATTERNS
+            context.config_for_path(Path(path))[0].ignore_patterns if context else c.IGNORE_PATTERNS
         )
     ):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-
     return path
 
 
@@ -75,6 +77,16 @@ def replace_file(src: Path, dst: Path) -> None:
     """Move a file or directory at src to dst."""
     if src != dst:
         try:
+            if IS_WINDOWS:
+                # os.replace() behaves differently on Windows so we have to do some extra checks
+                if dst.exists():
+                    if src.exists() and src.is_dir() and dst.is_file():
+                        raise OSError("Cant rename directory to existing file")
+                    elif src.exists() and src.is_file() and dst.is_dir():
+                        raise OSError("Cant rename file to existing directory")
+                    elif dst.is_dir() and not any(dst.iterdir()):
+                        # target dir exists but is empty, delete it so replace() succeeds
+                        dst.rmdir()
             src.replace(dst)
         except FileNotFoundError:
             raise HTTPException(status_code=HTTP_404_NOT_FOUND)

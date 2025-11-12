@@ -102,6 +102,8 @@ For example, pre/post-statements might modify settings or create indexes. Howeve
 
 You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
+**Project-level defaults:** You can also define pre/post-statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
+
 ``` python linenums="1" hl_lines="8-12"
 @model(
     "db.test_model",
@@ -163,7 +165,7 @@ def execute(
 ) -> pd.DataFrame:
 
     # pre-statement
-    context.fetchdf("SET GLOBAL parameter = 'value';")
+    context.engine_adapter.execute("SET GLOBAL parameter = 'value';")
 
     # post-statement requires using `yield` instead of `return`
     yield pd.DataFrame([
@@ -171,7 +173,7 @@ def execute(
     ])
 
     # post-statement
-    context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
+    context.engine_adapter.execute("CREATE INDEX idx ON example.pre_post_statements (id);")
 ```
 
 ## Optional on-virtual-update statements
@@ -181,6 +183,8 @@ The optional on-virtual-update statements allow you to execute SQL commands afte
 These can be used, for example, to grant privileges on views of the virtual layer.
 
 Similar to pre/post-statements you can set the `on_virtual_update` argument in the `@model` decorator to a list of SQL strings, SQLGlot expressions, or macro calls.
+
+**Project-level defaults:** You can also define on-virtual-update statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project (including Python models) and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
 
 ``` python linenums="1" hl_lines="8"
 @model(
@@ -241,18 +245,16 @@ def execute(
     context.resolve_table("docs_example.another_dependency")
 ```
 
-User-defined [global variables](global-variables) can also be used in `resolve_table` calls, as long as the `depends_on` keyword argument is present and contains the required dependencies. This is shown in the following example:
+User-defined [global variables](global-variables) or [blueprint variables](#python-model-blueprinting) can also be used in `resolve_table` calls, as shown in the following example (similarly for `blueprint_var()`):
 
 ```python linenums="1"
 @model(
     "@schema_name.test_model2",
     kind="FULL",
     columns={"id": "INT"},
-    depends_on=["@schema_name.test_model1"],
 )
 def execute(context, **kwargs):
-    schema_name = context.var("schema_name")
-    table = context.resolve_table(f"{schema_name}.test_model1")
+    table = context.resolve_table(f"{context.var('schema_name')}.test_model1")
     select_query = exp.select("*").from_(table)
     return context.fetchdf(select_query)
 ```
@@ -366,6 +368,64 @@ def entrypoint(
         }
     )
 ```
+
+Note the use of curly brace syntax `@{customer}` in the model name above. It is used to ensure SQLMesh can combine the macro variable into the model name identifier correctly - learn more [here](../../concepts/macros/sqlmesh_macros.md#embedding-variables-in-strings).
+
+Blueprint variable mappings can also be constructed dynamically, e.g., by using a macro: `blueprints="@gen_blueprints()"`. This is useful in cases where the `blueprints` list needs to be sourced from external sources, such as CSV files.
+
+For example, the definition of the `gen_blueprints` may look like this:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def gen_blueprints(evaluator):
+    return (
+        "((customer := customer1, field_a := x, field_b := y),"
+        " (customer := customer2, field_a := z, field_b := w))"
+    )
+```
+
+It's also possible to use the `@EACH` macro, combined with a global list variable (`@values`):
+
+```python linenums="1"
+
+@model(
+    "@{customer}.some_table",
+    blueprints="@EACH(@values, x -> (customer := schema_@x))",
+    ...
+)
+...
+```
+
+## Using macros in model properties
+
+Python models support macro variables in model properties. However, special care must be taken when the macro variable appears within a string.
+
+For example when using macro variables inside cron expressions, you need to wrap the entire expression in quotes and prefix it with `@` to ensure proper parsing:
+
+```python linenums="1"
+# Correct: Wrap the cron expression containing a macro variable
+@model(
+    "my_model",
+    cron="@'*/@{mins} * * * *'",  # Note the @'...' syntax
+    ...
+)
+
+# This also works with blueprint variables
+@model(
+    "@{customer}.scheduled_model",
+    cron="@'0 @{hour} * * *'",
+    blueprints=[
+        {"customer": "customer_1", "hour": 2}, # Runs at 2 AM
+        {"customer": "customer_2", "hour": 8}, # Runs at 8 AM
+    ],
+    ...
+)
+
+```
+
+This is necessary because cron expressions often use `@` for aliases (like `@daily`, `@hourly`), which can conflict with SQLMesh's macro syntax.
 
 ## Examples
 ### Basic

@@ -56,6 +56,8 @@ If SQLMesh does not have access to an external table's metadata, the table will 
 
 In some use-cases such as [isolated systems with multiple gateways](../../guides/isolated_systems.md#multiple-gateways), there are external models that only exist on a certain gateway.
 
+**Gateway names are case-insensitive in external model configurations.** You can specify the gateway name using any case (e.g., `gateway: dev`, `gateway: DEV`, `gateway: Dev`) and SQLMesh will handle the matching correctly.
+
 Consider the following model that queries an external table with a dynamic database based on the current gateway:
 
 ```
@@ -70,7 +72,9 @@ FROM
   @{gateway}_db.external_table;
 ```
 
-This table will be named differently depending on which `--gateway` SQLMesh is run with. For example:
+This table will be named differently depending on which `--gateway` SQLMesh is run with (learn more about the curly brace `@{gateway}` syntax [here](../../concepts/macros/sqlmesh_macros.md#embedding-variables-in-strings)).
+
+For example:
 
 - `sqlmesh --gateway dev plan` - SQLMesh will try to query `dev_db.external_table`
 - `sqlmesh --gateway prod plan` - SQLMesh will try to query `prod_db.external_table`
@@ -98,7 +102,7 @@ This example demonstrates the structure of a `external_models.yaml` file:
     column_d: float
 - name: external_db.gateway_specific_external_table
   description: Another external table that only exists when the gateway is set to "test"
-  gateway: test
+  gateway: test  # Case-insensitive - could also be "TEST", "Test", etc.
   columns:
     column_e: int
     column_f: varchar

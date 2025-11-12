@@ -29,9 +29,9 @@ import sqlmesh
 If desired, you can create the [quickstart example project](../quick_start.md) with the Python `init_example_project` function. The function requires a default SQL dialect for the project's models; this example uses `snowflake`:
 
 ```python
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 
-init_example_project("path_to_project_directory", dialect="snowflake")
+init_example_project("path_to_project_directory", engine_type="snowflake")
 ```
 
 Alternatively, create the project with a notebook magic:
@@ -86,7 +86,7 @@ positional arguments:
 
 options:
   --template TEMPLATE, -t TEMPLATE
-                        Project template. Supported values: airflow, dbt,
+                        Project template. Supported values: dbt,
                         dlt, default, empty.
   --dlt-pipeline PIPELINE
                         DLT pipeline for which to generate a SQLMesh project.
@@ -201,6 +201,9 @@ options:
 ```
 %render [--start START] [--end END] [--execution-time EXECUTION_TIME]
               [--expand EXPAND] [--dialect DIALECT] [--no-format]
+              [--normalize] [--pad PAD] [--indent INDENT]
+              [--normalize-functions NORMALIZE_FUNCTIONS] [--leading-comma]
+              [--max-text-width MAX_TEXT_WIDTH]
               model
 
 Renders a model's query, optionally expanding referenced models.
@@ -220,6 +223,17 @@ options:
                         models are expanded as raw queries.
   --dialect DIALECT     SQL dialect to render.
   --no-format           Disable fancy formatting of the query.
+  --normalize           Whether or not to normalize identifiers to lowercase.
+  --pad PAD             Determines the pad size in a formatted string.
+  --indent INDENT       Determines the indentation size in a formatted string.
+  --normalize-functions NORMALIZE_FUNCTIONS
+                        Whether or not to normalize all function names.
+                        Possible values are: 'upper', 'lower'
+  --leading-comma       Determines whether or not the comma is leading or
+                        trailing in select expressions. Default is trailing.
+  --max-text-width MAX_TEXT_WIDTH
+                        The max number of characters in a segment before
+                        creating new lines in pretty mode.
 ```
 
 #### dag
@@ -230,6 +244,13 @@ Displays the HTML DAG.
 
 options:
   --file FILE, -f FILE  An optional file path to write the HTML output to.
+```
+
+#### destroy
+```
+%destroy
+
+Removes all state tables, the SQLMesh cache, and other project resources, including warehouse objects. This includes all tables, views, and schemas managed by SQLMesh, as well as any external resources that may have been created by other tools within those schemas.
 ```
 
 #### dlt_refresh
@@ -293,8 +314,8 @@ Create a schema file containing external model schemas.
 %table_diff [--on [ON ...]] [--skip-columns [SKIP_COLUMNS ...]]
                 [--model MODEL] [--where WHERE] [--limit LIMIT]
                 [--show-sample] [--decimals DECIMALS] [--skip-grain-check]
-                [--temp-schema SCHEMA]
-                SOURCE:TARGET
+                [--warn-grain-check] [--temp-schema SCHEMA]
+                [--select-model [SELECT_MODEL ...]] SOURCE:TARGET
 
 Show the diff between two tables.
 
@@ -319,7 +340,11 @@ options:
                         floating point columns. Default: 3
   --skip-grain-check    Disable the check for a primary key (grain) that is
                         missing or is not unique.
+  --warn-grain-check    Warn if any selected model is missing a grain,
+                        and compute diffs for the remaining models.
   --temp-schema SCHEMA  The schema to use for temporary tables.
+  --select-model <[SELECT_MODEL ...]>
+                        Select specific models to diff using a pattern.
 ```
 
 #### model
@@ -438,6 +463,27 @@ options:
                         Execution time.
 ```
 
+#### check_intervals
+```
+%check_intervals [--no-signals] [--select-model [SELECT_MODEL ...]]
+                   [--start START] [--end END]
+                   [environment]
+
+Show missing intervals in an environment, respecting signals.
+
+positional arguments:
+  environment           The environment to check intervals for.
+
+options:
+  --no-signals          Disable signal checks and only show missing intervals.
+  --select-model <[SELECT_MODEL ...]>
+                        Select specific model changes that should be included
+                        in the plan.
+  --start START, -s START
+                        Start date of intervals to check for.
+  --end END, -e END     End date of intervals to check for.
+```
+
 #### rollback
 ```
 %rollback
@@ -499,7 +545,7 @@ options:
 
 #### lint
 ```
-%lint [--models ...] 
+%lint [--models ...]
 
 Run the linter on the target models(s)
 

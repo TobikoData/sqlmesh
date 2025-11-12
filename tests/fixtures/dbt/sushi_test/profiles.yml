@@ -3,6 +3,7 @@ sushi:
     in_memory:
       type: duckdb
       schema: sushi
+      database: memory
     duckdb:
       type: duckdb
       path: 'local.duckdb'

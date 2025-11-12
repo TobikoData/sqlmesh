@@ -13,13 +13,15 @@ import traceback
 import types
 import typing as t
 import uuid
+from dataclasses import dataclass
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
-from enum import IntEnum
+from enum import IntEnum, Enum
 from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
+import unicodedata
 from sqlglot import exp
 from sqlglot.dialects.dialect import Dialects
 
@@ -136,7 +138,7 @@ class registry_decorator:
         except ValueError:
             # No need to raise due to duplicate key if the functions are identical
             if func.__code__.co_code != registry[func_name].func.__code__.co_code:
-                raise
+                raise ValueError(f"Duplicate name: '{func_name}'.")
 
         @wraps(func)
         def wrapper(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
@@ -177,8 +179,7 @@ def sys_path(*paths: Path) -> t.Iterator[None]:
 def format_exception(exception: BaseException) -> t.List[str]:
     if sys.version_info < (3, 10):
         return traceback.format_exception(type(exception), exception, exception.__traceback__)  # type: ignore
-    else:
-        return traceback.format_exception(exception)  # type: ignore
+    return traceback.format_exception(exception)  # type: ignore
 
 
 def word_characters_only(s: str, replacement_char: str = "_") -> str:
@@ -291,8 +292,14 @@ def sqlglot_dialects() -> str:
 
 NON_ALNUM = re.compile(r"[^a-zA-Z0-9_]")
 
+NON_ALUM_INCLUDE_UNICODE = re.compile(r"\W", flags=re.UNICODE)
 
-def sanitize_name(name: str) -> str:
+
+def sanitize_name(name: str, *, include_unicode: bool = False) -> str:
+    if include_unicode:
+        s = unicodedata.normalize("NFC", name)
+        s = NON_ALUM_INCLUDE_UNICODE.sub("_", s)
+        return s
     return NON_ALNUM.sub("_", name)
 
 
@@ -347,3 +354,71 @@ class Verbosity(IntEnum):
     DEFAULT = 0
     VERBOSE = 1
     VERY_VERBOSE = 2
+
+    @property
+    def is_default(self) -> bool:
+        return self == Verbosity.DEFAULT
+
+    @property
+    def is_verbose(self) -> bool:
+        return self == Verbosity.VERBOSE
+
+    @property
+    def is_very_verbose(self) -> bool:
+        return self == Verbosity.VERY_VERBOSE
+
+
+class CompletionStatus(Enum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    NOTHING_TO_DO = "nothing_to_do"
+
+    @property
+    def is_success(self) -> bool:
+        return self == CompletionStatus.SUCCESS
+
+    @property
+    def is_failure(self) -> bool:
+        return self == CompletionStatus.FAILURE
+
+    @property
+    def is_nothing_to_do(self) -> bool:
+        return self == CompletionStatus.NOTHING_TO_DO
+
+
+def to_snake_case(name: str) -> str:
+    return "".join(
+        f"_{c.lower()}" if c.isupper() and idx != 0 else c.lower() for idx, c in enumerate(name)
+    )
+
+
+class JobType(Enum):
+    PLAN = "SQLMESH_PLAN"
+    RUN = "SQLMESH_RUN"
+
+
+@dataclass(frozen=True)
+class CorrelationId:
+    """ID that is added to each query in order to identify the job that created it."""
+
+    job_type: JobType
+    job_id: str
+
+    def __str__(self) -> str:
+        return f"{self.job_type.value}: {self.job_id}"
+
+    @classmethod
+    def from_plan_id(cls, plan_id: str) -> CorrelationId:
+        return CorrelationId(JobType.PLAN, plan_id)
+
+
+def get_source_columns_to_types(
+    columns_to_types: t.Dict[str, exp.DataType],
+    source_columns: t.Optional[t.List[str]],
+) -> t.Dict[str, exp.DataType]:
+    source_column_lookup = set(source_columns) if source_columns else None
+    return {
+        k: v
+        for k, v in columns_to_types.items()
+        if not source_column_lookup or k in source_column_lookup
+    }

@@ -4,11 +4,14 @@ from sqlmesh.core.snapshot.definition import (
     Node as Node,
     QualifiedViewName as QualifiedViewName,
     Snapshot as Snapshot,
+    SnapshotIdAndVersion as SnapshotIdAndVersion,
     SnapshotChangeCategory as SnapshotChangeCategory,
     SnapshotDataVersion as SnapshotDataVersion,
     SnapshotFingerprint as SnapshotFingerprint,
     SnapshotId as SnapshotId,
+    SnapshotIdBatch as SnapshotIdBatch,
     SnapshotIdLike as SnapshotIdLike,
+    SnapshotIdAndVersionLike as SnapshotIdAndVersionLike,
     SnapshotInfoLike as SnapshotInfoLike,
     SnapshotIntervals as SnapshotIntervals,
     SnapshotNameVersion as SnapshotNameVersion,
@@ -26,4 +29,7 @@ from sqlmesh.core.snapshot.definition import (
     table_name as table_name,
     to_table_mapping as to_table_mapping,
 )
-from sqlmesh.core.snapshot.evaluator import SnapshotEvaluator as SnapshotEvaluator
+from sqlmesh.core.snapshot.evaluator import (
+    SnapshotEvaluator as SnapshotEvaluator,
+    SnapshotCreationFailedError as SnapshotCreationFailedError,
+)

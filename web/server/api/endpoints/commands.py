@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import typing as t
 
-import pandas as pd
 from fastapi import APIRouter, Body, Depends, Request, Response
 from starlette.status import HTTP_204_NO_CONTENT
 from sqlmesh.core.console import Verbosity
@@ -22,6 +20,7 @@ from web.server.utils import (
     df_to_pyarrow_bytes,
     run_in_executor,
 )
+from pathlib import Path
 
 router = APIRouter()
 
@@ -65,6 +64,8 @@ async def evaluate(
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Evaluate a model with a default limit of 1000"""
+    import pandas as pd
+
     try:
         df = context.evaluate(
             options.model,
@@ -140,12 +141,10 @@ async def test(
     context: Context = Depends(get_loaded_context),
 ) -> models.TestResult:
     """Run one or all model tests"""
-    test_output = io.StringIO()
     try:
         result = context.test(
-            tests=[str(context.path / test)] if test else None,
+            tests=[str(context.path / Path(test))] if test else None,
             verbosity=verbosity,
-            stream=test_output,
         )
     except Exception:
         import traceback
@@ -155,16 +154,18 @@ async def test(
             message="Unable to run tests",
             origin="API -> commands -> test",
         )
-    context.console.log_test_results(
-        result,
-        test_output.getvalue(),
-        context._test_connection_config._engine_adapter.DIALECT,
-    )
+    context.console.log_test_results(result, context.test_connection_config._engine_adapter.DIALECT)
+
+    def _test_path(test: ModelTest) -> t.Optional[str]:
+        if path := test.path_relative_to(context.path):
+            return path.as_posix()
+        return None
+
     return models.TestResult(
         errors=[
             models.TestErrorOrFailure(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
                 tb=tb,
             )
             for test, tb in ((t.cast(ModelTest, test), tb) for test, tb in result.errors)
@@ -172,7 +173,7 @@ async def test(
         failures=[
             models.TestErrorOrFailure(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
                 tb=tb,
             )
             for test, tb in ((t.cast(ModelTest, test), tb) for test, tb in result.failures)
@@ -180,7 +181,7 @@ async def test(
         skipped=[
             models.TestSkipped(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
                 reason=reason,
             )
             for test, reason in (
@@ -190,7 +191,7 @@ async def test(
         successes=[
             models.TestCase(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
             )
             for test in (t.cast(ModelTest, test) for test in result.successes)
         ],

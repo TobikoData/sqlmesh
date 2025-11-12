@@ -1241,12 +1241,13 @@ This is the most accurate representation of the menu based on the source data pr
 
 ### Shared Configuration Options
 
-| Name                    | Description                                                                                                     | Type                      |
-|-------------------------|-----------------------------------------------------------------------------------------------------------------|---------------------------|
-| unique_key              | Unique key used for identifying rows between source and target                                                  | List of strings or string |
-| valid_from_name         | The name of the `valid_from` column to create in the target table. Default: `valid_from`                        | string                    |
-| valid_to_name           | The name of the `valid_to` column to create in the target table. Default: `valid_to`                            | string                    |
-| invalidate_hard_deletes | If set to `true`, when a record is missing from the source table it will be marked as invalid. Default: `false` | bool                      |
+| Name                    | Description                                                                                                                                                                                                                                                                                                       | Type                      |
+|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| unique_key              | Unique key used for identifying rows between source and target                                                                                                                                                                                                                                                    | List of strings or string |
+| valid_from_name         | The name of the `valid_from` column to create in the target table. Default: `valid_from`                                                                                                                                                                                                                          | string                    |
+| valid_to_name           | The name of the `valid_to` column to create in the target table. Default: `valid_to`                                                                                                                                                                                                                              | string                    |
+| invalidate_hard_deletes | If set to `true`, when a record is missing from the source table it will be marked as invalid. Default: `false`                                                                                                                                                                                                   | bool                      |
+| batch_size              | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. See [Processing Source Table with Historical Data](#processing-source-table-with-historical-data) for more info on this use case. (Default: `None`) | int                       |
 
 !!! tip "Important"
 
@@ -1273,10 +1274,66 @@ This is the most accurate representation of the menu based on the source data pr
 
 ### SCD Type 2 By Column Configuration Options
 
-| Name                         | Description                                                                                                                                                                                                                                 | Type                      |
-|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| columns                      | The name of the columns to check for changes. `*` to represent that all columns should be checked.                                                                                                                                          | List of strings or string |
-| execution_time_as_valid_from | By default, when the model is first loaded `valid_from` is set to `1970-01-01 00:00:00` and future new rows will have `execution_time` of when the pipeline ran. This changes the behavior to always use `execution_time`. Default: `false` | bool                      |
+| Name                         | Description                                                                                                                                                                                                                                                                                                                                  | Type                      |
+|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| columns                      | The name of the columns to check for changes. `*` to represent that all columns should be checked.                                                                                                                                                                                                                                           | List of strings or string |
+| execution_time_as_valid_from | By default, when the model is first loaded `valid_from` is set to `1970-01-01 00:00:00` and future new rows will have `execution_time` of when the pipeline ran. This changes the behavior to always use `execution_time`. Default: `false`                                                                                                  | bool                      |
+| updated_at_name              | If sourcing from a table that includes as timestamp to use as valid_from, set this property to that column. See [Processing Source Table with Historical Data](#processing-source-table-with-historical-data) for more info on this use case. (Default: `None`) | int                       |
+
+
+### Processing Source Table with Historical Data
+
+The most common case for SCD Type 2 is creating history for a table that it doesn't have it already. 
+In the example of the restaurant menu, the menu just tells you what is offered right now, but you want to know what was offered over time.
+In this case, the default setting of `None` for `batch_size` is the best option.
+
+Another use case though is processing a source table that already has history in it. 
+A common example of this is a "daily snapshot" table that is created by a source system that takes a snapshot of the data at the end of each day.
+If your source table has historical records, like a "daily snapshot" table, then set `batch_size` to `1` to process each interval (each day if a `@daily` cron) in sequential order.
+That way the historical records will be properly captured in the SCD Type 2 table.
+
+#### Example - Source from Daily Snapshot Table
+
+```sql linenums="1"
+MODEL (
+    name db.table,
+    kind SCD_TYPE_2_BY_COLUMN (
+        unique_key id,
+        columns [some_value],
+        updated_at_name ds,
+        batch_size 1
+    ),
+    start '2025-01-01',
+    cron '@daily'
+);
+SELECT
+    id,
+    some_value,
+    ds
+FROM
+    source_table
+WHERE
+    ds between @start_ds and @end_ds
+```
+
+This will process each day of the source table in sequential order (if more than one day to process), checking `some_value` column to see if it changed. If it did change, `valid_from` will be set to match the `ds` column (except for first value which would be `1970-01-01 00:00:00`).
+
+If the source data was the following:
+
+| id | some_value |     ds      |
+|----|------------|:-----------:|
+| 1  | 1          | 2025-01-01  |
+| 1  | 2          | 2025-01-02  |
+| 1  | 3          | 2025-01-03  |
+| 1  | 3          | 2025-01-04  |
+
+Then the resulting SCD Type 2 table would be:
+
+| id | some_value |     ds      |     valid_from      |      valid_to       |
+|----|------------|:-----------:|:-------------------:|:-------------------:|
+| 1  | 1          | 2025-01-01  | 1970-01-01 00:00:00 | 2025-01-02 00:00:00 |
+| 1  | 2          | 2025-01-02  | 2025-01-02 00:00:00 | 2025-01-03 00:00:00 |
+| 1  | 3          | 2025-01-03  | 2025-01-03 00:00:00 |        NULL         |
 
 ### Querying SCD Type 2 Models
 

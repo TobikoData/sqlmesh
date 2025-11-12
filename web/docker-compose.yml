@@ -1,4 +1,3 @@
-version: "3.11"
 services:
   generate-openapi-spec:
     image: tobiko-api
@@ -17,13 +16,13 @@ services:
     build:
       context: ..
       dockerfile: web/Dockerfile.app
-    command: npm run dev -- --host 0.0.0.0 --port 8001
-    working_dir: /app
+    command: pnpm run dev --host 0.0.0.0 --port 8001
+    working_dir: /app/web/client
     ports:
       - 8001:8001
     volumes:
-      - ../web/client:/app
-      - /app/node_modules
+      - ../web/client:/app/web/client
+      - /app/web/client/node_modules
     tty: true
     networks:
       - tobiko-development
@@ -37,7 +36,10 @@ services:
     build:
       context: ..
       dockerfile: web/Dockerfile.api
-    command: python -m uvicorn web.server.app:app --host 0.0.0.0 --port 8000 --reload --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh --timeout-keep-alive 300 --timeout-graceful-shutdown 1
+    command:
+      python -m uvicorn web.server.app:app --host 0.0.0.0 --port 8000 --reload
+      --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh
+      --timeout-keep-alive 300 --timeout-graceful-shutdown 1
     ports:
       - 8000:8000
     volumes:

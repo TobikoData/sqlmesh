@@ -1,0 +1,19 @@
+:where(:root) {
+  --color-model-name-grayscale-link-underline: var(--color-neutral-125);
+  --color-model-name-grayscale-link-underline-hover: var(--color-neutral-500);
+  --color-model-name-link-underline: var(--color-link-underline);
+  --color-model-name-link-underline-hover: var(--color-link-hover);
+
+  --color-model-name-grayscale-catalog: var(--color-neutral-400);
+  --color-model-name-grayscale-schema: var(--color-neutral-600);
+  /* --color-model-name-grayscale-model: var(--color-model-name-grayscale-model, var(--color-neutral-800)); */
+
+  --color-model-name-catalog: var(--color-catalog);
+  --color-model-name-schema: var(--color-schema);
+  --color-model-name-model: var(--color-model);
+
+  --color-model-name-copy-icon: var(--color-neutral-600);
+  --color-model-name-copy-icon-hover: var(--color-neutral-100);
+  --color-model-name-copy-icon-background: var(--color-neutral-100);
+  --color-model-name-copy-icon-background-hover: var(--color-neutral-200);
+}

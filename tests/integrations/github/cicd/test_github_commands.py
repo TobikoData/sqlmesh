@@ -1,24 +1,28 @@
 # type: ignore
+import typing as t
 import os
 import pathlib
 from unittest import TestCase, mock
 from unittest.result import TestResult
+
+TestResult.__test__ = False  # prevent pytest trying to collect this as a test class
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.plan import Plan
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd import command
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
+    GithubController,
     GithubCheckConclusion,
     GithubCheckStatus,
 )
 from sqlmesh.utils.errors import ConflictingPlanError, PlanError, TestError, CICDBotError
 
-pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
     pytest.mark.github,
     pytest.mark.slow,
@@ -144,7 +148,8 @@ def test_run_all_success_with_approvers_approved(
 <details>
   <summary>:ship: Prod Plan Being Applied</summary>
 
-**New environment `prod` will be created from `prod`**"""
+
+**`prod` environment will be initialized**"""
     )
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
@@ -271,7 +276,8 @@ def test_run_all_success_with_approvers_approved_merge_delete(
 <details>
   <summary>:ship: Prod Plan Being Applied</summary>
 
-**New environment `prod` will be created from `prod`**"""
+
+**`prod` environment will be initialized**"""
     )
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
@@ -380,7 +386,7 @@ def test_run_all_missing_approval(
     assert GithubCheckStatus(approval_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(approval_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(approval_checks_runs[2]["status"]).is_completed
-    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_neutral
+    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_failure
 
     assert len(controller._context.apply.call_args_list) == 1
     pr_plan = controller._context.apply.call_args_list[0][0]
@@ -400,7 +406,7 @@ def test_run_all_missing_approval(
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=neutral\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
+            == "run_unit_tests=success\nhas_required_approval=failure\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
         )
 
 
@@ -447,11 +453,11 @@ def test_run_all_test_failed(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.MERGE),
     )
-    test_result = TestResult()
+    test_result = ModelTextTestResult(stream=None, descriptions=True, verbosity=0)
     test_result.testsRun += 1
-    test_result.addFailure(TestCase(), (None, None, None))
+    test_result.addFailure(TestCase(), (TestError, TestError("some error"), None))
     controller._context._run_tests = mocker.MagicMock(
-        side_effect=lambda **kwargs: (test_result, "some error")
+        side_effect=lambda **kwargs: (test_result, "")
     )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
@@ -473,15 +479,9 @@ def test_run_all_test_failed(
     assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_failure
     assert test_checks_runs[2]["output"]["title"] == "Tests Failed"
     assert (
-        test_checks_runs[2]["output"]["summary"]
-        == """**Num Successful Tests: 0**
-
-
-```some error```
-
-
-"""
+        """sqlmesh.utils.errors.TestError: some error""" in test_checks_runs[2]["output"]["summary"]
     )
+    assert """Failed tests""" in test_checks_runs[2]["output"]["summary"]
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
@@ -882,6 +882,15 @@ def make_test_prod_update_failure_case(
     assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_checks_runs[2]["conclusion"]) == expect_prod_sync_conclusion
+    if expect_prod_sync_conclusion.is_action_required:
+        assert prod_checks_runs[2]["output"]["title"] == "Failed due to error applying plan"
+        assert (
+            prod_checks_runs[2]["output"]["summary"]
+            == f"""**Plan error:**
+```
+{to_raise_on_prod_plan}
+```"""
+        )
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -918,7 +927,8 @@ def make_test_prod_update_failure_case(
 <details>
   <summary>:ship: Prod Plan Being Applied</summary>
 
-**New environment `prod` will be created from `prod`**"""
+
+**`prod` environment will be initialized**"""
     )
 
     with open(github_output_file, "r", encoding="utf-8") as f:
@@ -1146,6 +1156,7 @@ def test_comment_command_deploy_prod(
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
+    assert not controller.forward_only_plan
 
     github_output_file = tmp_path / "github_output.txt"
 
@@ -1210,7 +1221,8 @@ def test_comment_command_deploy_prod(
 <details>
   <summary>:ship: Prod Plan Being Applied</summary>
 
-**New environment `prod` will be created from `prod`**"""
+
+**`prod` environment will be initialized**"""
     )
 
     with open(github_output_file, "r", encoding="utf-8") as f:
@@ -1288,3 +1300,155 @@ def test_comment_command_deploy_prod_not_enabled(
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert output == ""
+
+
+def test_comment_command_deploy_prod_no_deploy_detected_yet(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is not merged
+    - No requred approvers defined
+    - Tests passed
+    - PR Merge Method defined
+    - Deploy command enabled but not yet triggered
+
+    Outcome:
+    - "Prod Environment Synced" step should explain the reason why it was skipped is because /deploy has not yet been detected
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(lambda: [])
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE, enable_deploy_command=True),
+    )
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
+
+    assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
+    assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
+    assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
+    assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
+    prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
+    assert len(prod_checks_runs) == 2
+    assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
+    assert prod_checks_runs[1]["output"]["title"] == "Skipped deployment"
+    assert (
+        prod_checks_runs[1]["output"]["summary"]
+        == "Skipped Deploying to Production because a `/deploy` command has not been detected yet"
+    )
+    assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_skipped
+
+    # required approvers are irrelevant because /deploy command is enabled
+    assert "SQLMesh - Has Required Approval" not in controller._check_run_mapping
+
+
+def test_deploy_prod_forward_only(
+    github_client,
+    make_controller: t.Callable[..., GithubController],
+    make_mock_check_run,
+    make_mock_issue_comment,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is created with a branch name indicating that plans should be forward-only
+    - PR is not merged
+    - Tests passed
+    - PR Merge Method defined
+    - Deploy command has been triggered
+
+    Outcome:
+    - "Prod Environment Synced" step should show a tip explaining how to retroactively apply forward-only changes to old data
+    - Bot Comment should show the same tip
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(lambda: [])
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+    mock_pull_request.head.ref = "unit-test-forward-only"
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.SQUASH,
+            enable_deploy_command=True,
+            forward_only_branch_suffix="-forward-only",
+        ),
+        mock_out_context=False,
+    )
+
+    # create existing prod to apply against
+    controller._context.plan(auto_apply=True)
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    # then, run a deploy with forward_only set
+    assert controller.forward_only_plan
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._deploy_production(controller)
+
+    # Prod Environment Synced step should be successful
+    assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
+    prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
+    assert len(prod_checks_runs) == 2
+    assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_in_progress
+    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
+    assert prod_checks_runs[1]["output"]["title"] == "Deployed to Prod"
+    assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_success
+
+    # PR comment should be updated with forward-only tip
+    assert len(created_comments) == 1
+    assert (
+        """> [!TIP]
+> In order to see this forward-only plan retroactively apply to historical intervals on the production model, run the below for date ranges in scope:
+> 
+> `$ sqlmesh plan --restate-model sushi.customer_revenue_by_day --start YYYY-MM-DD --end YYYY-MM-DD`"""
+        in created_comments[0].body
+    )

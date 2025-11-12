@@ -1,15 +1,18 @@
 """Remove disable restatement from external and embedded models."""
 
 import json
-import pandas as pd
 
 from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
-    engine_adapter = state_sync.engine_adapter
-    schema = state_sync.schema
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
+    pass
+
+
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
+    import pandas as pd
+
     snapshots_table = "_snapshots"
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
@@ -68,5 +71,5 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
-            columns_to_types=snapshots_columns_to_types,
+            target_columns_to_types=snapshots_columns_to_types,
         )

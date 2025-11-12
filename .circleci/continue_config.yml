@@ -11,6 +11,9 @@ parameters:
     type: boolean
     default: false
 
+orbs:
+  windows: circleci/windows@5.0
+
 commands:
   halt_unless_core:
     steps:
@@ -34,6 +37,21 @@ commands:
             - run: circleci-agent step halt
 
 jobs:
+  vscode_test:
+    docker:
+      - image: cimg/node:20.19.1-browsers
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install Dependencies
+          command: |
+            pnpm install
+      - run:
+          name: Run VSCode extension CI
+          command: |
+            cd vscode/extension
+            pnpm run ci
   doc_tests:
     docker:
       - image: cimg/python:3.10
@@ -75,9 +93,48 @@ jobs:
       - run:
           name: Run linters and code style checks
           command: make py-style
+      - unless:
+          condition:
+            equal: ["3.9", << parameters.python_version >>]
+          steps:
+            - run:
+                name: Exercise the benchmarks
+                command: make benchmark-ci
       - run:
           name: Run cicd tests
           command: make cicd-test
+      - store_test_results:
+          path: test-results
+
+  cicd_tests_windows:
+    executor:
+      name: windows/default
+      size: large
+    steps:
+      - halt_unless_core
+      - run:
+          name: Enable symlinks in git config
+          command: git config --global core.symlinks true
+      - checkout
+      - run:
+          name: Install System Dependencies
+          command: |
+            choco install make which -y
+            refreshenv
+      - run:
+          name: Install SQLMesh dev dependencies
+          command: |
+            python -m venv venv
+            . ./venv/Scripts/activate
+            python.exe -m pip install --upgrade pip
+            make install-dev
+      - run:
+          name: Run fast unit tests
+          command: |
+            . ./venv/Scripts/activate
+            which python
+            python --version
+            make fast-test
       - store_test_results:
           path: test-results
 
@@ -91,123 +148,65 @@ jobs:
       - halt_unless_core
       - checkout
       - run:
-          name: Run the migration test
-          command: ./.circleci/test_migration.sh
+          name: Run the migration test - sushi
+          command: ./.circleci/test_migration.sh sushi "--gateway duckdb_persistent"
+      - run:
+          name: Run the migration test - sushi_dbt
+          command: ./.circleci/test_migration.sh sushi_dbt "--config migration_test_config"
 
   ui_style:
     docker:
-      - image: cimg/python:3.9
+      - image: cimg/node:20.19.0
     resource_class: small
     steps:
-      - halt_unless_client
       - checkout
-      - run:
-          command: |
-            cp .pre-commit-config.yaml pre-commit-cache-key.txt
-            python --version --version >> pre-commit-cache-key.txt
       - restore_cache:
+          name: Restore pnpm Package Cache
           keys:
-            - v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
+            - pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
       - run:
-          name: Install pre-commit
-          command: pip install pre-commit
-      - run:
-          name: Fix Git URL override
-          command: git config --global --unset url."ssh://git@github.com".insteadOf
+          name: Install Dependencies
+          command: |
+            pnpm install
+      - save_cache:
+          name: Save pnpm Package Cache
+          key: pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - .pnpm-store
       - run:
           name: Run linters and code style checks
-          command: make ui-style
-      - save_cache:
-          key: v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
-          paths:
-            - ~/.cache/pre-commit
+          command: pnpm run lint
 
   ui_test:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.40.1-jammy
+      - image: mcr.microsoft.com/playwright:v1.54.1-jammy
     resource_class: medium
     steps:
       - halt_unless_client
       - checkout
       - restore_cache:
+          name: Restore pnpm Package Cache
           keys:
-            - v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+            - pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
       - run:
-          name: Install packages
-          command: npm --prefix web/client ci
+          name: Install pnpm package manager
+          command: |
+            npm install --global corepack@latest
+            corepack enable
+            corepack prepare pnpm@latest-10 --activate
+            pnpm config set store-dir .pnpm-store
+      - run:
+          name: Install Dependencies
+          command: |
+            pnpm install
       - save_cache:
-          key: v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+          name: Save pnpm Package Cache
+          key: pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
           paths:
-            - /root/.npm
+            - .pnpm-store
       - run:
           name: Run tests
           command: npm --prefix web/client run test
-
-  airflow_docker_tests:
-    machine:
-      image: ubuntu-2204:2022.10.2
-      docker_layer_caching: true
-    resource_class: large
-    environment:
-      PYTEST_XDIST_AUTO_NUM_WORKERS: 8
-      SQLMESH__DISABLE_ANONYMIZED_ANALYTICS: "1"
-    steps:
-      - checkout
-      - run:
-          name: Install envsubst
-          command: sudo apt-get update && sudo apt-get install gettext-base
-      - run:
-          name: Setup python env
-          command: |
-            pip3 install --upgrade pip
-            pip3 install ruamel.yaml==0.16.0
-            python3 --version
-      - run:
-          name: Run Airflow slow tests
-          command: make airflow-docker-test-with-env
-          no_output_timeout: 15m
-      - run:
-          name: Collect Airflow logs
-          command: |
-            tar -czf ./airflow_logs.tgz -C ./examples/airflow/logs .
-            mkdir -p /tmp/airflow_logs
-            cp ./airflow_logs.tgz /tmp/airflow_logs/
-          when: on_fail
-      - store_artifacts:
-          path: /tmp/airflow_logs
-
-  trigger_private_tests:
-      docker:
-        - image: cimg/python:3.12.0
-      resource_class: small
-      steps:
-        - checkout
-        - run:
-            name: Install setuptools scm
-            command: pip install setuptools_scm
-        - run:
-            name: Trigger private tests
-            command: |
-              export COMMIT_MESSAGE="$(git log --format=%s -n 1 $CIRCLE_SHA1)"
-              export FORMATTED_COMMIT_MESSAGE="${COMMIT_MESSAGE//\"/\\\"}"
-              # returns a version string like 0.1.0.dev11
-              export PACKAGE_VERSION="$(python ./.circleci/get_scm_version.py)"
-              curl --request POST \
-                --url $TOBIKO_PRIVATE_CIRCLECI_URL \
-                --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
-                --header "content-type: application/json" \
-                --data '{
-                  "branch":"main",
-                  "parameters":{
-                    "run_main_pr":false,
-                    "run_sqlmesh_commit":true,
-                    "sqlmesh_branch":"'$CIRCLE_BRANCH'",
-                    "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
-                    "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
-                    "sqlmesh_commit_message":"'"$FORMATTED_COMMIT_MESSAGE"'",
-                    "sqlmesh_package_version":"'$PACKAGE_VERSION'"
-                    }
-                }'
 
   engine_tests_docker:
     parameters:
@@ -246,6 +245,9 @@ jobs:
       - halt_unless_core
       - checkout
       - run:
+          name: Install OS-level dependencies
+          command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"
+      - run:
           name: Generate database name
           command: |
             UUID=`cat /proc/sys/kernel/random/uuid`
@@ -254,6 +256,8 @@ jobs:
             echo "export SNOWFLAKE_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
             echo "export DATABRICKS_CATALOG='$TEST_DB_NAME'" >> "$BASH_ENV"
             echo "export REDSHIFT_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
+            echo "export GCP_POSTGRES_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
+            echo "export FABRIC_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
       - run:
           name: Create test database
           command: ./.circleci/manage-test-db.sh << parameters.engine >> "$TEST_DB_NAME" up
@@ -281,13 +285,8 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
-      - airflow_docker_tests:
-          requires:
-            - style_and_cicd_tests
-          filters:
-            branches:
-              only:
-                - main
+                - "3.13"
+      - cicd_tests_windows
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
           matrix:
@@ -300,7 +299,6 @@ workflows:
                 - trino
                 - spark
                 - clickhouse
-                - clickhouse-cluster
                 - risingwave
       - engine_tests_cloud:
           name: cloud_engine_<< matrix.engine >>
@@ -317,17 +315,13 @@ workflows:
                 - bigquery
                 - clickhouse-cloud
                 - athena
-          filters:
-           branches:
-             only:
-               - main
-      - trigger_private_tests:
-          requires:
-            - style_and_cicd_tests
+                - fabric
+                - gcp-postgres
           filters:
             branches:
               only:
                 - main
       - ui_style
       - ui_test
+      - vscode_test
       - migration_test

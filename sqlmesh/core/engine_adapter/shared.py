@@ -171,11 +171,21 @@ class DataObject(PydanticModel):
     def is_clustered(self) -> bool:
         return bool(self.clustering_key)
 
+    def to_table(self) -> exp.Table:
+        return exp.table_(self.name, db=self.schema_name, catalog=self.catalog, quoted=True)
+
 
 class CatalogSupport(Enum):
+    # The engine has no concept of catalogs
     UNSUPPORTED = 1
+
+    # The engine has a concept of catalogs, but they are isolated from each other and cannot reference each others tables
     SINGLE_CATALOG_ONLY = 2
+
+    # The engine supports multiple catalogs but some operations require a SET CATALOG query to set the active catalog before proceeding
     REQUIRES_SET_CATALOG = 3
+
+    # The engine supports multiple catalogs and can unambiguously target a specific catalog when performing operations (without running SET CATALOG first)
     FULL_SUPPORT = 4
 
     @property
@@ -233,6 +243,8 @@ class InsertOverwriteStrategy(Enum):
     # Issue a single INSERT query to replace a data range. The assumption is that the query engine will transparently match partition bounds
     # and replace data rather than append to it. Trino is an example of this when `hive.insert-existing-partitions-behavior=OVERWRITE` is configured
     INTO_IS_OVERWRITE = 4
+    # Do the INSERT OVERWRITE using merge since the engine doesn't support it natively
+    MERGE = 5
 
     @property
     def is_delete_insert(self) -> bool:
@@ -249,6 +261,10 @@ class InsertOverwriteStrategy(Enum):
     @property
     def is_into_is_overwrite(self) -> bool:
         return self == InsertOverwriteStrategy.INTO_IS_OVERWRITE
+
+    @property
+    def is_merge(self) -> bool:
+        return self == InsertOverwriteStrategy.MERGE
 
 
 class SourceQuery:

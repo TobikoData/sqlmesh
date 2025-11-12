@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import NotFound from '../root/NotFound'
 import { EnumRoutes } from '~/routes'
 import { useNotificationCenter } from '../root/context/notificationCenter'

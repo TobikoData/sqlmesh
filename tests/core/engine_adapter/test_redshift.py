@@ -1,7 +1,7 @@
 # type: ignore
 import typing as t
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from unittest.mock import PropertyMock
@@ -9,6 +9,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import RedshiftEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
@@ -80,6 +81,154 @@ def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker:
         'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
         'CREATE TABLE "test_schema"."test_table" ("char" CHAR, "char1" CHAR(max), "char2" CHAR(2), "varchar" VARCHAR, "varchar256" VARCHAR(max), "varchar2" VARCHAR(2))',
     ]
+
+
+def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_schema.test_table", dialect="redshift")
+    new_grants_config = {"SELECT": ["user1", "user2"], "INSERT": ["user3"]}
+
+    current_grants = [("SELECT", "old_user"), ("UPDATE", "legacy_user")]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 4
+    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM "old_user"' in sql_calls
+    assert 'REVOKE UPDATE ON "test_schema"."test_table" FROM "legacy_user"' in sql_calls
+    assert 'GRANT SELECT ON "test_schema"."test_table" TO "user1", "user2"' in sql_calls
+    assert 'GRANT INSERT ON "test_schema"."test_table" TO "user3"' in sql_calls
+
+
+def test_sync_grants_config_with_overlaps(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_schema.test_table", dialect="redshift")
+    new_grants_config = {
+        "SELECT": ["user_shared", "user_new"],
+        "INSERT": ["user_shared", "user_writer"],
+    }
+
+    current_grants = [
+        ("SELECT", "user_shared"),
+        ("SELECT", "user_legacy"),
+        ("INSERT", "user_shared"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 3
+    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM "user_legacy"' in sql_calls
+    assert 'GRANT SELECT ON "test_schema"."test_table" TO "user_new"' in sql_calls
+    assert 'GRANT INSERT ON "test_schema"."test_table" TO "user_writer"' in sql_calls
+
+
+@pytest.mark.parametrize(
+    "table_type",
+    [
+        (DataObjectType.TABLE),
+        (DataObjectType.VIEW),
+        (DataObjectType.MATERIALIZED_VIEW),
+    ],
+)
+def test_sync_grants_config_object_kind(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+    table_type: DataObjectType,
+) -> None:
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_schema.test_object", dialect="redshift")
+
+    mocker.patch.object(adapter, "fetchall", return_value=[])
+
+    adapter.sync_grants_config(relation, {"SELECT": ["user_test"]}, table_type)
+
+    sql_calls = to_sql_calls(adapter)
+    # we don't need to explicitly specify object_type for tables and views
+    assert sql_calls == [f'GRANT SELECT ON "test_schema"."test_object" TO "user_test"']
+
+
+def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table('"TestSchema"."TestTable"', dialect="redshift")
+    new_grants_config = {"SELECT": ["user1", "user2"], "INSERT": ["user3"]}
+
+    current_grants = [("SELECT", "user_old"), ("UPDATE", "user_legacy")]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'TestSchema' AND table_name = 'TestTable' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 4
+    assert 'REVOKE SELECT ON "TestSchema"."TestTable" FROM "user_old"' in sql_calls
+    assert 'REVOKE UPDATE ON "TestSchema"."TestTable" FROM "user_legacy"' in sql_calls
+    assert 'GRANT SELECT ON "TestSchema"."TestTable" TO "user1", "user2"' in sql_calls
+    assert 'GRANT INSERT ON "TestSchema"."TestTable" TO "user3"' in sql_calls
+
+
+def test_sync_grants_config_no_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_table", dialect="redshift")
+    new_grants_config = {"SELECT": ["user1"], "INSERT": ["user2"]}
+
+    current_grants = [("UPDATE", "user_old")]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    get_schema_mock = mocker.patch.object(adapter, "_get_current_schema", return_value="public")
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    get_schema_mock.assert_called_once()
+
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'public' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 3
+    assert 'REVOKE UPDATE ON "test_table" FROM "user_old"' in sql_calls
+    assert 'GRANT SELECT ON "test_table" TO "user1"' in sql_calls
+    assert 'GRANT INSERT ON "test_table" TO "user2"' in sql_calls
 
 
 def test_create_table_from_query_exists_no_if_not_exists(
@@ -219,7 +368,7 @@ def test_values_to_sql(adapter: t.Callable, mocker: MockerFixture):
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     result = adapter._values_to_sql(
         values=list(df.itertuples(index=False, name=None)),
-        columns_to_types={"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         batch_start=0,
         batch_end=2,
     )
@@ -262,11 +411,16 @@ def test_replace_query_with_df_table_exists(adapter: t.Callable, mocker: MockerF
 
     mock_temp_table = mocker.MagicMock(side_effect=mock_table)
     mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table", mock_temp_table)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
 
     adapter.replace_query(
         table_name="test_table",
         query_or_df=df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "b": exp.DataType.build("int"),
         },
@@ -293,7 +447,7 @@ def test_replace_query_with_df_table_not_exists(adapter: t.Callable, mocker: Moc
     adapter.replace_query(
         table_name="test_table",
         query_or_df=df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "b": exp.DataType.build("int"),
         },
@@ -336,7 +490,7 @@ def test_create_view(adapter: t.Callable):
     adapter.create_view(
         view_name="test_view",
         query_or_df=parse_one("SELECT cola FROM table"),
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "b": exp.DataType.build("int"),
         },
@@ -355,12 +509,11 @@ def test_alter_table_drop_column_cascade(adapter: t.Callable):
     def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
         if table_name == current_table_name:
             return {"id": exp.DataType.build("int"), "test_column": exp.DataType.build("int")}
-        else:
-            return {"id": exp.DataType.build("int")}
+        return {"id": exp.DataType.build("int")}
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
     ]
@@ -376,15 +529,14 @@ def test_alter_table_precision_increase_varchar(adapter: t.Callable):
                 "id": exp.DataType.build("int"),
                 "test_column": exp.DataType.build("VARCHAR(10)"),
             }
-        else:
-            return {
-                "id": exp.DataType.build("int"),
-                "test_column": exp.DataType.build("VARCHAR(20)"),
-            }
+        return {
+            "id": exp.DataType.build("int"),
+            "test_column": exp.DataType.build("VARCHAR(20)"),
+        }
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" ALTER COLUMN "test_column" TYPE VARCHAR(20)',
     ]
@@ -400,15 +552,14 @@ def test_alter_table_precision_increase_decimal(adapter: t.Callable):
                 "id": exp.DataType.build("int"),
                 "test_column": exp.DataType.build("DECIMAL(10, 10)"),
             }
-        else:
-            return {
-                "id": exp.DataType.build("int"),
-                "test_column": exp.DataType.build("DECIMAL(25, 10)"),
-            }
+        return {
+            "id": exp.DataType.build("int"),
+            "test_column": exp.DataType.build("DECIMAL(25, 10)"),
+        }
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
         'ALTER TABLE "test_table" ADD COLUMN "test_column" DECIMAL(25, 10)',
@@ -425,7 +576,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.merge(
         target_table=exp.to_table("target_table_name"),
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -437,7 +588,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.merge(
         target_table=exp.to_table("target_table_name"),
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -470,7 +621,7 @@ def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable, mocker
         adapter.merge(
             target_table=exp.to_table("target_table_name"),
             source_table=t.cast(exp.Select, parse_one('SELECT "ID", val FROM source')),
-            columns_to_types={
+            target_columns_to_types={
                 "ID": exp.DataType.build("int"),
                 "val": exp.DataType.build("int"),
             },
@@ -518,7 +669,7 @@ def test_merge_logical_filter_error(make_mocked_engine_adapter: t.Callable, mock
         adapter.merge(
             target_table=exp.to_table("target_table_name_2"),
             source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts FROM source')),
-            columns_to_types={
+            target_columns_to_types={
                 "ID": exp.DataType.build("int"),
                 "ts": exp.DataType.build("timestamp"),
             },
@@ -543,7 +694,7 @@ def test_merge_logical(
     adapter.merge(
         target_table=exp.to_table("target"),
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
         },

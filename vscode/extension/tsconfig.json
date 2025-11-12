@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "module": "Node16",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "sourceMap": true,
+    "strict": true /* enable all strict type-checking options */,
+    /* Additional Checks */
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedParameters": true,
+    "noUnusedLocals": true,
+    "types": ["mocha"],
+    "paths": {
+      "@bus/*": ["../bus/src/*"]
+    }
+  },
+  "include": ["tests/**/*", "src/**/*", "../bus/src/**/*"],
+  "exclude": [
+    "node_modules",
+    "../node_modules",
+    "../../node_modules",
+    "tests/**/*.test.ts",
+    "src/**/*.test.ts"
+  ]
+}

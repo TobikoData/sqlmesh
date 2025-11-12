@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 import typing as t
+from enum import Enum
 from functools import cached_property
 from typing_extensions import Self
 
 from pydantic import Field
-from sqlglot import Dialect, exp
+from sqlglot import Dialect, exp, parse_one
 from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config.linter import LinterConfig
-from sqlmesh.core.dialect import normalize_model_name, extract_func_call
+from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.utils import classproperty
 from sqlmesh.core.model.common import (
     bool_validator,
     default_catalog_validator,
     depends_on_validator,
     properties_validator,
+    parse_properties,
 )
 from sqlmesh.core.model.kind import (
     CustomKind,
@@ -27,8 +31,8 @@ from sqlmesh.core.model.kind import (
     SCDType2ByTimeKind,
     TimeColumn,
     ViewKind,
-    _IncrementalBy,
     model_kind_validator,
+    OnAdditiveChange,
 )
 from sqlmesh.core.node import _Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
@@ -39,12 +43,44 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     list_of_fields_validator,
     model_validator,
+    get_dialect,
 )
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import CustomMaterializationProperties, SessionProperties
+    from sqlmesh.core.engine_adapter._typing import GrantsConfig
 
 FunctionCall = t.Tuple[str, t.Dict[str, exp.Expression]]
+
+
+class GrantsTargetLayer(str, Enum):
+    """Target layer(s) where grants should be applied."""
+
+    ALL = "all"
+    PHYSICAL = "physical"
+    VIRTUAL = "virtual"
+
+    @classproperty
+    def default(cls) -> "GrantsTargetLayer":
+        return GrantsTargetLayer.VIRTUAL
+
+    @property
+    def is_all(self) -> bool:
+        return self == GrantsTargetLayer.ALL
+
+    @property
+    def is_physical(self) -> bool:
+        return self == GrantsTargetLayer.PHYSICAL
+
+    @property
+    def is_virtual(self) -> bool:
+        return self == GrantsTargetLayer.VIRTUAL
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 class ModelMeta(_Node):
@@ -80,6 +116,10 @@ class ModelMeta(_Node):
     ignored_rules_: t.Optional[t.Set[str]] = Field(
         default=None, exclude=True, alias="ignored_rules"
     )
+    formatting: t.Optional[bool] = Field(default=None, exclude=True)
+    virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default
+    grants_: t.Optional[exp.Tuple] = Field(default=None, alias="grants")
+    grants_target_layer: GrantsTargetLayer = GrantsTargetLayer.default
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -91,37 +131,7 @@ class ModelMeta(_Node):
     def _func_call_validator(cls, v: t.Any, field: t.Any) -> t.Any:
         is_signal = getattr(field, "name" if hasattr(field, "name") else "field_name") == "signals"
 
-        if isinstance(v, (exp.Tuple, exp.Array)):
-            return [extract_func_call(i, allow_tuples=is_signal) for i in v.expressions]
-        if isinstance(v, exp.Paren):
-            return [extract_func_call(v.this, allow_tuples=is_signal)]
-        if isinstance(v, exp.Expression):
-            return [extract_func_call(v, allow_tuples=is_signal)]
-        if isinstance(v, list):
-            audits = []
-
-            for entry in v:
-                if isinstance(entry, dict):
-                    args = entry
-                    name = "" if is_signal else entry.pop("name")
-                elif isinstance(entry, (tuple, list)):
-                    name, args = entry
-                else:
-                    raise ConfigError(f"Audit must be a dictionary or named tuple. Got {entry}.")
-
-                audits.append(
-                    (
-                        name.lower(),
-                        {
-                            key: d.parse_one(value) if isinstance(value, str) else value
-                            for key, value in args.items()
-                        },
-                    )
-                )
-
-            return audits
-
-        return v or []
+        return d.extract_function_calls(v, allow_tuples=is_signal)
 
     @field_validator("tags", mode="before")
     def _value_or_tuple_validator(cls, v: t.Any, info: ValidationInfo) -> t.Any:
@@ -181,6 +191,22 @@ class ModelMeta(_Node):
     def _partition_and_cluster_validator(
         cls, v: t.Any, info: ValidationInfo
     ) -> t.List[exp.Expression]:
+        if (
+            isinstance(v, list)
+            and all(isinstance(i, str) for i in v)
+            and info.field_name == "partitioned_by_"
+        ):
+            # this branch gets hit when we are deserializing from json because `partitioned_by` is stored as a List[str]
+            # however, we should only invoke this if the list contains strings because this validator is also
+            # called by Python models which might pass a List[exp.Expression]
+            string_to_parse = (
+                f"({','.join(v)})"  # recreate the (a, b, c) part of "partitioned_by (a, b, c)"
+            )
+            parsed = parse_one(
+                string_to_parse, into=exp.PartitionedByProperty, dialect=get_dialect(info)
+            )
+            v = parsed.this.expressions if isinstance(parsed.this, exp.Schema) else v
+
         expressions = list_of_fields_validator(v, info.data)
 
         for expression in expressions:
@@ -256,11 +282,15 @@ class ModelMeta(_Node):
 
         columns_to_types = info.data.get("columns_to_types_")
         if columns_to_types:
-            for column_name in col_descriptions:
+            from sqlmesh.core.console import get_console
+
+            console = get_console()
+            for column_name in list(col_descriptions):
                 if column_name not in columns_to_types:
-                    raise ConfigError(
+                    console.log_warning(
                         f"In model '{info.data['name']}', a description is provided for column '{column_name}' but it is not a column in the model."
                     )
+                    del col_descriptions[column_name]
 
         return col_descriptions
 
@@ -291,6 +321,59 @@ class ModelMeta(_Node):
     @field_validator("ignored_rules_", mode="before")
     def ignored_rules_validator(cls, vs: t.Any) -> t.Any:
         return LinterConfig._validate_rules(vs)
+
+    @field_validator("grants_target_layer", mode="before")
+    def _grants_target_layer_validator(cls, v: t.Any) -> t.Any:
+        if isinstance(v, exp.Identifier):
+            return v.this
+        if isinstance(v, exp.Literal) and v.is_string:
+            return v.this
+        return v
+
+    @field_validator("session_properties_", mode="before")
+    def session_properties_validator(cls, v: t.Any, info: ValidationInfo) -> t.Any:
+        # use the generic properties validator to parse the session properties
+        parsed_session_properties = parse_properties(type(cls), v, info)
+        if not parsed_session_properties:
+            return parsed_session_properties
+
+        for eq in parsed_session_properties:
+            prop_name = eq.left.name
+
+            if prop_name == "query_label":
+                query_label = eq.right
+                if not isinstance(
+                    query_label, (exp.Array, exp.Tuple, exp.Paren, d.MacroFunc, d.MacroVar)
+                ):
+                    raise ConfigError(
+                        "Invalid value for `session_properties.query_label`. Must be an array or tuple."
+                    )
+
+                label_tuples: t.List[exp.Expression] = (
+                    [query_label.unnest()]
+                    if isinstance(query_label, exp.Paren)
+                    else query_label.expressions
+                )
+
+                for label_tuple in label_tuples:
+                    if not (
+                        isinstance(label_tuple, exp.Tuple)
+                        and len(label_tuple.expressions) == 2
+                        and all(isinstance(label, exp.Literal) for label in label_tuple.expressions)
+                    ):
+                        raise ConfigError(
+                            "Invalid entry in `session_properties.query_label`. Must be tuples of string literals with length 2."
+                        )
+            elif prop_name == "authorization":
+                authorization = eq.right
+                if not (
+                    isinstance(authorization, exp.Literal) and authorization.is_string
+                ) and not isinstance(authorization, (d.MacroFunc, d.MacroVar)):
+                    raise ConfigError(
+                        "Invalid value for `session_properties.authorization`. Must be a string literal."
+                    )
+
+        return parsed_session_properties
 
     @model_validator(mode="before")
     def _pre_root_validator(cls, data: t.Any) -> t.Any:
@@ -337,7 +420,7 @@ class ModelMeta(_Node):
                 and not (kind.is_view and kind.materialized)
             ):
                 name = field[:-1] if field.endswith("_") else field
-                raise ValueError(f"{name} field cannot be set for {kind} models")
+                raise ValueError(f"{name} field cannot be set for {kind.name} models")
         if kind.is_incremental_by_partition and not getattr(self, "partitioned_by_", None):
             raise ValueError(f"partitioned_by field is required for {kind.name} models")
 
@@ -353,6 +436,10 @@ class ModelMeta(_Node):
             get_console().log_warning(
                 f"Model {self.name} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead."
             )
+
+        # Validate grants configuration for model kind support
+        if self.grants is not None and not kind.supports_grants:
+            raise ValueError(f"grants cannot be set for {kind.name} models")
 
         return self
 
@@ -377,7 +464,7 @@ class ModelMeta(_Node):
     @property
     def lookback(self) -> int:
         """The incremental lookback window."""
-        return (self.kind.lookback if isinstance(self.kind, _IncrementalBy) else 0) or 0
+        return getattr(self.kind, "lookback", 0) or 0
 
     def lookback_start(self, start: TimeLike) -> TimeLike:
         if self.lookback == 0:
@@ -425,12 +512,50 @@ class ModelMeta(_Node):
             return self.kind.materialization_properties
         return {}
 
+    @cached_property
+    def grants(self) -> t.Optional[GrantsConfig]:
+        """A dictionary of grants mapping permission names to lists of grantees."""
+
+        if self.grants_ is None:
+            return None
+
+        if not self.grants_.expressions:
+            return {}
+
+        grants_dict = {}
+        for eq_expr in self.grants_.expressions:
+            try:
+                permission_name = self._validate_config_expression(eq_expr.left)
+                grantee_list = self._validate_nested_config_values(eq_expr.expression)
+                grants_dict[permission_name] = grantee_list
+            except ConfigError as e:
+                permission_name = (
+                    eq_expr.left.name if hasattr(eq_expr.left, "name") else str(eq_expr.left)
+                )
+                raise ConfigError(f"Invalid grants configuration for '{permission_name}': {e}")
+
+        return grants_dict if grants_dict else None
+
     @property
     def all_references(self) -> t.List[Reference]:
         """All references including grains."""
         return [Reference(model_name=self.name, expression=e, unique=True) for e in self.grains] + [
             Reference(model_name=self.name, expression=e, unique=True) for e in self.references
         ]
+
+    @property
+    def on(self) -> t.List[str]:
+        """The grains to be used as join condition in table_diff."""
+
+        on: t.List[str] = []
+        for expr in [ref.expression for ref in self.all_references if ref.unique]:
+            if isinstance(expr, exp.Tuple):
+                on.extend([key.this.sql(dialect=self.dialect) for key in expr.expressions])
+            else:
+                # Handle a single Column or Paren expression
+                on.append(expr.this.sql(dialect=self.dialect))
+
+        return on
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
@@ -468,5 +593,40 @@ class ModelMeta(_Node):
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
 
     @property
+    def on_additive_change(self) -> OnAdditiveChange:
+        """Return the model's additive change setting if it has one."""
+        return getattr(self.kind, "on_additive_change", OnAdditiveChange.ALLOW)
+
+    @property
     def ignored_rules(self) -> t.Set[str]:
         return self.ignored_rules_ or set()
+
+    def _validate_config_expression(self, expr: exp.Expression) -> str:
+        if isinstance(expr, (d.MacroFunc, d.MacroVar)):
+            raise ConfigError(f"Unresolved macro: {expr.sql(dialect=self.dialect)}")
+
+        if isinstance(expr, exp.Null):
+            raise ConfigError("NULL value")
+
+        if isinstance(expr, exp.Literal):
+            return str(expr.this).strip()
+        if isinstance(expr, (exp.Column, exp.Identifier)):
+            return expr.name
+        return expr.sql(dialect=self.dialect).strip()
+
+    def _validate_nested_config_values(self, value_expr: exp.Expression) -> t.List[str]:
+        result = []
+
+        def flatten_expr(expr: exp.Expression) -> None:
+            if isinstance(expr, exp.Array):
+                for elem in expr.expressions:
+                    flatten_expr(elem)
+            elif isinstance(expr, (exp.Tuple, exp.Paren)):
+                expressions = [expr.unnest()] if isinstance(expr, exp.Paren) else expr.expressions
+                for elem in expressions:
+                    flatten_expr(elem)
+            else:
+                result.append(self._validate_config_expression(expr))
+
+        flatten_expr(value_expr)
+        return result

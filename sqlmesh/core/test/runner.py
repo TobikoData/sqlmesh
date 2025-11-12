@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import sys
 import time
-import pathlib
 import threading
 import typing as t
 import unittest
+from io import StringIO
 
 import concurrent
 from concurrent.futures import ThreadPoolExecutor
@@ -15,12 +14,8 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.test.definition import ModelTest as ModelTest, generate_test as generate_test
 from sqlmesh.core.test.discovery import (
     ModelTestMetadata as ModelTestMetadata,
-    filter_tests_by_patterns as filter_tests_by_patterns,
-    get_all_model_tests as get_all_model_tests,
-    load_model_test_file as load_model_test_file,
 )
 from sqlmesh.core.config.connection import BaseDuckDBConnectionConfig
-
 from sqlmesh.core.test.result import ModelTextTestResult as ModelTextTestResult
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 
@@ -48,7 +43,7 @@ class ModelTextTestRunner(unittest.TextTestRunner):
 def create_testing_engine_adapters(
     model_test_metadata: list[ModelTestMetadata],
     config: C,
-    default_gateway: str,
+    selected_gateway: str,
     default_catalog: str | None = None,
     default_catalog_dialect: str = "",
 ) -> t.Dict[ModelTestMetadata, EngineAdapter]:
@@ -56,7 +51,7 @@ def create_testing_engine_adapters(
     metadata_to_adapter = {}
 
     for metadata in model_test_metadata:
-        gateway = metadata.body.get("gateway") or default_gateway
+        gateway = metadata.body.get("gateway") or selected_gateway
         test_connection = config.get_test_connection(
             gateway, default_catalog, default_catalog_dialect
         )
@@ -86,7 +81,7 @@ def run_tests(
     model_test_metadata: list[ModelTestMetadata],
     models: UniqueKeyDict[str, Model],
     config: C,
-    gateway: t.Optional[str] = None,
+    selected_gateway: str,
     dialect: str | None = None,
     verbosity: Verbosity = Verbosity.DEFAULT,
     preserve_fixtures: bool = False,
@@ -102,33 +97,37 @@ def run_tests(
         verbosity: The verbosity level.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
-    default_gateway = gateway or config.default_gateway_name
-
     default_test_connection = config.get_test_connection(
-        gateway_name=default_gateway,
+        gateway_name=selected_gateway,
         default_catalog=default_catalog,
         default_catalog_dialect=default_catalog_dialect,
     )
 
     lock = threading.Lock()
 
+    from sqlmesh.core.console import get_console
+
     combined_results = ModelTextTestResult(
-        stream=unittest.runner._WritelnDecorator(stream or sys.stderr),  # type: ignore
+        stream=unittest.runner._WritelnDecorator(stream or StringIO()),  # type: ignore
         verbosity=2 if verbosity >= Verbosity.VERBOSE else 1,
         descriptions=True,
+        console=get_console(),
     )
 
     metadata_to_adapter = create_testing_engine_adapters(
         model_test_metadata=model_test_metadata,
         config=config,
-        default_gateway=default_gateway,
+        selected_gateway=selected_gateway,
         default_catalog=default_catalog,
         default_catalog_dialect=default_catalog_dialect,
     )
 
+    # Ensure workers are not greater than the number of tests
+    num_workers = min(len(model_test_metadata) or 1, default_test_connection.concurrent_tasks)
+
     def _run_single_test(
         metadata: ModelTestMetadata, engine_adapter: EngineAdapter
-    ) -> ModelTextTestResult:
+    ) -> t.Optional[ModelTextTestResult]:
         test = ModelTest.create_test(
             body=metadata.body,
             test_name=metadata.test_name,
@@ -138,7 +137,12 @@ def run_tests(
             path=metadata.path,
             default_catalog=default_catalog,
             preserve_fixtures=preserve_fixtures,
+            concurrency=num_workers > 1,
+            verbosity=verbosity,
         )
+
+        if not test:
+            return None
 
         result = t.cast(
             ModelTextTestResult,
@@ -146,21 +150,11 @@ def run_tests(
         )
 
         with lock:
-            if result.successes:
-                combined_results.addSuccess(result.successes[0])
-            elif result.errors:
-                combined_results.addError(result.original_err[0], result.original_err[1])
-            elif result.failures:
-                combined_results.addFailure(result.original_err[0], result.original_err[1])
-            elif result.skipped:
-                skipped_args = result.skipped[0]
-                combined_results.addSkip(skipped_args[0], skipped_args[1])
+            combined_results.merge(result)
+
         return result
 
     test_results = []
-
-    # Ensure workers are not greater than the number of tests
-    num_workers = min(len(model_test_metadata) or 1, default_test_connection.concurrent_tasks)
 
     start_time = time.perf_counter()
     try:
@@ -180,57 +174,6 @@ def run_tests(
 
     end_time = time.perf_counter()
 
-    combined_results.testsRun = len(test_results)
-
-    combined_results.log_test_report(test_duration=end_time - start_time)
+    combined_results.duration = round(end_time - start_time, 2)
 
     return combined_results
-
-
-def run_model_tests(
-    tests: list[str],
-    models: UniqueKeyDict[str, Model],
-    config: C,
-    gateway: t.Optional[str] = None,
-    dialect: str | None = None,
-    verbosity: Verbosity = Verbosity.DEFAULT,
-    patterns: list[str] | None = None,
-    preserve_fixtures: bool = False,
-    stream: t.TextIO | None = None,
-    default_catalog: t.Optional[str] = None,
-    default_catalog_dialect: str = "",
-) -> ModelTextTestResult:
-    """Load and run tests.
-
-    Args:
-        tests: A list of tests to run, e.g. [tests/test_orders.yaml::test_single_order]
-        models: All models to use for expansion and mapping of physical locations.
-        verbosity: The verbosity level.
-        patterns: A list of patterns to match against.
-        preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
-    """
-    loaded_tests = []
-    for test in tests:
-        filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
-        path = pathlib.Path(filename)
-
-        if test_name:
-            loaded_tests.append(load_model_test_file(path, variables=config.variables)[test_name])
-        else:
-            loaded_tests.extend(load_model_test_file(path, variables=config.variables).values())
-
-    if patterns:
-        loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
-
-    return run_tests(
-        loaded_tests,
-        models,
-        config,
-        gateway=gateway,
-        dialect=dialect,
-        verbosity=verbosity,
-        preserve_fixtures=preserve_fixtures,
-        stream=stream,
-        default_catalog=default_catalog,
-        default_catalog_dialect=default_catalog_dialect,
-    )

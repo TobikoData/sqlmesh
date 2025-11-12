@@ -1,0 +1,70 @@
+// See https://go.microsoft.com/fwlink/?LinkId=733558
+// for the documentation about the tasks.json format
+{
+  "$schema": "vscode://schemas/tasks",
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "extension-watch",
+      "type": "shell",
+      "command": "pnpm run watch",
+      "problemMatcher": {
+        "base": "$ts-webpack-watch",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started",
+          "endsPattern": "build finished"
+        }
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "never",
+        "group": "watchers"
+      },
+      "group": {
+        "kind": "build"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/vscode/extension"
+      },
+      "dependsOrder": "parallel"
+    },
+    {
+      "label": "react-dev",
+      "type": "shell",
+      "command": "pnpm run build:watch",
+      "options": {
+        "cwd": "${workspaceFolder}/vscode/react"
+      },
+      "group": {
+        "kind": "build"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "webpack",
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Generating routes",
+          "endsPattern": "built in"
+        }
+      },
+      "presentation": {
+        "reveal": "never",
+        "group": "watchers"
+      },
+      "dependsOrder": "parallel"
+    },
+    {
+      "label": "extension-watch-develop",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "dependsOn": ["react-dev", "extension-watch"],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

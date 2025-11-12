@@ -7,7 +7,6 @@ from pathlib import Path
 from sqlglot.errors import SchemaError
 from sqlglot.schema import MappingSchema
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.model.cache import (
     load_optimized_query_and_mapping,
     optimized_query_cache_pool,
@@ -23,15 +22,12 @@ if t.TYPE_CHECKING:
 def update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
-    context_path: Path,
+    cache_dir: Path,
 ) -> None:
     schema = MappingSchema(normalize=False)
-    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(cache_dir)
 
-    if c.MAX_FORK_WORKERS == 1:
-        _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)
-    else:
-        _update_model_schemas_parallel(dag, models, schema, optimized_query_cache)
+    _update_model_schemas(dag, models, schema, optimized_query_cache)
 
 
 def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
@@ -49,25 +45,7 @@ def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
             raise
 
 
-def _update_model_schemas_sequential(
-    dag: DAG[str],
-    models: UniqueKeyDict[str, Model],
-    schema: MappingSchema,
-    optimized_query_cache: OptimizedQueryCache,
-) -> None:
-    for name in dag.sorted:
-        model = models.get(name)
-
-        # External models don't exist in the context, so we need to skip them
-        if not model:
-            continue
-
-        model.update_schema(schema)
-        optimized_query_cache.with_optimized_query(model)
-        _update_schema_with_model(schema, model)
-
-
-def _update_model_schemas_parallel(
+def _update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
     schema: MappingSchema,
@@ -107,12 +85,16 @@ def _update_model_schemas_parallel(
 
         while futures:
             for future in as_completed(futures):
-                futures.remove(future)
-                fqn, entry_name, data_hash, metadata_hash, mapping_schema = future.result()
-                model = models[fqn]
-                model._data_hash = data_hash
-                model._metadata_hash = metadata_hash
-                model.set_mapping_schema(mapping_schema)
-                optimized_query_cache.with_optimized_query(model, entry_name)
-                _update_schema_with_model(schema, model)
-                process_models(completed_model=model)
+                try:
+                    futures.remove(future)
+                    fqn, entry_name, data_hash, metadata_hash, mapping_schema = future.result()
+                    model = models[fqn]
+                    model._data_hash = data_hash
+                    model._metadata_hash = metadata_hash
+                    if model.mapping_schema != mapping_schema:
+                        model.set_mapping_schema(mapping_schema)
+                    optimized_query_cache.with_optimized_query(model, entry_name)
+                    _update_schema_with_model(schema, model)
+                    process_models(completed_model=model)
+                except Exception as ex:
+                    raise SchemaError(f"Failed to update model schemas\n\n{ex}")

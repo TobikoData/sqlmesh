@@ -442,6 +442,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
     <div className="px-2 flex items-center text-xs text-neutral-400 @container">
       <div className="contents">
         <Popover
+          as="div"
           className="flex @lg:hidden bg-none border-none"
           aria-label="Show lineage node details"
         >

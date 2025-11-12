@@ -111,7 +111,7 @@ export default function ModelColumns({
     if (isNil(lineageCache)) {
       const mainNodeLineage = isNil(mainNode)
         ? undefined
-        : lineage[mainNode] ?? lineageCache?.[mainNode]
+        : (lineage[mainNode] ?? lineageCache?.[mainNode])
 
       newLineageCache = lineage
       currentConnections = new Map()
@@ -471,10 +471,10 @@ function ModelColumn({
                 isError
                   ? 'text-danger-500'
                   : isTimeout
-                  ? 'text-warning-500'
-                  : isEmpty
-                  ? 'text-neutral-400 dark:text-neutral-600'
-                  : 'text-prose',
+                    ? 'text-warning-500'
+                    : isEmpty
+                      ? 'text-neutral-400 dark:text-neutral-600'
+                      : 'text-prose',
               )}
             />
           </ColumnHandles>
@@ -495,10 +495,10 @@ function ModelColumn({
                 isError
                   ? 'text-danger-500'
                   : isTimeout
-                  ? 'text-warning-500'
-                  : isEmpty
-                  ? 'text-neutral-400 dark:text-neutral-600'
-                  : 'text-prose',
+                    ? 'text-warning-500'
+                    : isEmpty
+                      ? 'text-neutral-400 dark:text-neutral-600'
+                      : 'text-prose',
               )}
             />
           </>

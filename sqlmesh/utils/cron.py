@@ -10,7 +10,7 @@ from sqlglot.helper import first
 from sqlmesh.utils.date import TimeLike, now, to_datetime
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def interval_seconds(cron: str) -> int:
     """Computes the interval seconds of a cron statement if it is deterministic.
 

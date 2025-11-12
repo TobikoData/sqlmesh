@@ -167,14 +167,17 @@
 ## Scheduling
 
 ??? question "How do I run SQLMesh models on a schedule?"
-    You can run SQLMesh models using the [built-in scheduler](../guides/scheduling.md#built-in-scheduler) or with the native [Airflow integration](../integrations/airflow.md).
+    You can run SQLMesh models using the [built-in scheduler](../guides/scheduling.md#built-in-scheduler) or using [Tobiko Cloud](../cloud/features/scheduler/scheduler.md)
 
     Both approaches use each model's `cron` parameter to determine when the model should run - see the [question about `cron` above](#cron-question) for more information.
 
     The built-in scheduler works by executing the command `sqlmesh run`. A sensible approach to running on your project on a schedule is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, the `cron` tool should execute `sqlmesh run` at least every hour.
 
 ??? question "How do I use SQLMesh with Airflow?"
-    SQLMesh has first-class support for Airflow - learn more [here](../integrations/airflow.md).
+    Tobiko Cloud offers first-class support for Airflow - learn more [here](../cloud/features/scheduler/airflow.md)
+
+??? question "How do I use SQLMesh with Dagster?"
+    Tobiko Cloud offers first-class support for Dagster - learn more [here](../cloud/features/scheduler/dagster.md)
 
 ## Warnings and Errors
 

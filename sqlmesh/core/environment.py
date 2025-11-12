@@ -14,9 +14,10 @@ from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo, Snapshot
 from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike, now_timestamp
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable
-from sqlmesh.utils.pydantic import PydanticModel, field_validator
+from sqlmesh.utils.pydantic import PydanticModel, field_validator, ValidationInfo
 
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
 PydanticType = t.TypeVar("PydanticType", bound="PydanticModel")
@@ -32,22 +33,31 @@ class EnvironmentNamingInfo(PydanticModel):
         catalog_name_override: The name of the catalog to use for this environment if an override was provided
         normalize_name: Indicates whether the environment's name will be normalized. For example, if it's
             `dev`, then it will become `DEV` when targeting Snowflake.
+        gateway_managed: Determines whether the virtual layer's views are created by the model-specific
+            gateways, otherwise the default gateway is used. Default: False.
     """
 
     name: str = c.PROD
     suffix_target: EnvironmentSuffixTarget = Field(default=EnvironmentSuffixTarget.SCHEMA)
     catalog_name_override: t.Optional[str] = None
     normalize_name: bool = True
+    gateway_managed: bool = False
+
+    @property
+    def is_dev(self) -> bool:
+        return self.name.lower() != c.PROD
 
     @field_validator("name", mode="before")
     @classmethod
     def _sanitize_name(cls, v: str) -> str:
         return word_characters_only(v).lower()
 
-    @field_validator("normalize_name", mode="before")
+    @field_validator("normalize_name", "gateway_managed", mode="before")
     @classmethod
-    def _validate_normalize_name(cls, v: t.Any) -> bool:
-        return True if v is None else bool(v)
+    def _validate_boolean_field(cls, v: t.Any, info: ValidationInfo) -> bool:
+        if v is None:
+            return info.field_name == "normalize_name"
+        return bool(v)
 
     @t.overload
     @classmethod
@@ -90,19 +100,39 @@ class EnvironmentNamingInfo(PydanticModel):
         return cls(**construction_kwargs)
 
 
-class Environment(EnvironmentNamingInfo):
-    """Represents an isolated environment.
-
-    Environments are isolated workspaces that hold pointers to physical tables.
+class EnvironmentSummary(PydanticModel):
+    """Represents summary information of an isolated environment.
 
     Args:
-        snapshots: The snapshots that are part of this environment.
+        name: The name of the environment.
         start_at: The start time of the environment.
         end_at: The end time of the environment.
         plan_id: The ID of the plan that last updated this environment.
         previous_plan_id: The ID of the previous plan that updated this environment.
         expiration_ts: The timestamp when this environment will expire.
         finalized_ts: The timestamp when this environment was finalized.
+    """
+
+    name: str
+    start_at: TimeLike
+    end_at: t.Optional[TimeLike] = None
+    plan_id: str
+    previous_plan_id: t.Optional[str] = None
+    expiration_ts: t.Optional[int] = None
+    finalized_ts: t.Optional[int] = None
+
+    @property
+    def expired(self) -> bool:
+        return self.expiration_ts is not None and self.expiration_ts <= now_timestamp()
+
+
+class Environment(EnvironmentNamingInfo, EnvironmentSummary):
+    """Represents an isolated environment.
+
+    Environments are isolated workspaces that hold pointers to physical tables.
+
+    Args:
+        snapshots: The snapshots that are part of this environment.
         promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment
             (i.e. for which the views are created). If not specified, all snapshots are promoted.
         previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
@@ -110,12 +140,6 @@ class Environment(EnvironmentNamingInfo):
     """
 
     snapshots_: t.List[t.Any] = Field(alias="snapshots")
-    start_at: TimeLike
-    end_at: t.Optional[TimeLike] = None
-    plan_id: str
-    previous_plan_id: t.Optional[str] = None
-    expiration_ts: t.Optional[int] = None
-    finalized_ts: t.Optional[int] = None
     promoted_snapshot_ids_: t.Optional[t.List[t.Any]] = Field(
         default=None, alias="promoted_snapshot_ids"
     )
@@ -194,11 +218,33 @@ class Environment(EnvironmentNamingInfo):
             suffix_target=self.suffix_target,
             catalog_name_override=self.catalog_name_override,
             normalize_name=self.normalize_name,
+            gateway_managed=self.gateway_managed,
         )
 
     @property
-    def expired(self) -> bool:
-        return self.expiration_ts is not None and self.expiration_ts <= now_timestamp()
+    def summary(self) -> EnvironmentSummary:
+        return EnvironmentSummary(
+            name=self.name,
+            start_at=self.start_at,
+            end_at=self.end_at,
+            plan_id=self.plan_id,
+            previous_plan_id=self.previous_plan_id,
+            expiration_ts=self.expiration_ts,
+            finalized_ts=self.finalized_ts,
+        )
+
+    def can_partially_promote(self, existing_environment: Environment) -> bool:
+        """Returns True if the existing environment can be partially promoted to the current environment.
+
+        Partial promotion means that we don't need to re-create views for snapshots that are already promoted in the
+        target environment.
+        """
+        return (
+            bool(existing_environment.finalized_ts)
+            and not existing_environment.expired
+            and existing_environment.gateway_managed == self.gateway_managed
+            and existing_environment.name == c.PROD
+        )
 
     def _convert_list_to_models_and_store(
         self, field: str, type_: t.Type[PydanticType]
@@ -220,6 +266,40 @@ class EnvironmentStatements(PydanticModel):
     after_all: t.List[str]
     python_env: t.Dict[str, Executable]
     jinja_macros: t.Optional[JinjaMacroRegistry] = None
+    project: t.Optional[str] = None
+
+    def render_before_all(
+        self,
+        dialect: str,
+        default_catalog: t.Optional[str] = None,
+        **render_kwargs: t.Any,
+    ) -> t.List[str]:
+        return self.render(RuntimeStage.BEFORE_ALL, dialect, default_catalog, **render_kwargs)
+
+    def render_after_all(
+        self,
+        dialect: str,
+        default_catalog: t.Optional[str] = None,
+        **render_kwargs: t.Any,
+    ) -> t.List[str]:
+        return self.render(RuntimeStage.AFTER_ALL, dialect, default_catalog, **render_kwargs)
+
+    def render(
+        self,
+        runtime_stage: RuntimeStage,
+        dialect: str,
+        default_catalog: t.Optional[str] = None,
+        **render_kwargs: t.Any,
+    ) -> t.List[str]:
+        return render_statements(
+            statements=getattr(self, runtime_stage.value),
+            dialect=dialect,
+            default_catalog=default_catalog,
+            python_env=self.python_env,
+            jinja_macros=self.jinja_macros,
+            runtime_stage=runtime_stage,
+            **render_kwargs,
+        )
 
 
 def execute_environment_statements(
@@ -232,25 +312,35 @@ def execute_environment_statements(
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
+    selected_models: t.Optional[t.Set[str]] = None,
 ) -> None:
-    if rendered_expressions := [
-        expr
-        for statements in environment_statements
-        for expr in render_statements(
-            statements=getattr(statements, runtime_stage.value),
-            dialect=adapter.dialect,
-            default_catalog=default_catalog,
-            python_env=statements.python_env,
-            jinja_macros=statements.jinja_macros,
-            snapshots=snapshots,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            environment_naming_info=environment_naming_info,
-            runtime_stage=runtime_stage,
-            engine_adapter=adapter,
+    try:
+        rendered_expressions = [
+            expr
+            for statements in environment_statements
+            for expr in statements.render(
+                runtime_stage=runtime_stage,
+                dialect=adapter.dialect,
+                default_catalog=default_catalog,
+                snapshots=snapshots,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                environment_naming_info=environment_naming_info,
+                engine_adapter=adapter,
+                selected_models=selected_models,
+            )
+        ]
+    except Exception as e:
+        raise SQLMeshError(
+            f"An error occurred during rendering of the '{runtime_stage.value}' statements:\n\n{e}"
         )
-    ]:
+    if rendered_expressions:
         with adapter.transaction():
             for expr in rendered_expressions:
-                adapter.execute(expr)
+                try:
+                    adapter.execute(expr)
+                except Exception as e:
+                    raise SQLMeshError(
+                        f"An error occurred during execution of the following '{runtime_stage.value}' statement:\n\n{expr}\n\n{e}"
+                    )

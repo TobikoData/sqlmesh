@@ -139,7 +139,7 @@ def test_concurrent_apply_to_snapshots_skip_each_node_only_once(mocker: MockerFi
     assert len(errors) == 1
     assert errors[0].node == failed_snapshot.snapshot_id
 
-    assert skipped == [snapshot_a.snapshot_id, snapshot_b.snapshot_id, snapshot_c.snapshot_id]
+    assert set(skipped) == {snapshot_a.snapshot_id, snapshot_b.snapshot_id, snapshot_c.snapshot_id}
 
 
 @pytest.mark.parametrize("tasks_num", [1, 3])

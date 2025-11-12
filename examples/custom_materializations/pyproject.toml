@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools >= 61.0", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "custom_materializations"
+requires-python = ">=3.9"
+version = "0.1.0"
+dependencies = ["sqlmesh"]
+
+[project.entry-points."sqlmesh.materializations"]
+custom_full_materialization = "custom_materializations.full:CustomFullMaterialization"
+custom_full_with_custom_kind = "custom_materializations.custom_kind:CustomFullWithCustomKindMaterialization"
+
+[tool.setuptools.packages.find]
+include = ["custom_materializations"]
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0"

@@ -1,8 +1,11 @@
+import json
 import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.context import Context
+from sqlmesh.core.node import DbtNodeInfo
 from sqlmesh.core.audit import (
     ModelAudit,
     StandaloneAudit,
@@ -10,7 +13,7 @@ from sqlmesh.core.audit import (
     load_audit,
     load_multiple_audits,
 )
-from sqlmesh.core.dialect import parse
+from sqlmesh.core.dialect import parse, jinja_query
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -78,6 +81,8 @@ def test_load(assert_exp_eq):
         col IS NULL
     """,
     )
+    assert audit.query_._parsed is not None
+    assert audit.query_._parsed_dialect == "spark"
 
 
 def test_load_standalone(assert_exp_eq):
@@ -119,6 +124,8 @@ def test_load_standalone(assert_exp_eq):
         col IS NULL
     """,
     )
+    assert audit.query_._parsed is not None
+    assert audit.query_._parsed_dialect == "spark"
 
 
 def test_load_standalone_default_catalog(assert_exp_eq):
@@ -620,7 +627,7 @@ def test_chi_square_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == """WITH "samples" AS (SELECT "a" AS "x_a", "b" AS "x_b" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE (NOT "a" IS NULL AND NOT "b" IS NULL) AND TRUE), "contingency_table" AS (SELECT "x_a", "x_b", COUNT(*) AS "observed", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_a" = "t"."x_a") AS "tot_a", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_b" = "t"."x_b") AS "tot_b", (SELECT COUNT(*) FROM "samples" AS "samples") AS "g_t" /* g_t is the grand total */ FROM "samples" AS "r" GROUP BY "x_a", "x_b") SELECT ((SELECT COUNT(DISTINCT "x_a") FROM "contingency_table" AS "contingency_table") - 1) * ((SELECT COUNT(DISTINCT "x_b") FROM "contingency_table" AS "contingency_table") - 1) AS "degrees_of_freedom", SUM(("observed" - ("tot_a" * "tot_b" / "g_t")) * ("observed" - ("tot_a" * "tot_b" / "g_t")) / ("tot_a" * "tot_b" / "g_t")) AS "chi_square" FROM "contingency_table" AS "contingency_table" HAVING NOT "chi_square" > 9.48773"""
+        == """WITH "samples" AS (SELECT "a" AS "x_a", "b" AS "x_b" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE (NOT "a" IS NULL AND NOT "b" IS NULL) AND TRUE), "contingency_table" AS (SELECT "x_a", "x_b", COUNT(*) AS "observed", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_a" = "t"."x_a") AS "tot_a", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_b" = "t"."x_b") AS "tot_b", (SELECT COUNT(*) FROM "samples" AS "samples") AS "g_t" /* g_t is the grand total */ FROM "samples" AS "r" GROUP BY "x_a", "x_b") SELECT ((SELECT COUNT(DISTINCT "x_a") FROM "contingency_table" AS "contingency_table") - 1) * ((SELECT COUNT(DISTINCT "x_b") FROM "contingency_table" AS "contingency_table") - 1) AS "degrees_of_freedom", SUM(("observed" - ("tot_a" * "tot_b" / "g_t")) * ("observed" - ("tot_a" * "tot_b" / "g_t")) / ("tot_a" * "tot_b" / "g_t")) AS "chi_square" FROM "contingency_table" AS "contingency_table" /* H0: the two variables are independent */ /* H1: the two variables are dependent */ /* if chi_square > critical_value, reject H0 */ /* if chi_square <= critical_value, fail to reject H0 */ HAVING NOT "chi_square" > 9.48773"""
     )
 
 
@@ -722,6 +729,27 @@ def test_render_definition():
 
     # Should include the macro implementation.
     assert "def test_macro(evaluator, v):" in format_model_expressions(audit.render_definition())
+
+
+def test_render_definition_dbt_node_info():
+    node_info = DbtNodeInfo(
+        unique_id="test.project.my_audit", name="my_audit", fqn="project.my_audit"
+    )
+
+    audit = StandaloneAudit(name="my_audit", dbt_node_info=node_info, query=jinja_query("select 1"))
+
+    assert (
+        audit.render_definition()[0].sql(pretty=True)
+        == """AUDIT (
+  name my_audit,
+  dbt_node_info (
+    fqn := 'project.my_audit',
+    name := 'my_audit',
+    unique_id := 'test.project.my_audit'
+  ),
+  standalone TRUE
+)"""
+    )
 
 
 def test_text_diff():
@@ -849,7 +877,7 @@ def test_load_inline_audits(assert_exp_eq):
         MODEL (
             name db.table,
             dialect spark,
-            audits(does_not_exceed_threshold)
+            audits(does_not_exceed_threshold, assert_positive_id)
         );
 
         SELECT id FROM tbl;
@@ -871,7 +899,7 @@ def test_load_inline_audits(assert_exp_eq):
     )
 
     model = load_sql_based_model(expressions)
-    assert len(model.audits) == 1
+    assert len(model.audits) == 2
     assert len(model.audits_with_args) == 2
     assert isinstance(model.audit_definitions["assert_positive_id"], ModelAudit)
     assert isinstance(model.audit_definitions["does_not_exceed_threshold"], ModelAudit)
@@ -959,3 +987,142 @@ def test_multiple_audits_with_same_name():
     # Testing that audit arguments are identical for second and third audit
     # This establishes that identical audits are preserved
     assert model.audits[1][1] == model.audits[2][1]
+
+
+def test_default_audits_included_when_no_model_audits():
+    expressions = parse("""
+    MODEL (
+        name test.basic_model
+    );
+    SELECT 1 as id, 'test' as name;
+    """)
+
+    model_defaults = ModelDefaultsConfig(
+        dialect="duckdb", audits=["not_null(columns := ['id'])", "unique_values(columns := ['id'])"]
+    )
+    model = load_sql_based_model(expressions, defaults=model_defaults.dict())
+
+    assert len(model.audits) == 2
+    audit_names = [audit[0] for audit in model.audits]
+    assert "not_null" in audit_names
+    assert "unique_values" in audit_names
+
+    # Verify arguments are preserved
+    for audit_name, audit_args in model.audits:
+        if audit_name == "not_null":
+            assert "columns" in audit_args
+            assert audit_args["columns"].expressions[0].this == "id"
+        elif audit_name == "unique_values":
+            assert "columns" in audit_args
+            assert audit_args["columns"].expressions[0].this == "id"
+
+    for audit_name, audit_args in model.audits_with_args:
+        if audit_name == "not_null":
+            assert "columns" in audit_args
+            assert audit_args["columns"].expressions[0].this == "id"
+        elif audit_name == "unique_values":
+            assert "columns" in audit_args
+            assert audit_args["columns"].expressions[0].this == "id"
+
+
+def test_model_defaults_audits_with_same_name():
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            audits(
+                does_not_exceed_threshold(column := id, threshold := 1000),
+                does_not_exceed_threshold(column := price, threshold := 100),
+                unique_values(columns := ['id'])
+            )
+        );
+
+        SELECT id, price FROM tbl;
+
+        AUDIT (
+            name does_not_exceed_threshold,
+        );
+        SELECT * FROM @this_model
+        WHERE @column >= @threshold;
+        """
+    )
+
+    model_defaults = ModelDefaultsConfig(
+        dialect="duckdb",
+        audits=[
+            "does_not_exceed_threshold(column := price, threshold := 33)",
+            "does_not_exceed_threshold(column := id, threshold := 65)",
+            "not_null(columns := ['id'])",
+        ],
+    )
+    model = load_sql_based_model(expressions, defaults=model_defaults.dict())
+    assert len(model.audits) == 6
+    assert len(model.audits_with_args) == 6
+    assert len(model.audit_definitions) == 1
+
+    expected_audits = [
+        (
+            "does_not_exceed_threshold",
+            {"column": exp.column("price"), "threshold": exp.Literal.number(33)},
+        ),
+        (
+            "does_not_exceed_threshold",
+            {"column": exp.column("id"), "threshold": exp.Literal.number(65)},
+        ),
+        ("not_null", {"columns": exp.convert(["id"])}),
+        (
+            "does_not_exceed_threshold",
+            {"column": exp.column("id"), "threshold": exp.Literal.number(1000)},
+        ),
+        (
+            "does_not_exceed_threshold",
+            {"column": exp.column("price"), "threshold": exp.Literal.number(100)},
+        ),
+        ("unique_values", {"columns": exp.convert(["id"])}),
+    ]
+
+    for (actual_name, actual_args), (expected_name, expected_args) in zip(
+        model.audits, expected_audits
+    ):
+        # Validate the audit names are preserved
+        assert actual_name == expected_name
+        for key in expected_args:
+            # comparing sql representaion is easier
+            assert actual_args[key].sql() == expected_args[key].sql()
+
+    # Validate audits with args as well along with their arguments
+    for (actual_audit, actual_args), (expected_name, expected_args) in zip(
+        model.audits_with_args, expected_audits
+    ):
+        assert actual_audit.name == expected_name
+        for key in expected_args:
+            assert actual_args[key].sql() == expected_args[key].sql()
+
+
+def test_audit_formatting_flag_serde():
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            dialect bigquery,
+            formatting false,
+        );
+
+        SELECT * FROM db.table WHERE col = @VAR('test_var')
+    """
+    )
+
+    audit = load_audit(
+        expressions,
+        path="/path/to/audit",
+        dialect="bigquery",
+        variables={"test_var": "test_val", "test_var_unused": "unused_val"},
+    )
+
+    audit_json = audit.json()
+
+    assert "formatting" not in json.loads(audit_json)
+
+    deserialized_audit = ModelAudit.parse_raw(audit_json)
+    assert deserialized_audit.dict() == audit.dict()

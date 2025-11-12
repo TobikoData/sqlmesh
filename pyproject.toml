@@ -10,18 +10,21 @@ dependencies = [
     "astor",
     "click",
     "croniter",
-    "duckdb!=0.10.3",
-    "dateparser",
+    "duckdb>=0.10.0,!=0.10.3",
+    "dateparser<=1.2.1",
+    "humanize",
     "hyperscript>=0.1.0",
     "importlib-metadata; python_version<'3.12'",
     "ipywidgets",
     "jinja2",
+    "packaging",
     "pandas",
     "pydantic>=2.0.0",
+    "python-dotenv",
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=26.12.1",
+    "sqlglot[rs]~=27.28.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -38,51 +41,59 @@ classifiers = [
 [project.optional-dependencies]
 athena = ["PyAthena[Pandas]"]
 azuresql = ["pymssql"]
+azuresql-odbc = ["pyodbc>=5.0.0"]
 bigquery = [
     "google-cloud-bigquery[pandas]",
     "google-cloud-bigquery-storage"
 ]
+# bigframes has to be separate to support environments with an older google-cloud-bigquery pin
+# this is because that pin pulls in an older bigframes and the bigframes team
+# pinned an older SQLGlot which is incompatible with SQLMesh
 bigframes = ["bigframes>=1.32.0"]
 clickhouse = ["clickhouse-connect"]
-databricks = ["databricks-sql-connector"]
+databricks = ["databricks-sql-connector[pyarrow]"]
 dev = [
-    "agate==1.7.1",
-    "apache-airflow==2.9.1",
-    "opentelemetry-proto==1.27.0", # pip was having trouble resolving this transitive dependency of airflow
+    "agate",
     "beautifulsoup4",
     "clickhouse-connect",
-    "cryptography",
+    "cryptography<46.0.0",
     "databricks-sql-connector",
     "dbt-bigquery",
     "dbt-core",
     "dbt-duckdb>=1.7.1",
-    "dbt-snowflake",
+    # version 1.10.1 of dbt-snowflake declares that it's compatible with dbt-adapters>=1.16 but in reality
+    # it depends on the 'InvalidCatalogIntegrationConfigError' class that only exists as of dbt-adapters==1.16.6
+    # so we exclude it to prevent failures and hope that upstream releases a new version with the correct constraint
+    "dbt-snowflake!=1.10.1",
     "dbt-athena-community",
     "dbt-clickhouse",
     "dbt-databricks",
     "dbt-redshift",
-    "dbt-sqlserver>=1.7.0",
     "dbt-trino",
     "Faker",
     "google-auth",
     "google-cloud-bigquery",
     "google-cloud-bigquery-storage",
+    "httpx",
     "mypy~=1.13.0",
+    "numpy",
     "pandas-stubs",
     "pre-commit",
     "psycopg2-binary",
     "pydantic",
     "PyAthena[Pandas]",
-    "PyGithub~=2.5.0",
+    "PyGithub>=2.6.0",
+    "pyodbc>=5.0.0",
+    "pyperf",
     "pyspark~=3.5.0",
     "pytest",
     "pytest-asyncio",
     "pytest-mock",
-    "pytest-retry",
+    "pytest-rerunfailures",
     "pytest-xdist",
     "pytz",
     "redshift_connector",
-    "ruff~=0.7.0",
+    "ruff~=0.11.0",
     "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
     "sqlalchemy-stubs",
     "trino",
@@ -96,20 +107,22 @@ dev = [
 ]
 dbt = ["dbt-core<2"]
 dlt = ["dlt"]
+duckdb = []
+fabric = ["pyodbc>=5.0.0"]
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
-github = ["PyGithub~=2.5.0"]
-llm = ["langchain", "openai"]
+github = ["PyGithub>=2.6.0"]
+motherduck = ["duckdb>=1.2.0"]
 mssql = ["pymssql"]
+mssql-odbc = ["pyodbc>=5.0.0"]
 mysql = ["pymysql"]
 mwaa = ["boto3"]
 postgres = ["psycopg2"]
 redshift = ["redshift_connector"]
 slack = ["slack_sdk"]
 snowflake = [
-    "cryptography",
+    "cryptography<46.0.0",
     "snowflake-connector-python[pandas,secure-local-storage]",
-    # as at 2024-08-05, snowflake-snowpark-python is only available up to Python 3.11
-    "snowflake-snowpark-python; python_version<'3.12'",
+    "snowflake-snowpark-python",
 ]
 trino = ["trino"]
 web = [
@@ -119,14 +132,24 @@ web = [
     "sse-starlette>=0.2.2",
     "pyarrow",
 ]
+lsp = [
+    # Duplicate of web
+    "fastapi==0.115.5",
+    "watchfiles>=0.19.0",
+    # "uvicorn[standard]==0.22.0",
+    "sse-starlette>=0.2.2",
+    "pyarrow",
+    # For lsp
+    "pygls>=1.2.0,<2.0.0",
+    "lsprotocol",
+]
 risingwave = ["psycopg2"]
 
 [project.scripts]
 sqlmesh = "sqlmesh.cli.main:cli"
+sqlmesh_dbt = "sqlmesh_dbt.cli:dbt"
 sqlmesh_cicd = "sqlmesh.cicd.bot:bot"
-
-[project.entry-points."airflow.plugins"]
-sqlmesh_airflow = "sqlmesh.schedulers.airflow.plugin:SqlmeshAirflowPlugin"
+sqlmesh_lsp = "sqlmesh.lsp.main:main"
 
 [project.urls]
 Homepage = "https://sqlmesh.com/"
@@ -147,7 +170,7 @@ fallback_version = "0.0.0"
 local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
-include = ["sqlmesh", "sqlmesh.*", "web*"]
+include = ["sqlmesh", "sqlmesh.*", "sqlmesh_dbt", "sqlmesh_dbt.*", "web*"]
 
 [tool.setuptools.package-data]
 web = ["client/dist/**"]
@@ -174,7 +197,6 @@ disable_error_code = "annotation-unchecked"
 [[tool.mypy.overrides]]
 module = [
     "api.*",
-    "airflow.*",
     "astor.*",
     "IPython.*",
     "hyperscript.*",
@@ -192,8 +214,8 @@ module = [
     "databricks_cli.*",
     "mysql.*",
     "pymssql.*",
+    "pyodbc.*",
     "psycopg2.*",
-    "langchain.*",
     "pytest_lazyfixture.*",
     "dbt.adapters.*",
     "slack_sdk.*",
@@ -204,6 +226,92 @@ module = [
     "pydantic_core.*",
     "dlt.*",
     "bigframes.*",
-    "json_stream.*"
+    "json_stream.*",
+    "duckdb.*"
 ]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+markers = [
+    # Test Type Markers
+    # Tests are ordered from fastest to slowest
+    "fast: fast tests (automatically applied if no type markers)",
+    "slow: slow tests that typically involve interacting with a local DB (like DuckDB)",
+    "docker: test that involves interacting with a Docker container",
+    "remote: test that involves interacting with a remote DB",
+    "cicdonly: test that only runs on CI/CD",
+    "isolated: tests that need to run sequentially usually because they use fork",
+    "dialect_isolated: tests that need to run separately due to global dialect overrides",
+
+    # Test Domain Markers
+    # default: core functionality
+    "cli: test for CLI",
+    "dbt: test for dbt adapter",
+    "github: test for Github CI/CD bot",
+    "jupyter: tests for Jupyter integration",
+    "web: tests for web UI",
+
+    # Engine Adapters
+    "engine: test all engine adapters",
+    "athena: test for Athena",
+    "bigquery: test for BigQuery",
+    "clickhouse: test for Clickhouse (standalone mode / cluster mode)",
+    "clickhouse_cloud: test for Clickhouse (cloud mode)",
+    "databricks: test for Databricks",
+    "duckdb: test for DuckDB",
+    "fabric: test for Fabric",
+    "motherduck: test for MotherDuck",
+    "mssql: test for MSSQL",
+    "mysql: test for MySQL",
+    "postgres: test for Postgres",
+    "gcp_postgres: test for Postgres on GCP",
+    "redshift: test for Redshift",
+    "snowflake: test for Snowflake",
+    "spark: test for Spark",
+    "pyspark: test for PySpark that need to run separately from the other spark tests",
+    "trino: test for Trino (all connectors)",
+    "risingwave: test for Risingwave",
+
+    # Other
+    "set_default_connection",
+    "registry_isolation"
+]
+addopts = "-n 0 --dist=loadgroup"
+asyncio_default_fixture_loop_scope = "session"
+log_cli = false # Set this to true to enable logging during tests
+log_cli_format = "%(asctime)s.%(msecs)03d %(filename)s:%(lineno)d %(levelname)s %(message)s"
+log_cli_level = "INFO"
+filterwarnings = [
+    "ignore:The localize method is no longer necessary, as this time zone supports the fold attribute"
+]
+reruns_delay = 10
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "F401",
+    "RET505",
+    "T100",
+]
+extend-select = ["TID"]
+
+
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = [
+    "duckdb",
+    "numpy",
+    "pandas",
+]
+
+# Bans imports from sqlmesh.lsp in files outside of sqlmesh/lsp
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"sqlmesh.lsp".msg = "Only files within sqlmesh/lsp can import from sqlmesh.lsp"
+
+[tool.ruff.lint.per-file-ignores]
+# TID251 is used to ignore the import of sqlmesh.lsp in files outside sqlmesh/lsp
+"sqlmesh/lsp/**/*.py" = ["TID251"]
+"tests/lsp/**/*.py" = ["TID251"]
+"benchmarks/lsp*.py" = ["TID251"]
+"sqlmesh/dbt/builtin.py" = ["T100"]

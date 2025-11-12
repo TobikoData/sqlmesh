@@ -43,15 +43,6 @@ This is a common choice in scenarios such as an addition of a new column, an act
 
 If any downstream models contain a `select *` from the model, SQLMesh attempts to infer breaking status on a best-effort basis. We recommend explicitly specifying a query's columns to avoid unnecessary recomputation.
 
-### Forward-only change
-A modified (either directly or indirectly) model that is categorized as forward-only will continue to use the existing physical table once the change is deployed to production (the `prod` environment). This means that no backfill will take place.
-
-While iterating on forward-only changes in the development environment, the model's output will be stored in either a temporary table or a shallow clone of the production table if supported by the engine.
-
-In either case the data produced this way in the development environment can only be used for preview and will **not** be reused once the change is deployed to production. See [Forward-only Plans](#forward-only-plans) for more details.
-
-This category is assigned by SQLMesh automatically either when a user opts into using a [forward-only plan](#forward-only-plans) or when a model is explicitly configured to be forward-only.
-
 ### Summary
 
 | Change Category                      | Change Type                                                                                | Behaviour                                          |
@@ -59,7 +50,17 @@ This category is assigned by SQLMesh automatically either when a user opts into 
 | [Breaking](#breaking-change)         | [Direct](glossary.md#direct-modification) or [Indirect](glossary.md#indirect-modification) | [Backfill](glossary.md#backfill)                   |
 | [Non-breaking](#non-breaking-change) | [Direct](glossary.md#direct-modification)                                                  | [Backfill](glossary.md#backfill)                   |
 | [Non-breaking](#non-breaking-change) | [Indirect](glossary.md#indirect-modification)                                              | [No Backfill](glossary.md#backfill)                |
-| [Forward-only](#forward-only-change) | [Direct](glossary.md#direct-modification) or [Indirect](glossary.md#indirect-modification) | [No Backfill](glossary.md#backfill), schema change |
+
+## Forward-only change
+In addition to categorizing a change as breaking or non-breaking, it can also be classified as forward-only.
+
+A model change classified as forward-only will continue to use the existing physical table once the change is deployed to production (the `prod` environment). This means that no backfill will take place.
+
+While iterating on forward-only changes in the development environment, the model's output will be stored in either a temporary table or a shallow clone of the production table if supported by the engine.
+
+In either case the data produced this way in the development environment can only be used for preview and will **not** be reused once the change is deployed to production. See [Forward-only Plans](#forward-only-plans) for more details.
+
+This category is assigned by SQLMesh automatically either when a user opts into using a [forward-only plan](#forward-only-plans) or when a model is explicitly configured to be forward-only.
 
 ## Plan application
 Once a plan has been created and reviewed, it is then applied to the target [environment](environments.md) in order for its changes to take effect.
@@ -246,6 +247,63 @@ Models needing backfill (missing dates):
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until '2024-09-27 00:00:00':
 ```
 
+#### Minimum intervals
+
+When you run a plan with a fixed `--start` or `--end` date, you create a virtual data environment with a limited subset of data. However, if the time range specified is less than the size of an interval on one of your models, that model will be skipped by default.
+
+For example, if you have a model like so:
+
+```sql
+MODEL(
+    name sqlmesh_example.monthly_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column month
+    ),
+    cron '@monthly'
+);
+
+SELECT SUM(a) AS sum_a, MONTH(day) AS month
+FROM sqlmesh_example.upstream_model
+WHERE day BETWEEN @start_ds AND @end_ds
+```
+
+make a change to it and run the following:
+
+```bash linenums="1" hl_lines="8"
+$ sqlmesh plan dev --start '1 day ago' 
+
+Models:
+└── Added:
+    └── sqlmesh_example__dev.monthly_model
+Apply - Virtual Update [y/n]: y
+
+SKIP: No model batches to execute
+```
+
+No data will be backfilled because `1 day ago` does not contain a complete month. However, you can use the `--min-intervals` option to override this behaviour like so:
+
+```bash linenums="1" hl_lines="11"
+$ sqlmesh plan dev --start '1 day ago' --min-intervals 1
+
+Models:
+└── Added:
+    └── sqlmesh_example__dev.monthly_model
+Apply - Virtual Update [y/n]: y
+
+[1/1] sqlmesh_example__dev.monthly_model   [insert 2025-06-01 - 2025-06-30]   0.08s   
+Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00                                                             
+                                                                                                                                                    
+✔ Model batches executed
+```
+
+This will ensure that regardless of the plan `--start` date, all added or modified models will have at least `--min-intervals` intervals considered for backfill.
+
+!!! info
+
+    If you are running plans manually you can just adjust the `--start` date to be wide enough to cover the models in question.
+
+    The `--min-intervals` option is primarily intended for [automation scenarios](../integrations/github.md) where the plan is always run with a default relative start date and you always want (for example) "2 weeks worth of data" in the target environment.
+
 ### Data preview for forward-only changes
 As mentioned earlier, the data output produced by [forward-only changes](#forward-only-change) in a development environment can only be used for preview and will not be reused in production.
 
@@ -297,9 +355,25 @@ Some model changes destroy existing data in a table. SQLMesh automatically detec
 
 Forward-only plans treats all of the plan's model changes as forward-only. In these plans, SQLMesh will check all modified incremental models for destructive schema changes, not just forward-only models.
 
-SQLMesh determines what to do for each model based on this setting hierarchy: the [model's `on_destructive_change` value](../guides/incremental_time.md#destructive-changes) (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`.
+SQLMesh determines what to do for each model based on this setting hierarchy: 
 
-If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's `--allow-destructive-change` selector to specify which models. Learn more about model selectors [here](../guides/model_selection.md).
+- **For destructive changes**: the [model's `on_destructive_change` value](../guides/incremental_time.md#schema-changes) (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`
+- **For additive changes**: the [model's `on_additive_change` value](../guides/incremental_time.md#schema-changes) (if present), the `on_additive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `allow`
+
+If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's `--allow-destructive-model` selector to specify which models. 
+Similarly, if you want to temporarily allow additive changes to models configured with `on_additive_change=error`, use the `--allow-additive-model` selector. 
+
+For example, to allow destructive changes to all models in the `analytics` schema:
+```bash
+sqlmesh plan --forward-only --allow-destructive-model "analytics.*"
+```
+
+Or to allow destructive changes to multiple specific models:
+```bash
+sqlmesh plan --forward-only --allow-destructive-model "sales.revenue_model" --allow-destructive-model "marketing.campaign_model"
+```
+
+Learn more about model selectors [here](../guides/model_selection.md).
 
 ### Effective date
 Changes that are part of the forward-only plan can also be applied retroactively to the production environment by specifying the effective date:
@@ -335,6 +409,12 @@ Applying a restatement plan will trigger a cascading backfill for all selected m
 You may restate external models. An [external model](./models/external_models.md) is just metadata about an external table, so the model does not actually reprocess anything. Instead, it triggers a cascading backfill of all downstream models.
 
 The plan's `--start` and `--end` date options determine which data intervals will be reprocessed. Some model kinds cannot be backfilled for limited date ranges, though - learn more [below](#model-kind-limitations).
+
+!!! info "Just catching up"
+
+    Restatement plans "catch models up" to the latest time interval already processed in the environment. They cannot process additional intervals because the required data has not yet been processed upstream.
+
+    If you pass an `--end` date later than the environment's most recent time interval, SQLMesh will just catch up to the environment and will ignore any additional intervals.
 
 To prevent models from ever being restated, set the [disable_restatement](models/overview.md#disable_restatement) attribute to `true`.
 
@@ -376,28 +456,23 @@ These examples demonstrate how to select which models to restate based on model 
 
 Restatement plans behave differently depending on if you're targeting the `prod` environment or a [development environment](./environments.md#how-to-use-environments).
 
-If you target a development environment like so:
+If you target a development environment by including an environment name like `dev`:
 
 ```bash
 sqlmesh plan dev --restate-model "db.model_a" --start "2024-01-01" --end "2024-01-10"
 ```
 
-the restatement plan will restate the requested intervals for the specified model in the `dev` environment. Versions of the model in other environments will be unaffected.
+the restatement plan will restate the requested intervals for the specified model in the `dev` environment. In other environments, the model will be unaffected.
 
-However, if you target the `prod` environment:
+However, if you target the `prod` environment by omitting an environment name:
 
 ```bash
 sqlmesh plan --restate-model "db.model_a" --start "2024-01-01" --end "2024-01-10"
 ```
 
-the restatement plan will restate the intervals in the `prod` table *and clear the intervals from state for every other version of that model*.
+the restatement plan will restate the intervals in the `prod` table *and clear the model's time intervals from state in every other environment*.
 
-This means that next time you do a run in `dev`, those intervals will be restated in the development environment as well.
-
-The reason for this is to prevent old data from getting promoted to `prod`. One of the benefits of SQLMesh is being able to [reuse tables](#virtual-update) from development environments to ensure that production deployments consist of quick, painless pointer swaps.
-
-!!! info
-    If restating data in `prod` did not also trigger a restatement in `dev`, when `sqlmesh plan` is run against `prod` to deploy changes, a table containing old data may be promoted.
+The next time you do a run in `dev`, the intervals already reprocessed in `prod` are reprocessed in `dev` as well. This is to prevent old data from getting promoted to `prod` in the future.
 
 This behavior also clears the affected intervals for downstream tables that only exist in development environments. Consider the following example:
 
@@ -405,11 +480,13 @@ This behavior also clears the affected intervals for downstream tables that only
  - A virtual environment `dev` is created with new tables `B` and `C` downstream of `A`
     - the DAG in `prod` looks like `A`
     - the DAG in `dev` looks like `A <- B <- C`
- - A restatement plan is created against table `A` in `prod`
- - SQLMesh will ensure that the affected intervals are also cleared for `B` and `C` in `dev` even though those tables do not exist in `prod`
+ - A restatement plan is executed against table `A` in `prod`
+ - SQLMesh will clear the affected intervals for `B` and `C` in `dev` even though those tables do not exist in `prod`
 
 !!! info "Bringing development environments up to date"
 
-    If a restatement plan against `prod` cleared intervals from state for tables in development environments, you need to `sqlmesh run <env>` to trigger the reprocessing of that data.
+    A restatement plan against `prod` clears time intervals from state for models in development environments, but it does not trigger a run to reprocess those intervals.
 
-    This is because SQLMesh limits the work done in the `prod` restatement plan to just the `prod` environment. That way the restatement can be applied as quickly as possible and avoid doing unnecessary work.
+    Execute `sqlmesh run <environment name>` to trigger reprocessing in the development environment.
+
+    This is necessary because a `prod` restatement plan only does work in the `prod` environment for speed and efficiency.

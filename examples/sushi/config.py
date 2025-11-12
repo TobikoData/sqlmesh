@@ -1,7 +1,7 @@
 import os
 
+from sqlmesh.core.config.common import VirtualEnvironmentMode, TableNamingConvention
 from sqlmesh.core.config import (
-    AirflowSchedulerConfig,
     AutoCategorizationMode,
     BigQueryConnectionConfig,
     CategorizerConfig,
@@ -11,8 +11,8 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
     PlanConfig,
-    SparkConnectionConfig,
 )
+from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.notification_target import (
     BasicSMTPNotificationTarget,
     SlackApiNotificationTarget,
@@ -27,6 +27,11 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 defaults = {"dialect": "duckdb"}
 model_defaults = ModelDefaultsConfig(**defaults)
 model_defaults_iceberg = ModelDefaultsConfig(**defaults, storage_format="iceberg")
+before_all = [
+    "CREATE SCHEMA IF NOT EXISTS raw",
+    "DROP VIEW IF EXISTS raw.demographics",
+    "CREATE VIEW raw.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
+]
 
 
 # A DuckDB config, in-memory by default.
@@ -41,6 +46,18 @@ config = Config(
     },
     default_gateway="duckdb",
     model_defaults=model_defaults,
+    linter=LinterConfig(
+        enabled=False,
+        rules=[
+            "ambiguousorinvalidcolumn",
+            "invalidselectstarexpansion",
+            "noselectstar",
+            "nomissingaudits",
+            "nomissingowner",
+            "nomissingexternalmodels",
+        ],
+    ),
+    before_all=before_all,
 )
 
 bigquery_config = Config(
@@ -52,6 +69,7 @@ bigquery_config = Config(
     },
     default_gateway="bq",
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 # A configuration used for SQLMesh tests.
@@ -64,26 +82,17 @@ test_config = Config(
         )
     ),
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
-airflow_config = Config(
-    default_scheduler=AirflowSchedulerConfig(),
-    gateways=GatewayConfig(
-        connection=SparkConnectionConfig(
-            config_dir=os.path.join(CURRENT_FILE_PATH, "..", "airflow", "spark_conf"),
-            config={
-                "spark.hadoop.javax.jdo.option.ConnectionURL": "jdbc:postgresql://localhost:5432/metastore_db"
-            },
-        )
-    ),
-    model_defaults=model_defaults_iceberg,
-)
-
-
-airflow_config_docker = Config(
-    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
-    gateways=GatewayConfig(connection=SparkConnectionConfig()),
-    model_defaults=model_defaults_iceberg,
+# A configuration used for SQLMesh tests with virtual environment mode set to DEV_ONLY.
+test_config_virtual_environment_mode_dev_only = test_config.copy(
+    update={
+        "virtual_environment_mode": VirtualEnvironmentMode.DEV_ONLY,
+        "plan": PlanConfig(
+            auto_categorize_changes=CategorizerConfig.all_full(),
+        ),
+    },
 )
 
 # A DuckDB config with a physical schema map.
@@ -91,6 +100,7 @@ map_config = Config(
     default_connection=DuckDBConnectionConfig(),
     physical_schema_mapping={"^sushi$": "company_internal"},
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 # A config representing isolated systems with a gateway per system
@@ -102,6 +112,7 @@ isolated_systems_config = Config(
     },
     default_gateway="dev",
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 required_approvers_config = Config(
@@ -136,15 +147,22 @@ required_approvers_config = Config(
         ),
     ],
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 
-environment_suffix_config = Config(
+environment_suffix_table_config = Config(
     default_connection=DuckDBConnectionConfig(),
     model_defaults=model_defaults,
     environment_suffix_target=EnvironmentSuffixTarget.TABLE,
+    before_all=before_all,
 )
 
+environment_suffix_catalog_config = environment_suffix_table_config.model_copy(
+    update={
+        "environment_suffix_target": EnvironmentSuffixTarget.CATALOG,
+    },
+)
 
 CATALOGS = {
     "in_memory": ":memory:",
@@ -155,6 +173,7 @@ local_catalogs = Config(
     default_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
     default_test_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 environment_catalog_mapping_config = Config(
@@ -171,4 +190,13 @@ environment_catalog_mapping_config = Config(
         "^prod$": "prod_catalog",
         ".*": "dev_catalog",
     },
+    before_all=before_all,
+)
+
+hash_md5_naming_config = config.copy(
+    update={"physical_table_naming_convention": TableNamingConvention.HASH_MD5}
+)
+
+table_only_naming_config = config.copy(
+    update={"physical_table_naming_convention": TableNamingConvention.TABLE_ONLY}
 )

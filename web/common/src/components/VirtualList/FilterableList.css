@@ -1,0 +1,16 @@
+:where(:root) {
+  --color-filterable-list-counter-background: var(--color-badge-background);
+  --color-filterable-list-counter-foreground: var(--color-badge-foreground);
+
+  --color-filterable-list-input-background: var(--color-input-background);
+  --color-filterable-list-input-foreground: var(--color-input-foreground);
+  --color-filterable-list-input-placeholder: var(--color-input-placeholder);
+  --color-filterable-list-input-border: var(--color-input-border);
+}
+
+.FilterableList__Input {
+  --color-input-background: var(--color-filterable-list-input-background);
+  --color-input-foreground: var(--color-filterable-list-input-foreground);
+  --color-input-placeholder: var(--color-filterable-list-input-placeholder);
+  --color-input-border: var(--color-filterable-list-input-border);
+}

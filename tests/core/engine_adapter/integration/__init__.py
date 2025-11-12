@@ -5,10 +5,12 @@ import pathlib
 import sys
 import typing as t
 import time
+from contextlib import contextmanager
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
@@ -22,12 +24,131 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.utils.pandas import compare_dataframes
+from dataclasses import dataclass
+from _pytest.mark import MarkDecorator
+from _pytest.mark.structures import ParameterSet
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import TableName, SchemaName
     from sqlmesh.core.engine_adapter._typing import Query
 
 TEST_SCHEMA = "test_schema"
+
+
+@dataclass
+class IntegrationTestEngine:
+    engine: str
+    catalog_types: t.Optional[t.List[str]] = None
+    native_dataframe_type: t.Optional[str] = None
+    cloud: bool = False
+
+    @property
+    def dialect(self) -> str:
+        return self.engine.split("_", maxsplit=1)[0]
+
+    @property
+    def pytest_marks(self) -> t.List[MarkDecorator]:
+        marks = [getattr(pytest.mark, self.engine), pytest.mark.engine]
+        if self.cloud:
+            marks.append(pytest.mark.remote)
+        else:
+            marks.append(pytest.mark.docker)
+        if self.engine == "duckdb":
+            marks.extend(
+                [
+                    # run the duckdb tests in `make cicd-test` as well
+                    pytest.mark.slow,
+                    # the duckdb tests cannot run concurrently because many of them point at the same files
+                    # and duckdb does not support multi process read/write on the same files
+                    # ref: https://duckdb.org/docs/connect/concurrency.html#writing-to-duckdb-from-multiple-processes
+                    pytest.mark.xdist_group("engine_integration_duckdb"),
+                ]
+            )
+        return marks
+
+
+ENGINES = [
+    # Docker engines that can be locally tested
+    IntegrationTestEngine("duckdb"),
+    IntegrationTestEngine("postgres"),
+    IntegrationTestEngine("mysql"),
+    IntegrationTestEngine("mssql"),
+    IntegrationTestEngine("trino", catalog_types=["hive", "iceberg", "delta", "nessie"]),
+    IntegrationTestEngine("spark", native_dataframe_type="pyspark"),
+    IntegrationTestEngine("clickhouse", catalog_types=["standalone", "cluster"]),
+    IntegrationTestEngine("risingwave"),
+    # Cloud engines that need paid accounts / special credentials
+    IntegrationTestEngine("clickhouse_cloud", cloud=True),
+    IntegrationTestEngine("redshift", cloud=True),
+    IntegrationTestEngine("athena", catalog_types=["hive", "iceberg"], cloud=True),
+    IntegrationTestEngine("bigquery", native_dataframe_type="bigframe", cloud=True),
+    IntegrationTestEngine("databricks", native_dataframe_type="pyspark", cloud=True),
+    IntegrationTestEngine("snowflake", native_dataframe_type="snowpark", cloud=True),
+    IntegrationTestEngine("fabric", cloud=True),
+    IntegrationTestEngine("gcp_postgres", cloud=True),
+]
+
+ENGINES_BY_NAME = {e.engine: e for e in ENGINES}
+
+
+def generate_pytest_params(
+    engines: t.Union[IntegrationTestEngine, t.List[IntegrationTestEngine]],
+    query: bool = True,
+    df: bool = False,
+    show_variant_in_test_id: bool = True,
+) -> t.Iterable[ParameterSet]:
+    """
+    The engine adapter tests have a bunch of variants:
+     - Per engine for engines that dont have pluggable catalogs
+     - Per engine per catalog type for engines that have pluggable catalogs
+
+    In addition, many engine adapter functions take either a SQL Query or a DataFrame so we need to test both combinations.
+    For the methods that take a DataFrame:
+     - Every engine takes a Pandas DataFrame
+     - A small subset of engines also take their own engine-specific DataFrame (eg Bigframe, Snowpark, Pyspark)
+
+    This function controls the parameter generation so that:
+     - Tests that only need to test SQL queries only get called once per engine/catalog
+     - Tests that only need to test DataFrame's get called once for Pandas Dataframe's and once for each engine-specific DataFrame
+     - Tests that need to test both SQL Queries and DataFrame's get called once for every combination of (engine, catalog, *(query, pandas df, native df))
+
+    The goal is to prevent needing to code this kind of logic into tests:
+
+    > if test_type == "df":
+    >    pytest.skip("Test only needs to run for query")
+
+    As well as make it easier to generate the right combinations for new databases / catalogs / DataFrame implementations
+    """
+    if not isinstance(engines, list):
+        engines = [engines]
+
+    for engine in engines:
+        catalogs = engine.catalog_types if engine.catalog_types else [""]
+        for catalog in catalogs:
+            gateway = (
+                f"inttest_{engine.engine}_{catalog}" if catalog else f"inttest_{engine.engine}"
+            )
+            if engine.engine == "athena":
+                # athena only has a single gateway defined, not a gateway per catalog
+                gateway = f"inttest_athena"
+
+            variants = []
+            if query:
+                variants.append("query")
+            if df:
+                variants.append("df-pandas")
+                if engine.native_dataframe_type:
+                    variants.append(f"df-{engine.native_dataframe_type}")
+
+            test_id = f"{engine.engine}_{catalog}" if catalog else f"{engine.engine}"
+            default_table_format = catalog
+
+            for variant in variants:
+                yield pytest.param(
+                    (engine, gateway, variant, default_table_format),
+                    marks=engine.pytest_marks,
+                    id=f"[{variant}]{test_id}" if show_variant_in_test_id else test_id,
+                )
 
 
 class MetadataResults(PydanticModel):
@@ -74,10 +195,11 @@ class TestContext:
         engine_adapter: EngineAdapter,
         mark: str,
         gateway: str,
+        tmp_path: pathlib.Path,
         is_remote: bool = False,
         columns_to_types: t.Optional[t.Dict[str, t.Union[str, exp.DataType]]] = None,
     ):
-        self.test_type = test_type
+        self._test_type = test_type
         self.engine_adapter = engine_adapter
         self.mark = mark
         self.gateway = gateway
@@ -88,6 +210,28 @@ class TestContext:
         self._schemas: t.List[
             str
         ] = []  # keep track of any schemas returned from self.schema() / self.table() so we can drop them at the end
+        self._catalogs: t.List[
+            str
+        ] = []  # keep track of any catalogs created via self.create_catalog() so we can drop them at the end
+        self.tmp_path = tmp_path
+
+    @property
+    def test_type(self) -> str:
+        return "df" if self._test_type.startswith("df") else "query"
+
+    @property
+    def df_type(self) -> t.Optional[str]:
+        if self.test_type == "df":
+            # the 'pandas' part of 'df-pandas'
+            return self._test_type.split("-", maxsplit=1)[1]
+        return None
+
+    @property
+    def engine_type(self) -> str:
+        if self.mark.startswith("gcp_postgres"):
+            return "gcp_postgres"
+
+        return self.mark.split("_")[0]
 
     @property
     def columns_to_types(self):
@@ -174,7 +318,7 @@ class TestContext:
     def add_test_suffix(self, value: str) -> str:
         return f"{value}_{self.test_id}"
 
-    def get_metadata_results(self, schema: t.Optional[str] = None) -> MetadataResults:
+    def get_metadata_results(self, schema: t.Optional[SchemaName] = None) -> MetadataResults:
         schema = schema if schema else self.schema(TEST_SCHEMA)
         return MetadataResults.from_data_objects(self.engine_adapter.get_data_objects(schema))
 
@@ -193,7 +337,7 @@ class TestContext:
         return data
 
     def init(self):
-        if self.test_type == "pyspark" and not hasattr(self.engine_adapter, "is_pyspark_df"):
+        if self.df_type == "pyspark" and not hasattr(self.engine_adapter, "is_pyspark_df"):
             pytest.skip(f"Engine adapter {self.engine_adapter} doesn't support pyspark")
         self._init_engine_adapter()
 
@@ -208,11 +352,22 @@ class TestContext:
                 list(data.itertuples(index=False, name=None)),
                 batch_start=0,
                 batch_end=sys.maxsize,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
             )
-        elif self.test_type == "pyspark":
-            return self.engine_adapter.spark.createDataFrame(data)  # type: ignore
-        return self._format_df(data, to_datetime=self.dialect != "trino")
+        if self.test_type == "df":
+            formatted_df = self._format_df(data, to_datetime=self.dialect != "trino")
+            if self.df_type == "pandas":
+                return formatted_df
+            if self.df_type == "pyspark":
+                return self.engine_adapter.spark.createDataFrame(formatted_df)  # type: ignore
+            if self.df_type == "bigframe":
+                return self.engine_adapter.bigframe.read_pandas(formatted_df)  # type: ignore
+            if self.df_type == "snowpark":
+                return self.engine_adapter.snowpark.create_dataframe(formatted_df)  # type: ignore
+
+            raise ValueError(f"Unknown DF type: {self.df_type}")
+
+        raise ValueError(f"Unknown test type: {self.test_type}")
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
         return self._format_df(data)
@@ -290,7 +445,7 @@ class TestContext:
                 WHERE
                     n.nspname = '{schema_name}'
                     AND pgc.relname = '{table_name}'
-                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND pgc.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
         elif self.dialect in ["mysql", "snowflake"]:
@@ -359,10 +514,10 @@ class TestContext:
                 FROM pg_class c
                 INNER JOIN pg_description d ON c.oid = d.objoid AND d.objsubid = 0
                 INNER JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE 
+                WHERE
                     c.relname = '{table_name}'
                     AND n.nspname= '{schema_name}'
-                    AND c.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND c.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
 
@@ -405,7 +560,7 @@ class TestContext:
                 WHERE
                     n.nspname = '{schema_name}'
                     AND pgc.relname = '{table_name}'
-                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND pgc.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
         elif self.dialect in ["mysql", "snowflake", "trino"]:
@@ -465,13 +620,13 @@ class TestContext:
                 INNER JOIN pg_namespace n ON c.relnamespace = n.oid
                 INNER JOIN pg_attribute a ON c.oid = a.attrelid
                 INNER JOIN pg_description d
-                ON 
+                ON
                     a.attnum = d.objsubid
                     AND d.objoid = c.oid
                 WHERE
                     n.nspname = '{schema_name}'
-                    AND c.relname = '{table_name}' 
-                    AND c.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND c.relname = '{table_name}'
+                    AND c.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
 
@@ -494,6 +649,7 @@ class TestContext:
         self,
         config_mutator: t.Optional[t.Callable[[str, Config], None]] = None,
         path: t.Optional[pathlib.Path] = None,
+        ephemeral_state_connection: bool = True,
     ) -> Context:
         private_sqlmesh_dir = pathlib.Path(pathlib.Path().home(), ".sqlmesh")
         config = load_config_from_paths(
@@ -503,20 +659,19 @@ class TestContext:
                 private_sqlmesh_dir / "config.yml",
                 private_sqlmesh_dir / "config.yaml",
             ],
+            variables={"tmp_path": str(path or self.tmp_path)},
         )
         if config_mutator:
             config_mutator(self.gateway, config)
         config.gateways = {self.gateway: config.gateways[self.gateway]}
 
         gateway_config = config.gateways[self.gateway]
-        if (
-            (sc := gateway_config.state_connection)
-            and (conn := gateway_config.connection)
-            and sc.type_ == "duckdb"
-        ):
-            # if duckdb is being used as the state connection, set concurrent_tasks=1 on the main connection
-            # to prevent duckdb from being accessed from multiple threads and getting deadlocked
-            conn.concurrent_tasks = 1
+        if ephemeral_state_connection:
+            # Override whatever state connection has been configured on the integration test config to use in-memory DuckDB instead
+            # This is so tests that initialize a SQLMesh context can run concurrently without clobbering each others state
+            from sqlmesh.core.config.connection import DuckDBConnectionConfig
+
+            gateway_config.state_connection = DuckDBConnectionConfig()
 
         if "athena" in self.gateway:
             conn = gateway_config.connection
@@ -538,6 +693,9 @@ class TestContext:
             except Exception:
                 pass
             self.engine_adapter.cursor.connection.autocommit(False)
+        elif self.dialect == "fabric":
+            # Use the engine adapter's built-in catalog creation functionality
+            self.engine_adapter.create_catalog(catalog_name)
         elif self.dialect == "snowflake":
             self.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
         elif self.dialect == "duckdb":
@@ -547,11 +705,16 @@ class TestContext:
             except Exception:
                 pass
 
+        self._catalogs.append(catalog_name)
+
     def drop_catalog(self, catalog_name: str):
         if self.dialect == "bigquery":
             return  # bigquery cannot create/drop catalogs
-        elif self.dialect == "databricks":
+        if self.dialect == "databricks":
             self.engine_adapter.execute(f"DROP CATALOG IF EXISTS {catalog_name} CASCADE")
+        elif self.dialect == "fabric":
+            # Use the engine adapter's built-in catalog dropping functionality
+            self.engine_adapter.drop_catalog(catalog_name)
         else:
             self.engine_adapter.execute(f'DROP DATABASE IF EXISTS "{catalog_name}"')
 
@@ -569,6 +732,11 @@ class TestContext:
                 schema_name=schema_name, ignore_if_not_exists=True, cascade=True
             )
 
+        for catalog_name in set(self._catalogs):
+            self.drop_catalog(catalog_name)
+
+        self.engine_adapter.close()
+
     def upsert_sql_model(self, model_definition: str) -> t.Tuple[Context, SqlModel]:
         if not self._context:
             self._context = self.create_context()
@@ -577,6 +745,106 @@ class TestContext:
         assert isinstance(model, SqlModel)
         self._context.upsert_model(model)
         return self._context, model
+
+    def _get_create_user_or_role(
+        self, username: str, password: t.Optional[str] = None
+    ) -> t.Tuple[str, t.Optional[str]]:
+        password = password or random_id()
+        if self.dialect in ["postgres", "redshift"]:
+            return username, f"CREATE USER \"{username}\" WITH PASSWORD '{password}'"
+        if self.dialect == "snowflake":
+            return username, f"CREATE ROLE {username}"
+        if self.dialect == "databricks":
+            # Creating an account-level group in Databricks requires making REST API calls so we are going to
+            # use a pre-created group instead. We assume the suffix on the name is the unique id
+            return "_".join(username.split("_")[:-1]), None
+        if self.dialect == "bigquery":
+            # BigQuery uses IAM service accounts that need to be pre-created
+            # Pre-created GCP service accounts:
+            # - sqlmesh-test-admin@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-analyst@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-etl-user@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-reader@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-user@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-writer@{project-id}.iam.gserviceaccount.com
+            role_name = (
+                username.replace(f"_{self.test_id}", "").replace("test_", "").replace("_", "-")
+            )
+            project_id = self.engine_adapter.get_current_catalog()
+            service_account = f"sqlmesh-test-{role_name}@{project_id}.iam.gserviceaccount.com"
+            return f"serviceAccount:{service_account}", None
+        raise ValueError(f"User creation not supported for dialect: {self.dialect}")
+
+    def _create_user_or_role(self, username: str, password: t.Optional[str] = None) -> str:
+        username, create_user_sql = self._get_create_user_or_role(username, password)
+        if create_user_sql:
+            self.engine_adapter.execute(create_user_sql)
+        return username
+
+    @contextmanager
+    def create_users_or_roles(self, *role_names: str) -> t.Iterator[t.Dict[str, str]]:
+        created_users = []
+        roles = {}
+
+        try:
+            for role_name in role_names:
+                user_name = normalize_identifiers(
+                    self.add_test_suffix(f"test_{role_name}"), dialect=self.dialect
+                ).sql(dialect=self.dialect)
+                password = random_id()
+                if self.dialect == "redshift":
+                    password += (
+                        "A"  # redshift requires passwords to have at least one uppercase letter
+                    )
+                user_name = self._create_user_or_role(user_name, password)
+                created_users.append(user_name)
+                roles[role_name] = user_name
+
+            yield roles
+
+        finally:
+            for user_name in created_users:
+                self._cleanup_user_or_role(user_name)
+
+    def get_select_privilege(self) -> str:
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataViewer"
+        return "SELECT"
+
+    def get_insert_privilege(self) -> str:
+        if self.dialect == "databricks":
+            # This would really be "MODIFY" but for the purposes of having this be unique from UPDATE
+            # we return "MANAGE" instead
+            return "MANAGE"
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataEditor"
+        return "INSERT"
+
+    def get_update_privilege(self) -> str:
+        if self.dialect == "databricks":
+            return "MODIFY"
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataOwner"
+        return "UPDATE"
+
+    def _cleanup_user_or_role(self, user_name: str) -> None:
+        """Helper function to clean up a user/role and all their dependencies."""
+        try:
+            if self.dialect in ["postgres", "redshift"]:
+                self.engine_adapter.execute(f"""
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE usename = '{user_name}' AND pid <> pg_backend_pid()
+                """)
+                self.engine_adapter.execute(f'DROP OWNED BY "{user_name}"')
+                self.engine_adapter.execute(f'DROP USER IF EXISTS "{user_name}"')
+            elif self.dialect == "snowflake":
+                self.engine_adapter.execute(f"DROP ROLE IF EXISTS {user_name}")
+            elif self.dialect in ["databricks", "bigquery"]:
+                # For Databricks and BigQuery, we use pre-created accounts that should not be deleted
+                pass
+        except Exception:
+            pass
 
 
 def wait_until(fn: t.Callable[..., bool], attempts=3, wait=5) -> None:

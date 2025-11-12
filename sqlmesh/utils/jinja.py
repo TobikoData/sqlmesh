@@ -7,14 +7,18 @@ import typing as t
 import zlib
 from collections import defaultdict
 from enum import Enum
+from sys import exc_info
+from traceback import walk_tb
 
-from jinja2 import Environment, Template, nodes
+from jinja2 import Environment, Template, nodes, UndefinedError
+from jinja2.runtime import Macro
 from sqlglot import Dialect, Expression, Parser, TokenType
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.pydantic import PRIVATE_FIELDS, PydanticModel, field_serializer, field_validator
+from sqlmesh.utils.metaprogramming import SqlValue
 
 
 if t.TYPE_CHECKING:
@@ -73,7 +77,7 @@ class MacroExtractor(Parser):
         """
         self.reset()
         self.sql = jinja
-        self._tokens = Dialect.get_or_raise(dialect).tokenizer.tokenize(jinja)
+        self._tokens = Dialect.get_or_raise(dialect).tokenize(jinja)
         self._index = -1
         self._advance()
 
@@ -129,6 +133,12 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[C
     vars_in_scope = vars_in_scope.copy()
     for child_node in node.iter_child_nodes():
         if "target" in child_node.fields:
+            # For nodes with assignment targets (Assign, AssignBlock, For, Import),
+            # the target name could shadow a reference in the right hand side.
+            # So we need to process the RHS before adding the target to scope.
+            # For example: {% set model = model.path %} should track model.path.
+            yield from find_call_names(child_node, vars_in_scope)
+
             target = getattr(child_node, "target")
             if isinstance(target, nodes.Name):
                 vars_in_scope.add(target.name)
@@ -145,7 +155,9 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[C
             name = call_name(child_node)
             if name[0][0] != "'" and name[0] not in vars_in_scope:
                 yield (name, child_node)
-        yield from find_call_names(child_node, vars_in_scope)
+
+        if "target" not in child_node.fields:
+            yield from find_call_names(child_node, vars_in_scope)
 
 
 def extract_call_names(
@@ -165,6 +177,14 @@ def extract_call_names(
     return parse()
 
 
+def is_variable_node(n: nodes.Node) -> bool:
+    return (
+        isinstance(n, nodes.Call)
+        and isinstance(n.node, nodes.Name)
+        and n.node.name in (c.VAR, c.BLUEPRINT_VAR)
+    )
+
+
 def extract_macro_references_and_variables(
     *jinja_strs: str,
 ) -> t.Tuple[t.Set[MacroReference], t.Set[str]]:
@@ -172,8 +192,16 @@ def extract_macro_references_and_variables(
     variables = set()
     for jinja_str in jinja_strs:
         for call_name, node in extract_call_names(jinja_str):
-            if call_name[0] == c.VAR:
-                assert isinstance(node, nodes.Call)
+            if call_name[0] in (c.VAR, c.BLUEPRINT_VAR):
+                if not is_variable_node(node):
+                    # Find the variable node which could be nested
+                    for n in node.find_all(nodes.Call):
+                        if is_variable_node(n):
+                            node = n
+                            break
+                    else:
+                        raise ValueError(f"Could not find variable name in {jinja_str}")
+                node = t.cast(nodes.Call, node)
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     variables.add(args[0].lower())
@@ -184,6 +212,20 @@ def extract_macro_references_and_variables(
             elif len(call_name) == 2:
                 macro_references.add(MacroReference(package=call_name[0], name=call_name[1]))
     return macro_references, variables
+
+
+def sort_dict_recursive(
+    item: t.Dict[str, t.Any],
+) -> t.Dict[str, t.Any]:
+    sorted_dict: t.Dict[str, t.Any] = {}
+    for k, v in sorted(item.items()):
+        if isinstance(v, list):
+            sorted_dict[k] = sorted(v)
+        elif isinstance(v, dict):
+            sorted_dict[k] = sort_dict_recursive(v)
+        else:
+            sorted_dict[k] = v
+    return sorted_dict
 
 
 JinjaGlobalAttribute = t.Union[str, int, float, bool, AttributeDict]
@@ -276,6 +318,9 @@ class JinjaMacroRegistry(PydanticModel):
         Args:
             globals: The global objects that should be added.
         """
+        # Keep the registry lightweight when the graph is not needed
+        if not "graph" in self.packages:
+            globals.pop("flat_graph", None)
         self.global_objs.update(**self._validate_global_objs(globals))
 
     def build_macro(self, reference: MacroReference, **kwargs: t.Any) -> t.Optional[t.Callable]:
@@ -310,13 +355,16 @@ class JinjaMacroRegistry(PydanticModel):
                 if macro.is_top_level and macro_name not in root_macros:
                     root_macros[macro_name] = macro_wrapper
 
+        top_level_packages = self.top_level_packages.copy()
+
         if self.root_package_name is not None:
             package_macros[self.root_package_name].update(root_macros)
+            top_level_packages.append(self.root_package_name)
 
         env = environment()
 
         builtin_globals = self._create_builtin_globals(kwargs)
-        for top_level_package_name in self.top_level_packages:
+        for top_level_package_name in top_level_packages:
             # Make sure that the top-level package doesn't fully override the same builtin package.
             package_macros[top_level_package_name] = AttributeDict(
                 {
@@ -329,6 +377,7 @@ class JinjaMacroRegistry(PydanticModel):
         context.update(builtin_globals)
         context.update(root_macros)
         context.update(package_macros)
+        context["render"] = lambda input: env.from_string(input).render()
 
         env.globals.update(context)
         env.filters.update(self._environment.filters)
@@ -414,7 +463,7 @@ class JinjaMacroRegistry(PydanticModel):
                 d.PythonCode(
                     expressions=[
                         f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                        for k, v in sorted(filtered_objs.items())
+                        for k, v in sort_dict_recursive(filtered_objs).items()
                     ]
                 )
             )
@@ -593,7 +642,10 @@ def jinja_call_arg_name(node: nodes.Node) -> str:
 
 def create_var(variables: t.Dict[str, t.Any]) -> t.Callable:
     def _var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
-        return variables.get(var_name.lower(), default)
+        value = variables.get(var_name.lower(), default)
+        if isinstance(value, SqlValue):
+            return value.sql
+        return value
 
     return _var
 
@@ -603,8 +655,59 @@ def create_builtin_globals(
 ) -> t.Dict[str, t.Any]:
     global_vars.pop(c.GATEWAY, None)
     variables = global_vars.pop(c.SQLMESH_VARS, None) or {}
+    blueprint_variables = global_vars.pop(c.SQLMESH_BLUEPRINT_VARS, None) or {}
     return {
+        **global_vars,
         c.VAR: create_var(variables),
         c.GATEWAY: lambda: variables.get(c.GATEWAY, None),
-        **global_vars,
+        c.BLUEPRINT_VAR: create_var(blueprint_variables),
     }
+
+
+def make_jinja_registry(
+    jinja_macros: JinjaMacroRegistry, package_name: str, jinja_references: t.Set[MacroReference]
+) -> JinjaMacroRegistry:
+    """
+    Creates a Jinja macro registry for a specific package.
+
+    This function takes an existing Jinja macro registry and returns a new
+    registry that includes only the macros associated with the specified
+    package and trims the registry to include only the macros referenced
+    in the provided set of macro references.
+
+    Args:
+        jinja_macros: The original Jinja macro registry containing all macros.
+        package_name: The name of the package for which to create the registry.
+        jinja_references: A set of macro references to retain in the new registry.
+
+    Returns:
+        A new JinjaMacroRegistry containing only the macros for the specified
+        package and the referenced macros.
+    """
+
+    jinja_registry = jinja_macros.copy()
+    jinja_registry.root_macros = jinja_registry.packages.get(package_name) or {}
+    jinja_registry = jinja_registry.trim(jinja_references)
+
+    return jinja_registry
+
+
+def extract_error_details(ex: Exception) -> str:
+    """Extracts a readable message from a Jinja2 error, to include missing name and macro."""
+
+    error_details = ""
+    if isinstance(ex, UndefinedError):
+        if match := re.search(r"'(\w+)'", str(ex)):
+            error_details += f"\nUndefined macro/variable: '{match.group(1)}'"
+        try:
+            _, _, exc_traceback = exc_info()
+            for frame, _ in walk_tb(exc_traceback):
+                if frame.f_code.co_name == "_invoke":
+                    macro = frame.f_locals.get("self")
+                    if isinstance(macro, Macro):
+                        error_details += f" in macro: '{macro.name}'\n"
+                        break
+        except:
+            # to fall back to the generic error message if frame analysis fails
+            pass
+    return error_details or str(ex)

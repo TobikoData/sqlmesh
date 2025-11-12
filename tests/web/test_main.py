@@ -106,6 +106,18 @@ def test_write_file(client: TestClient, project_tmp_path: Path) -> None:
     }
 
 
+def test_write_file_non_ascii(client: TestClient, project_tmp_path: Path) -> None:
+    response = client.post("/api/files/foo.txt", json={"content": "何か良いこと"})
+    file = _get_file_with_content(project_tmp_path / "foo.txt", "foo.txt")
+    assert response.status_code == 204
+    assert file.dict() == {
+        "name": "foo.txt",
+        "path": "foo.txt",
+        "extension": ".txt",
+        "content": "何か良いこと",
+    }
+
+
 def test_update_file(client: TestClient, project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
@@ -212,7 +224,12 @@ def test_create_directory(client: TestClient, project_tmp_path: Path) -> None:
     response = client.post("/api/directories/new_dir")
     assert response.status_code == 200
     assert (project_tmp_path / "new_dir").exists()
-    assert response.json() == {"directories": [], "files": [], "name": "new_dir", "path": "new_dir"}
+    assert response.json() == {
+        "directories": [],
+        "files": [],
+        "name": "new_dir",
+        "path": "new_dir",
+    }
 
 
 def test_create_directory_already_exists(client: TestClient, project_tmp_path: Path) -> None:
@@ -494,7 +511,9 @@ def test_delete_environment_failure(
     client: TestClient, web_sushi_context: Context, mocker: MockerFixture
 ):
     mocker.patch.object(
-        web_sushi_context.state_sync, "invalidate_environment", side_effect=Exception("Some error")
+        web_sushi_context.state_sync,
+        "invalidate_environment",
+        side_effect=Exception("Some error"),
     )
 
     response = client.delete("/api/environments/test")
@@ -520,8 +539,7 @@ def test_table_diff(client: TestClient, web_sushi_context: Context) -> None:
         },
     )
     assert response.status_code == 200
-    assert "schema_diff" in response.json()
-    assert "row_diff" in response.json()
+    assert response.json() == None
 
 
 def test_test(client: TestClient, web_sushi_context: Context) -> None:

@@ -3,6 +3,7 @@ import typing as t
 from unittest.mock import call
 
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
@@ -75,3 +76,26 @@ def test_drop_view(make_mocked_engine_adapter: t.Callable):
             call('DROP VIEW IF EXISTS "db"."view"'),
         ]
     )
+
+
+def test_get_current_schema(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BasePostgresEngineAdapter)
+
+    fetchone_mock = mocker.patch.object(adapter, "fetchone", return_value=("test_schema",))
+    result = adapter._get_current_schema()
+
+    assert result == "test_schema"
+    fetchone_mock.assert_called_once()
+    executed_query = fetchone_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="postgres")
+    assert executed_sql == "SELECT CURRENT_SCHEMA"
+
+    fetchone_mock.reset_mock()
+    fetchone_mock.return_value = None
+    result = adapter._get_current_schema()
+    assert result == "public"
+
+    fetchone_mock.reset_mock()
+    fetchone_mock.return_value = (None,)  # search_path = '' or 'nonexistent_schema'
+    result = adapter._get_current_schema()
+    assert result == "public"

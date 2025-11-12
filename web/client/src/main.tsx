@@ -20,7 +20,7 @@ export interface PropsComponent extends HTMLAttributes<HTMLElement> {}
 const client = new QueryClient({
   queryCache: new QueryCache({
     onError(error, query) {
-      ;(query.meta as ApiQueryMeta).onError(error as ErrorIDE)
+      ;(query.meta as ApiQueryMeta).onError(error as unknown as ErrorIDE)
     },
     onSuccess(_, query) {
       ;(query.meta as ApiQueryMeta).onSuccess()

@@ -171,7 +171,11 @@ class Column(PydanticModel):
 class Model(PydanticModel):
     name: str
     fqn: str
-    path: str
+    path: t.Optional[str] = None
+    full_path: t.Optional[str] = None
+    """
+    As opposed to path, which is relative to the project root, full_path is the absolute path to the model file.
+    """
     dialect: str
     type: ModelType
     columns: t.List[Column]
@@ -388,14 +392,31 @@ class SchemaDiff(PydanticModel):
         v: t.Union[
             t.Dict[str, exp.DataType],
             t.List[t.Tuple[str, exp.DataType]],
+            t.Dict[str, t.Tuple[exp.DataType, exp.DataType]],
             t.Dict[str, str],
         ],
+        info: ValidationInfo,
     ) -> t.Dict[str, str]:
         if isinstance(v, dict):
-            return {k: str(v) for k, v in v.items()}
+            # Handle modified field which has tuples of (source_type, target_type)
+            if info.field_name == "modified" and any(isinstance(val, tuple) for val in v.values()):
+                return {
+                    k: f"{str(val[0])} → {str(val[1])}"
+                    for k, val in v.items()
+                    if isinstance(val, tuple)
+                    and isinstance(val[0], exp.DataType)
+                    and isinstance(val[1], exp.DataType)
+                }
+            return {k: str(val) for k, val in v.items()}
         if isinstance(v, list):
-            return {k: str(v) for k, v in v}
+            return {k: str(val) for k, val in v}
         return v
+
+
+class ProcessedSampleData(PydanticModel):
+    column_differences: t.List[t.Dict[str, t.Any]]
+    source_only: t.List[t.Dict[str, t.Any]]
+    target_only: t.List[t.Dict[str, t.Any]]
 
 
 class RowDiff(PydanticModel):
@@ -403,9 +424,15 @@ class RowDiff(PydanticModel):
     target: str
     stats: t.Dict[str, float]
     sample: t.Dict[str, t.Any]
+    joined_sample: t.Dict[str, t.Any]
+    s_sample: t.Dict[str, t.Any]
+    t_sample: t.Dict[str, t.Any]
+    column_stats: t.Dict[str, t.Any]
     source_count: int
     target_count: int
     count_pct_change: float
+    decimals: int
+    processed_sample_data: t.Optional[ProcessedSampleData] = None
 
 
 class TableDiff(PydanticModel):
@@ -416,7 +443,7 @@ class TableDiff(PydanticModel):
 
 class TestCase(PydanticModel):
     name: str
-    path: pathlib.Path
+    path: str
 
 
 class TestErrorOrFailure(TestCase):

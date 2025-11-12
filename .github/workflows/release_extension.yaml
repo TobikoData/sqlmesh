@@ -1,0 +1,56 @@
+name: Release VSCode Extension
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Check branch is main
+        run: |
+          if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
+            echo "Error: This workflow can only be run from the main branch"
+            exit 1
+          fi
+          echo "Branch check passed: running from main branch"
+      - name: Validate version format
+        run: |
+          version="${{ github.event.inputs.version }}"
+          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "Error: Version must be a valid semantic version (e.g., 1.0.0, 1.0.0-beta.1, 1.0.0+build.1)"
+            exit 1
+          fi
+          echo "Version format is valid: $version"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Update package.json version
+        working-directory: vscode/extension
+        run: |
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+      - name: Build extension
+        working-directory: vscode/extension
+        run: pnpm run vscode:package
+      - name: Upload extension to Marketplace
+        working-directory: vscode/extension
+        run: |
+          pnpx vsce publish --packagePath sqlmesh-${{ github.event.inputs.version }}.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: Upload extension to OpenVSX
+        working-directory: vscode/extension
+        run: |
+          pnpx ovsx publish -p ${{ secrets.OPEN_VSX_TOKEN }} sqlmesh-${{ github.event.inputs.version }}.vsix

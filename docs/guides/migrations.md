@@ -36,8 +36,3 @@ Migrations should ideally run when no one will be running plan/apply.
 Migrations should not be run in parallel. 
 Due to these constraints, it is better for a person responsible for managing SQLMesh to manually issue migrations. 
 Therefore, it is not recommended to issue migrations from CI/CD pipelines.
-
-### Airflow Scheduler Migrations
-
-If using Airflow, migrations are automatically run after the SQLMesh version is upgraded and cluster is restarted. 
-Therefore, migrations **should not** be run manually.

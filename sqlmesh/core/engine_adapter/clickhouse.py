@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 import logging
-import pandas as pd
 import re
 from sqlglot import exp, maybe_parse
 from sqlmesh.core.dialect import to_schema
@@ -16,9 +15,12 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
     InsertOverwriteStrategy,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.core.schema_diff import TableAlterOperation
+from sqlmesh.utils import get_source_columns_to_types
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
 
@@ -35,7 +37,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     SUPPORTS_REPLACE_TABLE = False
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
-    SCHEMA_DIFFER = SchemaDiffer()
+    SCHEMA_DIFFER_KWARGS = {}
 
     DEFAULT_TABLE_ENGINE = "MergeTree"
     ORDER_BY_TABLE_ENGINE_REGEX = "^.*?MergeTree.*$"
@@ -88,12 +90,16 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         temp_table = self._get_temp_table(target_table, **kwargs)
+        source_columns_to_types = get_source_columns_to_types(
+            target_columns_to_types, source_columns
+        )
 
         def query_factory() -> Query:
             # It is possible for the factory to be called multiple times and if so then the temp table will already
@@ -101,12 +107,18 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             # as later calls.
             if not self.table_exists(temp_table):
                 self.create_table(
-                    temp_table, columns_to_types, storage_format=exp.var("MergeTree"), **kwargs
+                    temp_table,
+                    source_columns_to_types,
+                    storage_format=exp.var("MergeTree"),
+                    **kwargs,
                 )
+                ordered_df = df[list(source_columns_to_types)]
 
-                self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
+                self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=ordered_df)
 
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
+            return exp.select(*self._casted_columns(target_columns_to_types, source_columns)).from_(
+                temp_table
+            )
 
         return [
             SourceQuery(
@@ -180,7 +192,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
@@ -195,7 +207,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         Args:
             table_name: Name of target table
             source_queries: Source queries returning records to insert
-            columns_to_types: Column names and data types of target table
+            target_columns_to_types: Column names and data types of target table
             where: SQLGlot expression determining which target table rows should be overwritten
             insert_overwrite_strategy_override: Not used by Clickhouse
             kwargs:
@@ -209,10 +221,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             Side effects only: execution of insert-overwrite operation.
         """
         target_table = exp.to_table(table_name)
-        columns_to_types = columns_to_types or self.columns(target_table)
+        target_columns_to_types = target_columns_to_types or self.columns(target_table)
 
         temp_table = self._get_temp_table(target_table)
-        self._create_table_like(temp_table, target_table)
+        self.create_table_like(temp_table, target_table)
 
         # REPLACE BY KEY: extract kwargs if present
         dynamic_key = kwargs.get("dynamic_key")
@@ -228,11 +240,13 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     if dynamic_key and dynamic_key_unique:
                         query = query.distinct(*dynamic_key)  # type: ignore
 
-                    query = self._order_projections_and_filter(query, columns_to_types, where=where)
+                    query = self._order_projections_and_filter(
+                        query, target_columns_to_types, where=where
+                    )
                     self._insert_append_query(
                         temp_table,
                         query,
-                        columns_to_types=columns_to_types,
+                        target_columns_to_types=target_columns_to_types,
                         order_projections=False,
                     )
 
@@ -258,7 +272,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             if where:
                 # identify existing records to keep by inverting the delete `where` clause
                 existing_records_insert_exp = exp.insert(
-                    self._select_columns(columns_to_types)
+                    self._select_columns(target_columns_to_types)
                     .from_(target_table)
                     .where(exp.paren(expression=where).not_()),
                     temp_table,
@@ -281,7 +295,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     )
 
                 try:
-                    self.execute(existing_records_insert_exp)
+                    self.execute(existing_records_insert_exp, track_rows_processed=True)
                 finally:
                     if table_partition_exp:
                         self.drop_table(partitions_temp_table_name)
@@ -399,12 +413,16 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         key: t.Sequence[exp.Expression],
         is_unique_key: bool,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            source_table, columns_to_types, target_table=target_table
+        source_queries, target_columns_to_types = self._get_source_queries_and_columns_to_types(
+            source_table,
+            target_columns_to_types,
+            target_table=target_table,
+            source_columns=source_columns,
         )
 
         key_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *key) if len(key) > 1 else key[0]
@@ -412,7 +430,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         self._insert_overwrite_by_condition(
             target_table,
             source_queries,
-            columns_to_types,
+            target_columns_to_types,
             dynamic_key=key,
             dynamic_key_exp=key_exp,
             dynamic_key_unique=is_unique_key,
@@ -423,18 +441,26 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         table_name: TableName,
         query_or_df: QueryOrDF,
         partitioned_by: t.List[exp.Expression],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+        source_queries, target_columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df,
+            target_columns_to_types,
+            target_table=table_name,
+            source_columns=source_columns,
         )
 
         self._insert_overwrite_by_condition(
-            table_name, source_queries, columns_to_types, keep_existing_partition_rows=False
+            table_name, source_queries, target_columns_to_types, keep_existing_partition_rows=False
         )
 
     def _create_table_like(
-        self, target_table_name: TableName, source_table_name: TableName
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        exists: bool,
+        **kwargs: t.Any,
     ) -> None:
         """Create table with identical structure as source table"""
         self.execute(
@@ -464,10 +490,11 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        track_rows_processed: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """Creates a table in the database.
@@ -490,20 +517,21 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 for coldef in table_name_or_schema.expressions:
                     if coldef.name in partition_cols:
                         coldef.kind.set("nullable", False)
-            if columns_to_types:
+            if target_columns_to_types:
                 for col in partition_cols:
-                    columns_to_types[col].set("nullable", False)
+                    target_columns_to_types[col].set("nullable", False)
 
         super()._create_table(
             table_name_or_schema,
             expression,
             exists,
             replace,
-            columns_to_types,
+            target_columns_to_types,
             table_description,
             column_descriptions,
             table_kind,
             empty_ctas=(self.engine_run_mode.is_cloud and expression is not None),
+            track_rows_processed=track_rows_processed,
             **kwargs,
         )
 
@@ -527,7 +555,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             self._insert_append_query(
                 table_name,
                 expression,  # type: ignore
-                columns_to_types or self.columns(table_name),
+                target_columns_to_types or self.columns(table_name),
             )
 
     def _exchange_tables(
@@ -575,13 +603,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
     def alter_table(
         self,
-        alter_expressions: t.List[exp.Alter],
+        alter_expressions: t.Union[t.List[exp.Alter], t.List[TableAlterOperation]],
     ) -> None:
         """
         Performs the alter statements to change the current table into the structure of the target table.
         """
         with self.transaction():
-            for alter_expression in alter_expressions:
+            for alter_expression in [
+                x.expression if isinstance(x, TableAlterOperation) else x for x in alter_expressions
+            ]:
                 if self.engine_run_mode.is_cluster:
                     alter_expression.set(
                         "cluster", exp.OnCluster(this=exp.to_identifier(self.cluster))
@@ -593,6 +623,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         name: TableName | SchemaName,
         exists: bool = True,
         kind: str = "TABLE",
+        cascade: bool = False,
         **drop_args: t.Any,
     ) -> None:
         """Drops an object.
@@ -605,17 +636,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             kind: What kind of object to drop. Defaults to TABLE
             **drop_args: Any extra arguments to set on the Drop expression
         """
-        drop_args.pop("cascade", None)
-        self.execute(
-            exp.Drop(
-                this=exp.to_table(name),
-                kind=kind,
-                exists=exists,
-                cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
-                if self.engine_run_mode.is_cluster
-                else None,
-                **drop_args,
-            )
+        super()._drop_object(
+            name=name,
+            exists=exists,
+            kind=kind,
+            cascade=cascade,
+            cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
+            if self.engine_run_mode.is_cluster
+            else None,
+            **drop_args,
         )
 
     def _build_partitioned_by_exp(
@@ -707,7 +736,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         empty_ctas: bool = False,
@@ -785,8 +814,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 )
             )
 
-        if partitioned_by and (
-            partitioned_by_prop := self._build_partitioned_by_exp(partitioned_by)
+        if (
+            partitioned_by
+            and (partitioned_by_prop := self._build_partitioned_by_exp(partitioned_by)) is not None
         ):
             properties.append(partitioned_by_prop)
 
