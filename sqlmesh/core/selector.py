@@ -3,6 +3,8 @@ from __future__ import annotations
 import fnmatch
 import typing as t
 from pathlib import Path
+from itertools import zip_longest
+import abc
 
 from sqlglot import exp
 from sqlglot.errors import ParseError
@@ -10,21 +12,25 @@ from sqlglot.tokens import Token, TokenType, Tokenizer as BaseTokenizer
 from sqlglot.dialects.dialect import Dialect, DialectType
 from sqlglot.helper import seq_get
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import update_model_schemas
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.git import GitClient
+from sqlmesh.utils.errors import SQLMeshError
 
 
 if t.TYPE_CHECKING:
     from typing_extensions import Literal as Lit  # noqa
     from sqlmesh.core.model import Model
+    from sqlmesh.core.node import Node
     from sqlmesh.core.state_sync import StateReader
 
 
-class Selector:
+class Selector(abc.ABC):
     def __init__(
         self,
         state_reader: StateReader,
@@ -33,10 +39,12 @@ class Selector:
         dag: t.Optional[DAG[str]] = None,
         default_catalog: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
+        cache_dir: t.Optional[Path] = None,
     ):
         self._state_reader = state_reader
         self._models = models
         self._context_path = context_path
+        self._cache_dir = cache_dir if cache_dir else context_path / c.CACHE
         self._default_catalog = default_catalog
         self._dialect = dialect
         self._git_client = GitClient(context_path)
@@ -93,7 +101,7 @@ class Selector:
             }
 
         all_selected_models = self.expand_model_selections(
-            model_selections, models={**self._models, **env_models}
+            model_selections, models={**env_models, **self._models}
         )
 
         dag: DAG[str] = DAG()
@@ -111,7 +119,16 @@ class Selector:
         def get_model(fqn: str) -> t.Optional[Model]:
             if fqn not in all_selected_models and fqn in env_models:
                 # Unselected modified or added model.
-                return env_models[fqn]
+                model_from_env = env_models[fqn]
+                try:
+                    # this triggers a render_query() which can throw an exception
+                    model_from_env.depends_on
+                    return model_from_env
+                except Exception as e:
+                    raise SQLMeshError(
+                        f"Model '{model_from_env.name}' sourced from state cannot be rendered "
+                        f"in the local environment due to:\n> {str(e)}"
+                    ) from e
             if fqn in all_selected_models and fqn in self._models:
                 # Selected modified or removed model.
                 return self._models[fqn]
@@ -147,28 +164,28 @@ class Selector:
             models[model.fqn] = model
 
         if needs_update:
-            update_model_schemas(dag, models=models, context_path=self._context_path)
+            update_model_schemas(dag, models=models, cache_dir=self._cache_dir)
 
         return models
 
     def expand_model_selections(
-        self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Model]] = None
+        self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Node]] = None
     ) -> t.Set[str]:
-        """Expands a set of model selections into a set of model names.
+        """Expands a set of model selections into a set of model fqns that can be looked up in the Context.
 
         Args:
             model_selections: A set of model selections.
 
         Returns:
-            A set of model names.
+            A set of model fqns.
         """
 
         node = parse(" | ".join(f"({s})" for s in model_selections))
 
-        models = models or self._models
+        all_models: t.Dict[str, Node] = models or dict(self._models)
         models_by_tags: t.Dict[str, t.Set[str]] = {}
 
-        for fqn, model in models.items():
+        for fqn, model in all_models.items():
             for tag in model.tags:
                 tag = tag.lower()
                 models_by_tags.setdefault(tag, set())
@@ -180,11 +197,10 @@ class Selector:
                 if "*" in pattern:
                     return {
                         fqn
-                        for fqn, model in models.items()
-                        if fnmatch.fnmatchcase(model.name, node.this)
+                        for fqn, model in all_models.items()
+                        if fnmatch.fnmatchcase(self._model_name(model), node.this)
                     }
-                fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
-                return {fqn} if fqn in models else set()
+                return self._pattern_to_model_fqns(pattern, all_models)
             if isinstance(node, exp.And):
                 return evaluate(node.left) & evaluate(node.right)
             if isinstance(node, exp.Or):
@@ -192,7 +208,7 @@ class Selector:
             if isinstance(node, exp.Paren):
                 return evaluate(node.this)
             if isinstance(node, exp.Not):
-                return set(models) - evaluate(node.this)
+                return set(all_models) - evaluate(node.this)
             if isinstance(node, Git):
                 target_branch = node.name
                 git_modified_files = {
@@ -200,7 +216,7 @@ class Selector:
                     *self._git_client.list_uncommitted_changed_files(),
                     *self._git_client.list_committed_changed_files(target_branch=target_branch),
                 }
-                return {m.fqn for m in self._models.values() if m._path in git_modified_files}
+                return {m.fqn for m in all_models.values() if m._path in git_modified_files}
             if isinstance(node, Tag):
                 pattern = node.name.lower()
 
@@ -212,6 +228,13 @@ class Selector:
                         if fnmatch.fnmatchcase(tag, pattern)
                     }
                 return models_by_tags.get(pattern, set())
+            if isinstance(node, ResourceType):
+                resource_type = node.name.lower()
+                return {
+                    fqn
+                    for fqn, model in all_models.items()
+                    if self._matches_resource_type(resource_type, model)
+                }
             if isinstance(node, Direction):
                 selected = set()
 
@@ -219,7 +242,7 @@ class Selector:
                     selected.add(model_name)
                     if node.args.get("up"):
                         for u in self._dag.upstream(model_name):
-                            if u in models:
+                            if u in all_models:
                                 selected.add(u)
                     if node.args.get("down"):
                         selected.update(self._dag.downstream(model_name))
@@ -227,6 +250,117 @@ class Selector:
             raise ParseError(f"Unexpected node {node}")
 
         return evaluate(node)
+
+    @abc.abstractmethod
+    def _model_name(self, model: Node) -> str:
+        """Given a model, return the name that a selector pattern contining wildcards should be fnmatch'd on"""
+        pass
+
+    @abc.abstractmethod
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Node]) -> t.Set[str]:
+        """Given a pattern, return the keys of the matching models from :all_models"""
+        pass
+
+    @abc.abstractmethod
+    def _matches_resource_type(self, resource_type: str, model: Node) -> bool:
+        """Indicate whether or not the supplied model matches the supplied resource type"""
+        pass
+
+
+class NativeSelector(Selector):
+    """Implementation of selectors that matches objects based on SQLMesh native names"""
+
+    def _model_name(self, model: Node) -> str:
+        return model.name
+
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Node]) -> t.Set[str]:
+        fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
+        return {fqn} if fqn in all_models else set()
+
+    def _matches_resource_type(self, resource_type: str, model: Node) -> bool:
+        if resource_type == "model":
+            return model.is_model
+        if resource_type == "audit":
+            return isinstance(model, StandaloneAudit)
+
+        raise SQLMeshError(f"Unsupported resource type: {resource_type}")
+
+
+class DbtSelector(Selector):
+    """Implementation of selectors that matches objects based on the DBT names instead of the SQLMesh native names"""
+
+    def _model_name(self, model: Node) -> str:
+        if dbt_fqn := model.dbt_fqn:
+            return dbt_fqn
+        raise SQLMeshError("dbt node information must be populated to use dbt selectors")
+
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Node]) -> t.Set[str]:
+        # a pattern like "staging.customers" should match a model called "jaffle_shop.staging.customers"
+        # but not a model called "jaffle_shop.customers.staging"
+        # also a pattern like "aging" should not match "staging" so we need to consider components; not substrings
+        pattern_components = pattern.split(".")
+        first_pattern_component = pattern_components[0]
+        matches = set()
+        for fqn, model in all_models.items():
+            if not model.dbt_fqn:
+                continue
+
+            dbt_fqn_components = model.dbt_fqn.split(".")
+            try:
+                starting_idx = dbt_fqn_components.index(first_pattern_component)
+            except ValueError:
+                continue
+            for pattern_component, fqn_component in zip_longest(
+                pattern_components, dbt_fqn_components[starting_idx:]
+            ):
+                if pattern_component and not fqn_component:
+                    # the pattern still goes but we have run out of fqn components to match; no match
+                    break
+                if fqn_component and not pattern_component:
+                    # all elements of the pattern have matched elements of the fqn; match
+                    matches.add(fqn)
+                    break
+                if pattern_component != fqn_component:
+                    # the pattern explicitly doesnt match a component; no match
+                    break
+            else:
+                # called if no explicit break, indicating all components of the pattern matched all components of the fqn
+                matches.add(fqn)
+        return matches
+
+    def _matches_resource_type(self, resource_type: str, model: Node) -> bool:
+        """
+        ref: https://docs.getdbt.com/reference/node-selection/methods#resource_type
+
+        # supported by SQLMesh
+        "model"
+        "seed"
+        "source" # external model
+        "test" # standalone audit
+
+        # not supported by SQLMesh yet, commented out to throw an error if someone tries to use them
+        "analysis"
+        "exposure"
+        "metric"
+        "saved_query"
+        "semantic_model"
+        "snapshot"
+        "unit_test"
+        """
+        if resource_type not in ("model", "seed", "source", "test"):
+            raise SQLMeshError(f"Unsupported resource type: {resource_type}")
+
+        if isinstance(model, StandaloneAudit):
+            return resource_type == "test"
+
+        if resource_type == "model":
+            return model.is_model and not model.kind.is_external and not model.kind.is_seed
+        if resource_type == "source":
+            return model.kind.is_external
+        if resource_type == "seed":
+            return model.kind.is_seed
+
+        return False
 
 
 class SelectorDialect(Dialect):
@@ -255,6 +389,10 @@ class Git(exp.Expression):
 
 
 class Tag(exp.Expression):
+    pass
+
+
+class ResourceType(exp.Expression):
     pass
 
 
@@ -310,7 +448,8 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
         upstream = _match(TokenType.PLUS)
         downstream = None
         tag = _parse_kind("tag")
-        git = False if tag else _parse_kind("git")
+        resource_type = False if tag else _parse_kind("resource_type")
+        git = False if resource_type else _parse_kind("git")
         lstar = "*" if _match(TokenType.STAR) else ""
         directions = {}
 
@@ -336,6 +475,8 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
 
         if tag:
             this = Tag(this=this)
+        if resource_type:
+            this = ResourceType(this=this)
         if git:
             this = Git(this=this)
         if directions:

@@ -1,5 +1,6 @@
 MODEL (
-  name bronze.b
+  name bronze.b,
+  kind FULL
 );
 
 SELECT

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+import logging
 
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
@@ -8,6 +9,8 @@ from sqlglot.helper import ensure_list
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.pydantic import field_validator
+
+logger = logging.getLogger(__name__)
 
 
 def yaml_to_columns(
@@ -31,11 +34,20 @@ def column_types_to_sqlmesh(
     Returns:
         A dict of column name to exp.DataType
     """
-    return {
-        name: parse_one(column.data_type, into=exp.DataType, dialect=dialect or "")
-        for name, column in columns.items()
-        if column.enabled and column.data_type
-    }
+    col_types_to_sqlmesh: t.Dict[str, exp.DataType] = {}
+    for name, column in columns.items():
+        if column.enabled and column.data_type:
+            column_def = parse_one(
+                f"{name} {column.data_type}", into=exp.ColumnDef, dialect=dialect or ""
+            )
+            if column_def.args.get("constraints"):
+                logger.warning(
+                    f"Ignoring unsupported constraints for column '{name}' with definition '{column.data_type}'. Please refer to github.com/TobikoData/sqlmesh/issues/4717 for more information."
+                )
+            kind = column_def.kind
+            if kind:
+                col_types_to_sqlmesh[name] = kind
+    return col_types_to_sqlmesh
 
 
 def column_descriptions_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict[str, str]:

@@ -1,0 +1,49 @@
+.react-flow__node {
+  z-index: 10 !important;
+  background-color: var(--vscode-editor-background, #ffffff);
+}
+.react-flow__handle {
+  background-color: currentColor;
+}
+.react-flow__node.react-flow__node-model:hover,
+.react-flow__node.react-flow__node-model:active {
+  z-index: 20 !important;
+}
+react-flow__attribution {
+  background: transparent;
+}
+.lineage__column-source b {
+  font-weight: 900;
+  /* color: var(--color-primary); */
+  color: black;
+}
+.react-flow__edge {
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+.react-flow__background path {
+  stroke: inherit;
+}
+
+.react-flow__controls-button {
+  box-shadow: none;
+  border: var(--vscode-button-border);
+  background: var(--vscode-button-background);
+  color: var(--vscode-foreground);
+}
+.react-flow__controls-button:hover {
+  background: var(--vscode-button-hoverBackground);
+  border: var(--vscode-button-hoverBorder);
+}
+.react-flow__controls-button:active {
+  background: var(--vscode-button-activeBackground);
+  border: var(--vscode-button-activeBorder);
+}
+.react-flow__controls {
+  box-shadow: none;
+}
+.react-flow__panel {
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}

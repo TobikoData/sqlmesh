@@ -5,14 +5,14 @@ from sqlmesh import SQL, macro
 
 @macro()
 def add_one(evaluator, column: int):
-    # typed column will be cast to an int and return an integer back
+    """typed column will be cast to an int and return an integer back"""
     assert isinstance(column, int)
     return column + 1
 
 
 @macro()
 def multiply(evaluator, column, num):
-    # untyped column will be a sqlglot column and return a sqlglot exp "column > 0"
+    """untyped column will be a sqlglot column and return a sqlglot exp "column > 0"""
     assert isinstance(column, exp.Column)
     return column * num
 
@@ -26,6 +26,7 @@ def sql_literal(
     column_str: str,
     column_quoted: str,
 ):
+    """A macro that accepts various types of SQL literals and returns the column."""
     assert isinstance(column, str)
     assert isinstance(str_lit, str)
     assert str_lit == "'x'"

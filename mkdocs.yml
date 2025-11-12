@@ -30,10 +30,13 @@ nav:
       - guides/testing.md
       - guides/model_selection.md
     - SQLMesh tools:
-      - guides/ui.md
+      - guides/vscode.md
       - guides/tablediff.md
       - guides/linter.md
-      - guides/observer.md
+      - guides/ui.md
+    - Advanced usage:
+      - guides/customizing_sqlmesh.md
+      - guides/signals.md
   - Concepts:
     - concepts/overview.md
     - Development:
@@ -65,11 +68,11 @@ nav:
   - Examples:
     - examples/overview.md
     - Walkthroughs:
+      - examples/sqlmesh_cli_crash_course.md
       - examples/incremental_time_full_walkthrough.md
   - Integrations:
     - "Overview": integrations/overview.md
     - Tools:
-      - integrations/airflow.md
       - integrations/dbt.md
       - integrations/dlt.md
       - integrations/github.md
@@ -80,6 +83,7 @@ nav:
       - integrations/engines/clickhouse.md
       - integrations/engines/databricks.md
       - integrations/engines/duckdb.md
+      - integrations/engines/fabric.md
       - integrations/engines/motherduck.md
       - integrations/engines/mssql.md
       - integrations/engines/mysql.md
@@ -103,18 +107,29 @@ nav:
     - Configuration:
       - reference/configuration.md
       - reference/model_configuration.md
-  - Tobiko Cloud:
+  - Tobiko Cloud: # NOTE: if this item is no longer last, need to update extra.css to adjust logo positioning
     - "Overview": cloud/cloud_index.md
     - "Getting Started": cloud/tcloud_getting_started.md
     - Cloud Features:
       - "Alerts & Notifications": cloud/features/alerts_notifications.md
-      - cloud/features/debugger_view.md
       - cloud/features/data_catalog.md
-      - cloud/features/single_sign_on.md
+      - cloud/features/debugger_view.md
+      - Maintenance:
+        - cloud/features/incident_reporting.md
+        - cloud/features/upgrades.md
       - Scheduler:
         - "Cloud": cloud/features/scheduler/scheduler.md
+        - "Cloud Hybrid Deployments":
+          - "Overview": cloud/features/scheduler/hybrid_executors_overview.md
+          - "Helm Chart example": cloud/features/scheduler/hybrid_executors_helm.md
+          - "Docker Compose example": cloud/features/scheduler/hybrid_executors_docker_compose.md
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
+      - Security:
+        - cloud/features/security/security.md
+        - cloud/features/security/single_sign_on.md
+      - Tools:
+        - cloud/features/xdb_diffing.md
 #      - Observability:
 #        - cloud/features/observability/overview.md
 #        - cloud/features/observability/model_freshness.md
@@ -150,6 +165,7 @@ theme:
     - navigation.expand ## expands navigation bar by default
     - navigation.tracking
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - toc.follow
@@ -175,6 +191,7 @@ markdown_extensions:
   - attr_list
   - md_in_html
   - pymdownx.caret
+  - sane_lists
 extra_css:
   - stylesheets/extra.css
 copyright: Tobiko Data Inc.

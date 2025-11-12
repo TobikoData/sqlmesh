@@ -1,0 +1,71 @@
+@import url('./palette.css');
+
+:root {
+  --color-light: hsl(30, 12%, 100%);
+  --color-dark: hsl(226, 24%, 8%);
+  --color-brand: var(--color-tobiko);
+  --color-prose: var(--color-gray-800);
+  --color-focused: var(--color-brand);
+
+  /* Neutral */
+  --color-neutral-3: var(--color-gray-5);
+  --color-neutral-5: var(--color-gray-5);
+  --color-neutral-10: var(--color-gray-10);
+  --color-neutral-15: var(--color-gray-15);
+  --color-neutral-20: var(--color-gray-20);
+  --color-neutral-25: var(--color-gray-25);
+  --color-neutral-100: var(--color-gray-100);
+  --color-neutral-125: var(--color-gray-125);
+  --color-neutral-150: var(--color-gray-150);
+  --color-neutral-200: var(--color-gray-200);
+  --color-neutral-300: var(--color-gray-300);
+  --color-neutral-400: var(--color-gray-400);
+  --color-neutral-500: var(--color-gray-500);
+  --color-neutral: var(--color-gray-500);
+  --color-neutral-525: var(--color-gray-525);
+  --color-neutral-550: var(--color-gray-550);
+  --color-neutral-600: var(--color-gray-600);
+  --color-neutral-700: var(--color-gray-700);
+  --color-neutral-725: var(--color-gray-725);
+  --color-neutral-750: var(--color-gray-750);
+  --color-neutral-800: var(--color-gray-800);
+  --color-neutral-900: var(--color-gray-900);
+
+  /* Model */
+  --color-catalog: var(--color-deep-blue-800);
+  --color-schema: var(--color-deep-blue-600);
+  --color-model: var(--color-deep-blue-500);
+
+  /* Destructive */
+  --color-destructive: var(--color-scarlet-500);
+  --color-destructive-foreground: var(--color-scarlet-600);
+  --color-destructive-hover: var(--color-scarlet-525);
+  --color-destructive-active: var(--color-scarlet-550);
+
+  /* Success */
+  --color-success: var(--color-emerald-500);
+
+  /* Warning */
+  --color-warning: var(--color-mandarin-500);
+
+  /* Action */
+  --color-action: var(--color-deep-blue-500);
+  --color-action-hover: var(--color-deep-blue-525);
+  --color-action-active: var(--color-deep-blue-550);
+
+  /* Accent */
+  --color-accent: var(--color-purple-500);
+
+  /* Link */
+  --color-link: var(--color-action);
+  --color-link-hover: var(--color-action-hover);
+  --color-link-active: var(--color-action-active);
+  --color-link-visited: var(--color-purple-600);
+  --color-link-underline: var(--color-deep-blue-125);
+
+  /* Typography */
+  --color-typography-headline: var(--color-prose);
+  --color-typography-tagline: var(--color-neutral-600);
+  --color-typography-description: var(--color-neutral-500);
+  --color-typography-info: var(--color-typography-tagline);
+}

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import typing as t
+import logging
 
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter, _get_data_object_cache_key
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     CommentCreationTable,
@@ -20,10 +21,15 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
+logger = logging.getLogger(__name__)
+
+
 class BasePostgresEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 400
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA", "TABLE", "VIEW"]
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
@@ -53,7 +59,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
         self.execute(sql)
         resp = self.cursor.fetchall()
         if not resp:
-            raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
+            raise SQLMeshError(
+                f"Could not get columns for table '{table.sql(dialect=self.dialect)}'. Table not found."
+            )
+
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
             for column_name, data_type in resp
@@ -71,6 +80,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
         Reference: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/cursor.py#L528-L553
         """
         table = exp.to_table(table_name)
+        data_object_cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+        if data_object_cache_key in self._data_object_cache:
+            logger.debug("Table existence cache hit: %s", data_object_cache_key)
+            return self._data_object_cache[data_object_cache_key] is not None
 
         sql = (
             exp.select("1")
@@ -91,13 +104,14 @@ class BasePostgresEngineAdapter(EngineAdapter):
         self,
         view_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -113,13 +127,14 @@ class BasePostgresEngineAdapter(EngineAdapter):
             super().create_view(
                 view_name,
                 query_or_df,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=target_columns_to_types,
                 replace=False,
                 materialized=materialized,
                 materialized_properties=materialized_properties,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
                 view_properties=view_properties,
+                source_columns=source_columns,
                 **create_kwargs,
             )
 
@@ -182,3 +197,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
             )
             for row in df.itertuples()
         ]
+
+    def _get_current_schema(self) -> str:
+        """Returns the current default schema for the connection."""
+        result = self.fetchone(exp.select(exp.func("current_schema")))
+        if result and result[0]:
+            return result[0]
+        return "public"

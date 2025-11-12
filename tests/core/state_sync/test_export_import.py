@@ -4,7 +4,7 @@ from sqlmesh.core.state_sync import StateSync, EngineAdapterStateSync, CachingSt
 from sqlmesh.core.state_sync.export_import import export_state, import_state
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core import constants as c
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.config import Config, GatewayConfig, DuckDBConnectionConfig, ModelDefaultsConfig
@@ -33,7 +33,7 @@ def state_sync(tmp_path: Path, example_project_config: Config) -> StateSync:
     return EngineAdapterStateSync(
         engine_adapter=example_project_config.get_state_connection("main").create_engine_adapter(),  # type: ignore
         schema=c.SQLMESH,
-        context_path=tmp_path,
+        cache_dir=tmp_path / c.CACHE,
     )
 
 
@@ -44,7 +44,7 @@ def test_export_empty_state(tmp_path: Path, state_sync: StateSync) -> None:
     with pytest.raises(SQLMeshError, match=r"Please run a migration"):
         export_state(state_sync, output_file)
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
 
     export_state(state_sync, output_file)
 
@@ -74,7 +74,7 @@ def test_export_empty_state(tmp_path: Path, state_sync: StateSync) -> None:
 def test_export_entire_project(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # prod
@@ -159,7 +159,7 @@ def test_export_specific_environment(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # create prod
@@ -231,7 +231,7 @@ def test_export_local_state(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # create prod
@@ -289,8 +289,8 @@ def test_export_local_state(
     full_model = next(s for s in snapshots if "full_model" in s["name"])
     new_model = next(s for s in snapshots if "new_model" in s["name"])
 
-    assert "'1' as modified" in full_model["node"]["query"]
-    assert "SELECT 1 as id" in new_model["node"]["query"]
+    assert "'1' as modified" in full_model["node"]["query"]["sql"]
+    assert "SELECT 1 as id" in new_model["node"]["query"]["sql"]
 
 
 def test_import_invalid_file(tmp_path: Path, state_sync: StateSync) -> None:
@@ -326,7 +326,7 @@ def test_import_invalid_file(tmp_path: Path, state_sync: StateSync) -> None:
 
 
 def test_import_from_older_version_export_fails(tmp_path: Path, state_sync: StateSync) -> None:
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     current_version = state_sync.get_versions()
 
     major, minor = current_version.minor_sqlmesh_version
@@ -354,7 +354,7 @@ def test_import_from_older_version_export_fails(tmp_path: Path, state_sync: Stat
 
 
 def test_import_from_newer_version_export_fails(tmp_path: Path, state_sync: StateSync) -> None:
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     current_version = state_sync.get_versions()
 
     major, minor = current_version.minor_sqlmesh_version
@@ -385,7 +385,7 @@ def test_import_local_state_fails(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     export_state(state_sync, output_file, context.snapshots)
@@ -400,7 +400,7 @@ def test_import_partial(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # create prod
@@ -437,7 +437,11 @@ def test_import_partial(
     import_state(state_sync, output_file, clear=False)
 
     # StateSync should have "prod", "dev" and "dev2".
-    assert sorted(list(state_sync.get_environments_summary().keys())) == ["dev", "dev2", "prod"]
+    assert sorted(list(env.name for env in state_sync.get_environments_summary())) == [
+        "dev",
+        "dev2",
+        "prod",
+    ]
 
     assert not context.plan(environment="dev", skip_tests=True).has_changes
     assert not context.plan(environment="dev2", skip_tests=True).has_changes
@@ -449,7 +453,7 @@ def test_import_partial(
 def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: StateSync) -> None:
     state_file = tmp_path / "state_dump.json"
 
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # populate initial state
@@ -468,7 +472,7 @@ def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: S
     state_sync.engine_adapter.drop_schema("sqlmesh", cascade=True)
 
     # state was destroyed, plan should have changes
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     plan = context.plan()
     assert plan.has_changes
 
@@ -505,7 +509,7 @@ def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: S
     with pytest.raises(SQLMeshError, match=r"Please run a migration"):
         state_sync.get_versions(validate=True)
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     import_state(state_sync, state_file)
 
     # should be no changes in dev
@@ -521,7 +525,7 @@ def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: S
 def test_roundtrip_includes_auto_restatements(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
 
     # add a model with auto restatements
     (tmp_path / c.MODELS / "new_model.sql").write_text("""
@@ -606,7 +610,7 @@ def test_roundtrip_includes_environment_statements(tmp_path: Path) -> None:
     with pytest.raises(SQLMeshError, match=r"Please run a migration"):
         state_sync.get_versions(validate=True)
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     import_state(state_sync, state_file)
 
     assert not context.plan().has_changes

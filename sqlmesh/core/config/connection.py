@@ -4,14 +4,17 @@ import abc
 import base64
 import logging
 import os
+import importlib
 import pathlib
 import re
 import typing as t
 from enum import Enum
-from functools import partial, lru_cache
+from functools import partial
 
 import pydantic
 from pydantic import Field
+from pydantic_core import from_json
+from packaging import version
 from sqlglot import exp
 from sqlglot.helper import subclasses
 
@@ -24,8 +27,15 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.utils import debug_mode_enabled, str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import ValidationInfo, field_validator, model_validator
+from sqlmesh.utils.pydantic import (
+    ValidationInfo,
+    field_validator,
+    model_validator,
+    validation_error_message,
+    get_concrete_types_from_typehint,
+)
 from sqlmesh.utils.aws import validate_s3_uri
 
 if t.TYPE_CHECKING:
@@ -33,7 +43,13 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql"}
+RECOMMENDED_STATE_SYNC_ENGINES = {
+    "postgres",
+    "gcp_postgres",
+    "mysql",
+    "mssql",
+    "azuresql",
+}
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
     "spark",
@@ -41,15 +57,55 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     # Nullable types are problematic
     "clickhouse",
 }
-MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
+MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
+PASSWORD_REGEX = re.compile(r"(password=)(\S+)")
+
+
+def _get_engine_import_validator(
+    import_name: str, engine_type: str, extra_name: t.Optional[str] = None, decorate: bool = True
+) -> t.Callable:
+    extra_name = extra_name or engine_type
+
+    def validate(cls: t.Any, data: t.Any) -> t.Any:
+        check_import = (
+            str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
+        )
+        if not check_import:
+            return data
+        try:
+            importlib.import_module(import_name)
+        except ImportError:
+            if debug_mode_enabled():
+                raise
+
+            logger.exception("Failed to import the engine library")
+
+            raise ConfigError(
+                f"Failed to import the '{engine_type}' engine library. This may be due to a missing "
+                "or incompatible installation. Please ensure the required dependency is installed by "
+                f'running: `pip install "sqlmesh[{extra_name}]"`. For more details, check the logs '
+                "in the 'logs/' folder, or rerun the command with the '--debug' flag."
+            )
+
+        return data
+
+    return model_validator(mode="before")(validate) if decorate else validate
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
     type_: str
+    DIALECT: t.ClassVar[str]
+    DISPLAY_NAME: t.ClassVar[str]
+    DISPLAY_ORDER: t.ClassVar[int]
     concurrent_tasks: int
     register_comments: bool
     pre_ping: bool
     pretty_sql: bool = False
+    schema_differ_overrides: t.Optional[t.Dict[str, t.Any]] = None
+    catalog_type_overrides: t.Optional[t.Dict[str, str]] = None
+
+    # Whether to share a  single connection across threads or create a new connection per thread.
+    shared_connection: t.ClassVar[bool] = False
 
     @property
     @abc.abstractmethod
@@ -106,16 +162,23 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         """A function that validates the connection configuration"""
         return self.create_engine_adapter().ping
 
-    def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
+    def create_engine_adapter(
+        self, register_comments_override: bool = False, concurrent_tasks: t.Optional[int] = None
+    ) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
+
+        concurrent_tasks = concurrent_tasks or self.concurrent_tasks
         return self._engine_adapter(
             self._connection_factory_with_kwargs,
-            multithreaded=self.concurrent_tasks > 1,
+            multithreaded=concurrent_tasks > 1,
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
             pre_ping=self.pre_ping,
             pretty_sql=self.pretty_sql,
+            shared_connection=self.shared_connection,
+            schema_differ_overrides=self.schema_differ_overrides,
+            catalog_type_overrides=self.catalog_type_overrides,
             **self._extra_engine_config,
         )
 
@@ -129,29 +192,83 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             return self.db
         return None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _expand_json_strings_to_concrete_types(cls, data: t.Any) -> t.Any:
+        """
+        There are situations where a connection config class has a field that is some kind of complex type
+        (eg a list of strings or a dict) but the value is being supplied from a source such as an environment variable
+
+        When this happens, the value is supplied as a string rather than a Python object. We need some way
+        of turning this string into the corresponding Python list or dict.
+
+        Rather than doing this piecemeal on every config subclass, this provides a generic implementatation
+        to identify fields that may be be supplied as JSON strings and handle them transparently
+        """
+        if data and isinstance(data, dict):
+            for maybe_json_field_name in cls._get_list_and_dict_field_names():
+                if (value := data.get(maybe_json_field_name)) and isinstance(value, str):
+                    # crude JSON check as we dont want to try and parse every string we get
+                    value = value.strip()
+                    if value.startswith("{") or value.startswith("["):
+                        data[maybe_json_field_name] = from_json(value)
+
+        return data
+
+    @classmethod
+    def _get_list_and_dict_field_names(cls) -> t.Set[str]:
+        field_names = set()
+        for name, field in cls.model_fields.items():
+            if field.annotation:
+                field_types = get_concrete_types_from_typehint(field.annotation)
+
+                # check if the field type is something that could concievably be supplied as a json string
+                if any(ft is t for t in (list, tuple, set, dict) for ft in field_types):
+                    field_names.add(name)
+
+        return field_names
+
 
 class DuckDBAttachOptions(BaseConfig):
     type: str
     path: str
     read_only: bool = False
-    token: t.Optional[str] = None
+
+    # DuckLake specific options
+    data_path: t.Optional[str] = None
+    encrypted: bool = False
+    data_inlining_row_limit: t.Optional[int] = None
 
     def to_sql(self, alias: str) -> str:
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
         # fully qualified attach options or integration testing, similar to duckdb-dbt
-        if self.type not in ("duckdb", "motherduck"):
+        if self.type not in ("duckdb", "ducklake", "motherduck"):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
+
+        # DuckLake specific options
+        path = self.path
+        if self.type == "ducklake":
+            if not path.startswith("ducklake:"):
+                path = f"ducklake:{path}"
+            if self.data_path is not None:
+                options.append(f"DATA_PATH '{self.data_path}'")
+            if self.encrypted:
+                options.append("ENCRYPTED")
+            if self.data_inlining_row_limit is not None:
+                options.append(f"DATA_INLINING_ROW_LIMIT {self.data_inlining_row_limit}")
+
+        options_sql = f" ({', '.join(options)})" if options else ""
+        alias_sql = ""
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
+
+        # MotherDuck does not support aliasing
         alias_sql = (
-            # MotherDuck does not support aliasing
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
-        options_sql = f" ({', '.join(options)})" if options else ""
-        token_sql = "?motherduck_token=" + self.token if self.token else ""
-        return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
+        return f"ATTACH IF NOT EXISTS '{path}'{alias_sql}{options_sql}"
 
 
 class BaseDuckDBConnectionConfig(ConnectionConfig):
@@ -162,6 +279,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         catalogs: Key is the name of the catalog and value is the path.
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
+        secrets: A list of dictionaries used to generate DuckDB secrets for authenticating with external services (e.g. S3).
+        filesystems: A list of dictionaries used to register `fsspec` filesystems to the DuckDB cursor.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
@@ -172,12 +291,16 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
+    secrets: t.Union[t.List[t.Dict[str, t.Any]], t.Dict[str, t.Dict[str, t.Any]]] = []
+    filesystems: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
     register_comments: bool = True
     pre_ping: t.Literal[False] = False
 
     token: t.Optional[str] = None
+
+    shared_connection: t.ClassVar[bool] = True
 
     _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
 
@@ -186,7 +309,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if not isinstance(data, dict):
             return data
 
-        if db_path := data.get("database") and data.get("catalogs"):
+        db_path = data.get("database")
+        if db_path and data.get("catalogs"):
             raise ConfigError(
                 "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
             )
@@ -208,43 +332,6 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     @property
     def _connection_factory(self) -> t.Callable:
         import duckdb
-
-        if self.concurrent_tasks > 1:
-            # ensures a single connection instance is used across threads rather than a new connection being established per thread
-            # this is in line with https://duckdb.org/docs/guides/python/multiple_threads.html
-            # the important thing is that the *cursor*'s are per thread, but the connection should be shared
-            @lru_cache
-            def _factory(*args: t.Any, **kwargs: t.Any) -> t.Any:
-                class ConnWrapper:
-                    def __init__(self, conn: duckdb.DuckDBPyConnection):
-                        self.conn = conn
-
-                    def __getattr__(self, attr: str) -> t.Any:
-                        return getattr(self.conn, attr)
-
-                    def close(self) -> None:
-                        # This overrides conn.close() to be a no-op to work with ThreadLocalConnectionPool which assumes that a new connection should
-                        # be created per thread. However, DuckDB expects the same connection instance to be shared across threads. There is a pattern
-                        # in the SQLMesh codebase that `EngineAdapter.recycle()` is called after doing things like merging intervals. This in turn causes
-                        # `ThreadLocalConnectionPool.close_all(exclude_calling_thread=True)` to be called.
-                        #
-                        # The problem with sharing a connection across threads and then allowing it to be closed for every thread except the current one
-                        # is that it gets closed for the current one too because its shared. This causes any ":memory:" databases to be discarded.
-                        # ":memory:" databases are convienient and are used heavily in our test suite amongst other things.
-                        #
-                        # Ok, so why not have a connection per thread as is the default for ThreadLocalConnectionPool? Two reasons:
-                        # - It makes any ":memory:" databases unique to that thread. So if one thread creates tables, another thread cant see them
-                        # - If you use local files instead (eg point each connection to the same db file) then all the connection instances
-                        #   fight over locks to the same file and performance tanks heavily
-                        #
-                        # From what I can tell, DuckDB expects the single process reading / writing the database from multiple
-                        # threads to /share the same connection/ and just use thread-local cursors. In order to support ":memory:" databases
-                        # and remove lock contention, the connection needs to live for the life of the application and not be closed
-                        pass
-
-                return ConnWrapper(duckdb.connect(*args, **kwargs))
-
-            return _factory
 
         return duckdb.connect
 
@@ -272,11 +359,69 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 except Exception as e:
                     raise ConfigError(f"Failed to load extension {extension['name']}: {e}")
 
-            for field, setting in self.connector_config.items():
-                try:
-                    cursor.execute(f"SET {field} = '{setting}'")
-                except Exception as e:
-                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
+            if self.connector_config:
+                option_names = list(self.connector_config)
+                in_part = ",".join("?" for _ in range(len(option_names)))
+
+                cursor.execute(
+                    f"SELECT name, value FROM duckdb_settings() WHERE name IN ({in_part})",
+                    option_names,
+                )
+
+                existing_values = {field: setting for field, setting in cursor.fetchall()}
+
+                # only set connector_config items if the values differ from what is already set
+                # trying to set options like 'temp_directory' even to the same value can throw errors like:
+                # Not implemented Error: Cannot switch temporary directory after the current one has been used
+                for field, setting in self.connector_config.items():
+                    if existing_values.get(field) != setting:
+                        try:
+                            cursor.execute(f"SET {field} = '{setting}'")
+                        except Exception as e:
+                            raise ConfigError(
+                                f"Failed to set connector config {field} to {setting}: {e}"
+                            )
+
+            if self.secrets:
+                duckdb_version = duckdb.__version__
+                if version.parse(duckdb_version) < version.parse("0.10.0"):
+                    from sqlmesh.core.console import get_console
+
+                    get_console().log_warning(
+                        f"DuckDB version {duckdb_version} does not support secrets-based authentication (requires 0.10.0 or later).\n"
+                        "To use secrets, please upgrade DuckDB. For older versions, configure legacy authentication via `connector_config`.\n"
+                        "More info: https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html"
+                    )
+                else:
+                    if isinstance(self.secrets, list):
+                        secrets_items = [(secret_dict, "") for secret_dict in self.secrets]
+                    else:
+                        secrets_items = [
+                            (secret_dict, secret_name)
+                            for secret_name, secret_dict in self.secrets.items()
+                        ]
+
+                    for secret_dict, secret_name in secrets_items:
+                        secret_settings: t.List[str] = []
+                        for field, setting in secret_dict.items():
+                            secret_settings.append(f"{field} '{setting}'")
+                        if secret_settings:
+                            secret_clause = ", ".join(secret_settings)
+                            try:
+                                cursor.execute(
+                                    f"CREATE OR REPLACE SECRET {secret_name} ({secret_clause});"
+                                )
+                            except Exception as e:
+                                raise ConfigError(f"Failed to create secret: {e}")
+
+            if self.filesystems:
+                from fsspec import filesystem  # type: ignore
+
+                for file_system in self.filesystems:
+                    options = file_system.copy()
+                    fs = options.pop("fs")
+                    fs = filesystem(fs, **options)
+                    cursor.register_filesystem(fs)
 
             for i, (alias, path_options) in enumerate(
                 (getattr(self, "catalogs", None) or {}).items()
@@ -290,19 +435,23 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     if isinstance(path_options, DuckDBAttachOptions):
                         query = path_options.to_sql(alias)
                     else:
-                        query = f"ATTACH '{path_options}'"
+                        query = f"ATTACH IF NOT EXISTS '{path_options}'"
                         if not path_options.startswith("md:"):
                             query += f" AS {alias}"
-                        elif self.token:
-                            query += f"?motherduck_token={self.token}"
                     cursor.execute(query)
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
                     # then we don't want to raise since this happens by default. They are just doing this to
                     # set it as the default catalog.
-                    if not (
-                        'database with name "memory" already exists' in str(e)
-                        and path_options == ":memory:"
+                    # If a user tried to attach a MotherDuck database/share which has already by attached via
+                    # `ATTACH 'md:'`, then we don't want to raise since this is expected.
+                    if (
+                        not (
+                            'database with name "memory" already exists' in str(e)
+                            and path_options == ":memory:"
+                        )
+                        and f"""database with name "{path_options.path.replace("md:", "")}" already exists"""
+                        not in str(e)
                     ):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
@@ -310,7 +459,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
         return init
 
-    def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
+    def create_engine_adapter(
+        self, register_comments_override: bool = False, concurrent_tasks: t.Optional[int] = None
+    ) -> EngineAdapter:
         """Checks if another engine adapter has already been created that shares a catalog that points to the same data
         file. If so, it uses that same adapter instead of creating a new one. As a result, any additional configuration
         associated with the new adapter will be ignored."""
@@ -326,21 +477,24 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         data_files.discard(":memory:")
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
-            if adapter := BaseDuckDBConnectionConfig._data_file_to_adapter.get(key):
+            adapter = BaseDuckDBConnectionConfig._data_file_to_adapter.get(key)
+            if adapter is not None:
                 logger.info(
-                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_motherduck_token(key)}"
+                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_sensitive_data(key)}"
                 )
                 return adapter
 
         if data_files:
             masked_files = {
-                self._mask_motherduck_token(file if isinstance(file, str) else file.path)
+                self._mask_sensitive_data(file if isinstance(file, str) else file.path)
                 for file in data_files
             }
             logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
         else:
             logger.info("Creating new DuckDB adapter for in-memory database")
-        adapter = super().create_engine_adapter(register_comments_override)
+        adapter = super().create_engine_adapter(
+            register_comments_override, concurrent_tasks=concurrent_tasks
+        )
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
             BaseDuckDBConnectionConfig._data_file_to_adapter[key] = adapter
@@ -354,14 +508,23 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             return list(self.catalogs)[0]
         return None
 
-    def _mask_motherduck_token(self, string: str) -> str:
-        return MOTHERDUCK_TOKEN_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", string)
+    def _mask_sensitive_data(self, string: str) -> str:
+        # Mask MotherDuck tokens with fixed number of asterisks
+        result = MOTHERDUCK_TOKEN_REGEX.sub(
+            lambda m: f"{m.group(1)}{m.group(2)}{'*' * 8 if m.group(3) else ''}", string
+        )
+        # Mask PostgreSQL/MySQL passwords with fixed number of asterisks
+        result = PASSWORD_REGEX.sub(lambda m: f"{m.group(1)}{'*' * 8}", result)
+        return result
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the MotherDuck connection."""
 
     type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
+    DIALECT: t.ClassVar[t.Literal["duckdb"]] = "duckdb"
+    DISPLAY_NAME: t.ClassVar[t.Literal["MotherDuck"]] = "MotherDuck"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[5]] = 5
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -373,18 +536,26 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         from sqlmesh import __version__
 
         custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
-        if not self.database:
-            return {"config": custom_user_agent_config}
-        connection_str = f"md:{self.database or ''}"
+        connection_str = "md:"
+        if self.database:
+            # Attach single MD database instead of all databases on the account
+            connection_str += f"{self.database}?attach_mode=single"
         if self.token:
-            connection_str += f"?motherduck_token={self.token}"
+            connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"is_motherduck": True}
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the DuckDB connection."""
 
     type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
+    DIALECT: t.ClassVar[t.Literal["duckdb"]] = "duckdb"
+    DISPLAY_NAME: t.ClassVar[t.Literal["DuckDB"]] = "DuckDB"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[1]] = 1
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):
@@ -435,6 +606,9 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     session_parameters: t.Optional[dict] = None
 
     type_: t.Literal["snowflake"] = Field(alias="type", default="snowflake")
+    DIALECT: t.ClassVar[t.Literal["snowflake"]] = "snowflake"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Snowflake"]] = "Snowflake"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[2]] = 2
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
@@ -462,6 +636,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             raise ConfigError("Token must be provided if using oauth authentication")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator(
+        "snowflake.connector.network", "snowflake"
+    )
 
     @classmethod
     def _get_private_key(cls, values: t.Dict[str, t.Optional[str]], auth: str) -> t.Optional[bytes]:
@@ -627,6 +805,9 @@ class DatabricksConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["databricks"] = Field(alias="type", default="databricks")
+    DIALECT: t.ClassVar[t.Literal["databricks"]] = "databricks"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Databricks"]] = "Databricks"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[3]] = 3
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
@@ -706,6 +887,8 @@ class DatabricksConnectionConfig(ConnectionConfig):
                 raise ValueError("`http_path` is still required when using `auth_type`")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -881,6 +1064,11 @@ class BigQueryConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["bigquery"] = Field(alias="type", default="bigquery")
+    DIALECT: t.ClassVar[t.Literal["bigquery"]] = "bigquery"
+    DISPLAY_NAME: t.ClassVar[t.Literal["BigQuery"]] = "BigQuery"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[4]] = 4
+
+    _engine_import_validator = _get_engine_import_validator("google.cloud.bigquery", "bigquery")
 
     @field_validator("execution_project")
     def validate_execution_project(
@@ -1019,10 +1207,19 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     timeout: t.Optional[int] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/sqlservice.admin",)
     driver: str = "pg8000"
+
     type_: t.Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
+    DIALECT: t.ClassVar[t.Literal["postgres"]] = "postgres"
+    DISPLAY_NAME: t.ClassVar[t.Literal["GCP Postgres"]] = "GCP Postgres"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[13]] = 13
+
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: bool = True
+
+    _engine_import_validator = _get_engine_import_validator(
+        "google.cloud.sql", "gcp_postgres", "gcppostgres"
+    )
 
     @model_validator(mode="before")
     def _validate_auth_method(cls, data: t.Any) -> t.Any:
@@ -1032,12 +1229,6 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
         password = data.get("password")
         enable_iam_auth = data.get("enable_iam_auth")
 
-        if password and enable_iam_auth:
-            raise ConfigError(
-                "Invalid GCP Postgres connection configuration - both password and"
-                " enable_iam_auth set. Use password when connecting to a postgres"
-                " user and enable_iam_auth 'True' when connecting to an IAM user."
-            )
         if not password and not enable_iam_auth:
             raise ConfigError(
                 "GCP Postgres connection configuration requires either password set"
@@ -1150,6 +1341,11 @@ class RedshiftConnectionConfig(ConnectionConfig):
     pre_ping: bool = False
 
     type_: t.Literal["redshift"] = Field(alias="type", default="redshift")
+    DIALECT: t.ClassVar[t.Literal["redshift"]] = "redshift"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Redshift"]] = "Redshift"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[7]] = 7
+
+    _engine_import_validator = _get_engine_import_validator("redshift_connector", "redshift")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1209,6 +1405,11 @@ class PostgresConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["postgres"] = Field(alias="type", default="postgres")
+    DIALECT: t.ClassVar[t.Literal["postgres"]] = "postgres"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Postgres"]] = "Postgres"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[12]] = 12
+
+    _engine_import_validator = _get_engine_import_validator("psycopg2", "postgres")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1260,6 +1461,11 @@ class MySQLConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
+    DIALECT: t.ClassVar[t.Literal["mysql"]] = "mysql"
+    DISPLAY_NAME: t.ClassVar[t.Literal["MySQL"]] = "MySQL"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[14]] = 14
+
+    _engine_import_validator = _get_engine_import_validator("pymysql", "mysql")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1305,15 +1511,53 @@ class MSSQLConnectionConfig(ConnectionConfig):
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
 
+    # Driver options
+    driver: t.Literal["pymssql", "pyodbc"] = "pymssql"
+    # PyODBC specific options
+    driver_name: t.Optional[str] = None  # e.g. "ODBC Driver 18 for SQL Server"
+    trust_server_certificate: t.Optional[bool] = None
+    encrypt: t.Optional[bool] = None
+    # Dictionary of arbitrary ODBC connection properties
+    # See: https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute
+    odbc_properties: t.Optional[t.Dict[str, t.Any]] = None
+
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: bool = True
 
     type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
+    DIALECT: t.ClassVar[t.Literal["tsql"]] = "tsql"
+    DISPLAY_NAME: t.ClassVar[t.Literal["MSSQL"]] = "MSSQL"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[11]] = 11
+
+    @model_validator(mode="before")
+    @classmethod
+    def _mssql_engine_import_validator(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        driver = data.get("driver", "pymssql")
+
+        # Define the mapping of driver to import module and extra name
+        driver_configs = {"pymssql": ("pymssql", "mssql"), "pyodbc": ("pyodbc", "mssql-odbc")}
+
+        if driver not in driver_configs:
+            raise ValueError(f"Unsupported driver: {driver}")
+
+        import_module, extra_name = driver_configs[driver]
+
+        # Use _get_engine_import_validator with decorate=False to get the raw validation function
+        # This avoids the __wrapped__ issue in Python 3.9
+        validator_func = _get_engine_import_validator(
+            import_module, driver, extra_name, decorate=False
+        )
+
+        # Call the raw validation function directly
+        return validator_func(cls, data)
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {
+        base_keys = {
             "host",
             "user",
             "password",
@@ -1328,15 +1572,121 @@ class MSSQLConnectionConfig(ConnectionConfig):
             "tds_version",
         }
 
+        if self.driver == "pyodbc":
+            base_keys.update(
+                {
+                    "driver_name",
+                    "trust_server_certificate",
+                    "encrypt",
+                    "odbc_properties",
+                }
+            )
+            # Remove pymssql-specific parameters
+            base_keys.discard("tds_version")
+            base_keys.discard("conn_properties")
+
+        return base_keys
+
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.MSSQLEngineAdapter
 
     @property
     def _connection_factory(self) -> t.Callable:
-        import pymssql
+        if self.driver == "pymssql":
+            import pymssql
 
-        return pymssql.connect
+            return pymssql.connect
+
+        import pyodbc
+
+        def connect(**kwargs: t.Any) -> t.Callable:
+            # Extract parameters for connection string
+            host = kwargs.pop("host")
+            port = kwargs.pop("port", 1433)
+            database = kwargs.pop("database", "")
+            user = kwargs.pop("user", None)
+            password = kwargs.pop("password", None)
+            driver_name = kwargs.pop("driver_name", "ODBC Driver 18 for SQL Server")
+            trust_server_certificate = kwargs.pop("trust_server_certificate", False)
+            encrypt = kwargs.pop("encrypt", True)
+            login_timeout = kwargs.pop("login_timeout", 60)
+
+            # Build connection string
+            conn_str_parts = [
+                f"DRIVER={{{driver_name}}}",
+                f"SERVER={host},{port}",
+            ]
+
+            if database:
+                conn_str_parts.append(f"DATABASE={database}")
+
+            # Add security options
+            conn_str_parts.append(f"Encrypt={'YES' if encrypt else 'NO'}")
+            if trust_server_certificate:
+                conn_str_parts.append("TrustServerCertificate=YES")
+
+            conn_str_parts.append(f"Connection Timeout={login_timeout}")
+
+            # Standard SQL Server authentication
+            if user:
+                conn_str_parts.append(f"UID={user}")
+            if password:
+                conn_str_parts.append(f"PWD={password}")
+
+            # Add any additional ODBC properties from the odbc_properties dictionary
+            if self.odbc_properties:
+                for key, value in self.odbc_properties.items():
+                    # Skip properties that we've already set above
+                    if key.lower() in (
+                        "driver",
+                        "server",
+                        "database",
+                        "uid",
+                        "pwd",
+                        "encrypt",
+                        "trustservercertificate",
+                        "connection timeout",
+                    ):
+                        continue
+
+                    # Handle boolean values properly
+                    if isinstance(value, bool):
+                        conn_str_parts.append(f"{key}={'YES' if value else 'NO'}")
+                    else:
+                        conn_str_parts.append(f"{key}={value}")
+
+            # Create the connection string
+            conn_str = ";".join(conn_str_parts)
+
+            conn = pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+
+            # Set up output converters for MSSQL-specific data types
+            # Handle SQL type -155 (DATETIMEOFFSET) which is not yet supported by pyodbc
+            # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
+            def handle_datetimeoffset(dto_value: t.Any) -> t.Any:
+                from datetime import datetime, timedelta, timezone
+                import struct
+
+                # Unpack the DATETIMEOFFSET binary format:
+                # Format: <6hI2h = (year, month, day, hour, minute, second, nanoseconds, tz_hour_offset, tz_minute_offset)
+                tup = struct.unpack("<6hI2h", dto_value)
+                return datetime(
+                    tup[0],
+                    tup[1],
+                    tup[2],
+                    tup[3],
+                    tup[4],
+                    tup[5],
+                    tup[6] // 1000,
+                    timezone(timedelta(hours=tup[7], minutes=tup[8])),
+                )
+
+            conn.add_output_converter(-155, handle_datetimeoffset)
+
+            return conn
+
+        return connect
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
@@ -1345,10 +1695,61 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
 class AzureSQLConnectionConfig(MSSQLConnectionConfig):
     type_: t.Literal["azuresql"] = Field(alias="type", default="azuresql")  # type: ignore
+    DISPLAY_NAME: t.ClassVar[t.Literal["Azure SQL"]] = "Azure SQL"  # type: ignore
+    DISPLAY_ORDER: t.ClassVar[t.Literal[10]] = 10  # type: ignore
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         return {"catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY}
+
+
+class FabricConnectionConfig(MSSQLConnectionConfig):
+    """
+    Fabric Connection Configuration.
+    Inherits most settings from MSSQLConnectionConfig and sets the type to 'fabric'.
+    It is recommended to use the 'pyodbc' driver for Fabric.
+    """
+
+    type_: t.Literal["fabric"] = Field(alias="type", default="fabric")  # type: ignore
+    DIALECT: t.ClassVar[t.Literal["fabric"]] = "fabric"  # type: ignore
+    DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"  # type: ignore
+    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17  # type: ignore
+    driver: t.Literal["pyodbc"] = "pyodbc"
+    workspace_id: str
+    tenant_id: str
+    autocommit: t.Optional[bool] = True
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        from sqlmesh.core.engine_adapter.fabric import FabricEngineAdapter
+
+        return FabricEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        # Override to support catalog switching for Fabric
+        base_factory = super()._connection_factory
+
+        def create_fabric_connection(
+            target_catalog: t.Optional[str] = None, *args: t.Any, **kwargs: t.Any
+        ) -> t.Callable:
+            kwargs["database"] = target_catalog or self.database
+            return base_factory(*args, **kwargs)
+
+        return create_fabric_connection
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            "database": self.database,
+            # more operations than not require a specific catalog to be already active
+            # in particular, create/drop view, create/drop schema and querying information_schema
+            "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
+            "workspace_id": self.workspace_id,
+            "tenant_id": self.tenant_id,
+            "user": self.user,
+            "password": self.password,
+        }
 
 
 class SparkConnectionConfig(ConnectionConfig):
@@ -1359,12 +1760,18 @@ class SparkConnectionConfig(ConnectionConfig):
     config_dir: t.Optional[str] = None
     catalog: t.Optional[str] = None
     config: t.Dict[str, t.Any] = {}
+    wap_enabled: bool = False
 
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["spark"] = Field(alias="type", default="spark")
+    DIALECT: t.ClassVar[t.Literal["spark"]] = "spark"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Spark"]] = "Spark"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[8]] = 8
+
+    _engine_import_validator = _get_engine_import_validator("pyspark", "spark")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1399,6 +1806,10 @@ class SparkConnectionConfig(ConnectionConfig):
             .enableHiveSupport()
             .getOrCreate(),
         }
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"wap_enabled": self.wap_enabled}
 
 
 class TrinoAuthenticationMethod(str, Enum):
@@ -1481,6 +1892,11 @@ class TrinoConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["trino"] = Field(alias="type", default="trino")
+    DIALECT: t.ClassVar[t.Literal["trino"]] = "trino"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Trino"]] = "Trino"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[9]] = 9
+
+    _engine_import_validator = _get_engine_import_validator("trino", "trino")
 
     @field_validator("schema_location_mapping", mode="before")
     @classmethod
@@ -1614,11 +2030,19 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     cluster: t.Optional[str] = None
     connect_timeout: int = 10
     send_receive_timeout: int = 300
-    verify: bool = True
     query_limit: int = 0
     use_compression: bool = True
     compression_method: t.Optional[str] = None
     connection_settings: t.Optional[t.Dict[str, t.Any]] = None
+    http_proxy: t.Optional[str] = None
+    # HTTPS/TLS settings
+    verify: bool = True
+    ca_cert: t.Optional[str] = None
+    client_cert: t.Optional[str] = None
+    client_cert_key: t.Optional[str] = None
+    https_proxy: t.Optional[str] = None
+    server_host_name: t.Optional[str] = None
+    tls_mode: t.Optional[str] = None
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1631,6 +2055,11 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     connection_pool_options: t.Optional[t.Dict[str, t.Any]] = None
 
     type_: t.Literal["clickhouse"] = Field(alias="type", default="clickhouse")
+    DIALECT: t.ClassVar[t.Literal["clickhouse"]] = "clickhouse"
+    DISPLAY_NAME: t.ClassVar[t.Literal["ClickHouse"]] = "ClickHouse"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[6]] = 6
+
+    _engine_import_validator = _get_engine_import_validator("clickhouse_connect", "clickhouse")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1641,8 +2070,15 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             "password",
             "connect_timeout",
             "send_receive_timeout",
-            "verify",
             "query_limit",
+            "http_proxy",
+            "verify",
+            "ca_cert",
+            "client_cert",
+            "client_cert_key",
+            "https_proxy",
+            "server_host_name",
+            "tls_mode",
         }
         return kwargs
 
@@ -1661,7 +2097,18 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             maxsize=self.concurrent_tasks,
             # Block if there are no free connections
             block=True,
+            verify=self.verify,
+            ca_cert=self.ca_cert,
+            client_cert=self.client_cert,
+            client_cert_key=self.client_cert_key,
+            https_proxy=self.https_proxy,
         )
+        # this doesn't happen automatically because we always supply our own pool manager to the connection
+        # https://github.com/ClickHouse/clickhouse-connect/blob/3a7f4b04cad29c7c2536661b831fb744248e2ec0/clickhouse_connect/driver/httpclient.py#L109
+        if self.server_host_name:
+            pool_manager_options["server_hostname"] = self.server_host_name
+            if self.verify:
+                pool_manager_options["assert_hostname"] = self.server_host_name
         if self.connection_pool_options:
             pool_manager_options.update(self.connection_pool_options)
         pool_mgr = httputil.get_pool_manager(**pool_manager_options)
@@ -1735,6 +2182,11 @@ class AthenaConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["athena"] = Field(alias="type", default="athena")
+    DIALECT: t.ClassVar[t.Literal["athena"]] = "athena"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Athena"]] = "Athena"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[15]] = 15
+
+    _engine_import_validator = _get_engine_import_validator("pyathena", "athena")
 
     @model_validator(mode="after")
     def _root_validator(self) -> Self:
@@ -1801,6 +2253,11 @@ class RisingwaveConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["risingwave"] = Field(alias="type", default="risingwave")
+    DIALECT: t.ClassVar[t.Literal["risingwave"]] = "risingwave"
+    DISPLAY_NAME: t.ClassVar[t.Literal["RisingWave"]] = "RisingWave"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[16]] = 16
+
+    _engine_import_validator = _get_engine_import_validator("psycopg2", "risingwave")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1843,6 +2300,27 @@ CONNECTION_CONFIG_TO_TYPE = {
     )
 }
 
+DIALECT_TO_TYPE = {
+    tpe.all_field_infos()["type_"].default: tpe.DIALECT
+    for tpe in subclasses(
+        __name__,
+        ConnectionConfig,
+        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+    )
+}
+
+INIT_DISPLAY_INFO_TO_TYPE = {
+    tpe.all_field_infos()["type_"].default: (
+        tpe.DISPLAY_ORDER,
+        tpe.DISPLAY_NAME,
+    )
+    for tpe in subclasses(
+        __name__,
+        ConnectionConfig,
+        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+    )
+}
+
 
 def parse_connection_config(v: t.Dict[str, t.Any]) -> ConnectionConfig:
     if "type" not in v:
@@ -1860,7 +2338,18 @@ def _connection_config_validator(
 ) -> ConnectionConfig | None:
     if v is None or isinstance(v, ConnectionConfig):
         return v
-    return parse_connection_config(v)
+
+    check_config_and_vars_msg = "\n\nVerify your config.yaml and environment variables."
+
+    try:
+        return parse_connection_config(v)
+    except pydantic.ValidationError as e:
+        raise ConfigError(
+            validation_error_message(e, f"Invalid '{v['type']}' connection config:")
+            + check_config_and_vars_msg
+        )
+    except ConfigError as e:
+        raise ConfigError(str(e) + check_config_and_vars_msg)
 
 
 connection_config_validator: t.Callable = field_validator(

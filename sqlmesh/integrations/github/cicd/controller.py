@@ -8,31 +8,32 @@ import pathlib
 import re
 import traceback
 import typing as t
-import unittest
 from enum import Enum
-from typing import List
+from pathlib import Path
+from dataclasses import dataclass
+from functools import cached_property
 
 import requests
-from hyperscript import Element, h
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, get_console, MarkdownConsole
 from sqlmesh.core.context import Context
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.plan import Plan, PlanBuilder
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
+from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.snapshot.definition import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
     SnapshotTableInfo,
-    format_intervals,
 )
+from sqlglot.errors import SqlglotError
 from sqlmesh.core.user import User
 from sqlmesh.core.config import Config
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.utils import word_characters_only, Verbosity
-from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
     CICDBotError,
@@ -40,6 +41,7 @@ from sqlmesh.utils.errors import (
     PlanError,
     UncategorizedPlanError,
     LinterError,
+    SQLMeshError,
 )
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -76,7 +78,7 @@ class PullRequestInfo(PydanticModel):
         return cls(
             owner=owner,
             repo=repo,
-            pr_number=pr_number,
+            pr_number=int(pr_number),
         )
 
 
@@ -283,11 +285,12 @@ class GithubController:
 
     def __init__(
         self,
-        paths: t.Union[str, t.Iterable[str]],
+        paths: t.Union[Path, t.Iterable[Path]],
         token: str,
         config: t.Optional[t.Union[Config, str]] = None,
         event: t.Optional[GithubEvent] = None,
         client: t.Optional[Github] = None,
+        context: t.Optional[Context] = None,
     ) -> None:
         from github import Github
 
@@ -307,10 +310,13 @@ class GithubController:
             raise CICDBotError("Console must be a markdown console.")
         self._console = t.cast(MarkdownConsole, get_console())
 
+        from github.Consts import DEFAULT_BASE_URL
+        from github.Auth import Token
+
         self._client: Github = client or Github(
-            base_url=os.environ["GITHUB_API_URL"],
-            login_or_token=self._token,
+            base_url=os.environ.get("GITHUB_API_URL", DEFAULT_BASE_URL), auth=Token(self._token)
         )
+
         self._repo: Repository = self._client.get_repo(
             self._event.pull_request_info.full_repo_path, lazy=True
         )
@@ -326,7 +332,10 @@ class GithubController:
             if review.state.lower() == "approved"
         }
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
-        self._context: Context = Context(paths=self._paths, config=self.config)
+        self._context: Context = context or Context(paths=self._paths, config=self.config)
+
+        # Bot config needs the context to be initialized
+        logger.debug(f"Bot config: {self.bot_config.json(indent=2)}")
 
     @property
     def deploy_command_enabled(self) -> bool:
@@ -394,11 +403,28 @@ class GithubController:
                 skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 start=self.bot_config.default_pr_start,
+                min_intervals=self.bot_config.pr_min_intervals,
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
+                forward_only=self.forward_only_plan,
             )
         assert self._pr_plan_builder
         return self._pr_plan_builder.build()
+
+    @property
+    def pr_plan_or_none(self) -> t.Optional[Plan]:
+        try:
+            return self.pr_plan
+        except:
+            return None
+
+    @property
+    def pr_plan_flags(self) -> t.Optional[t.Dict[str, UserProvidedFlags]]:
+        if pr_plan := self.pr_plan_or_none:
+            return pr_plan.user_provided_flags
+        if pr_plan_builder := self._pr_plan_builder:
+            return pr_plan_builder._user_provided_flags
+        return None
 
     @property
     def prod_plan(self) -> Plan:
@@ -410,6 +436,7 @@ class GithubController:
                 skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
+                forward_only=self.forward_only_plan,
             )
         assert self._prod_plan_builder
         return self._prod_plan_builder.build()
@@ -419,11 +446,14 @@ class GithubController:
         if not self._prod_plan_with_gaps_builder:
             self._prod_plan_with_gaps_builder = self._context.plan_builder(
                 c.PROD,
+                # this is required to highlight any data gaps between this PR environment and prod (since PR environments may only contain a subset of data)
                 no_gaps=False,
+                # this works because the snapshots were already categorized when applying self.pr_plan so there are no uncategorized local snapshots to trigger a plan error
                 no_auto_categorization=True,
                 skip_tests=True,
                 skip_linter=True,
                 run=self.bot_config.run_on_deploy_to_prod,
+                forward_only=self.forward_only_plan,
             )
         assert self._prod_plan_with_gaps_builder
         return self._prod_plan_with_gaps_builder.build()
@@ -433,7 +463,6 @@ class GithubController:
         bot_config = self._context.config.cicd_bot or GithubCICDBotConfig(
             auto_categorize_changes=self._context.auto_categorize_changes
         )
-        logger.debug(f"Bot config: {bot_config.json(indent=2)}")
         return bot_config
 
     @property
@@ -444,35 +473,197 @@ class GithubController:
     def removed_snapshots(self) -> t.Set[SnapshotId]:
         return set(self.prod_plan_with_gaps.context_diff.removed_snapshots)
 
+    @property
+    def pr_targets_prod_branch(self) -> bool:
+        return self._pull_request.base.ref in self.bot_config.prod_branch_names
+
+    @property
+    def forward_only_plan(self) -> bool:
+        default = self._context.config.plan.forward_only
+        head_ref = self._pull_request.head.ref
+        if isinstance(head_ref, str):
+            return head_ref.endswith(self.bot_config.forward_only_branch_suffix) or default
+        return default
+
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
         """
         Appends the given key/value to output so they can be read by following steps
         """
         logger.debug(f"Setting output. Key: {key}, Value: {value}")
-        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-            print(f"{key}={value}", file=fh)
+
+        # GitHub Actions sets this environment variable
+        if output_file := os.environ.get("GITHUB_OUTPUT"):
+            with open(output_file, "a", encoding="utf-8") as fh:
+                print(f"{key}={value}", file=fh)
+
+    def get_forward_only_plan_post_deployment_tip(self, plan: Plan) -> str:
+        if not plan.forward_only:
+            return ""
+
+        example_model_name = "<model name>"
+        for snapshot_id in sorted(plan.snapshots):
+            snapshot = plan.snapshots[snapshot_id]
+            if snapshot.is_incremental:
+                example_model_name = snapshot.node.name
+                break
+
+        return (
+            "> [!TIP]\n"
+            "> In order to see this forward-only plan retroactively apply to historical intervals on the production model, run the below for date ranges in scope:\n"
+            "> \n"
+            f"> `$ sqlmesh plan --restate-model {example_model_name} --start YYYY-MM-DD --end YYYY-MM-DD`\n"
+            ">\n"
+            "> Learn more: https://sqlmesh.readthedocs.io/en/stable/concepts/plans/?h=restate#restatement-plans"
+        )
 
     def get_plan_summary(self, plan: Plan) -> str:
+        # use Verbosity.VERY_VERBOSE to prevent the list of models from being truncated
+        # this is particularly important for the "Models needing backfill" list because
+        # there is no easy way to tell this otherwise
+        orig_verbosity = self._console.verbosity
+        self._console.verbosity = Verbosity.VERY_VERBOSE
+
         try:
             # Clear out any output that might exist from prior steps
-            self._console.clear_captured_outputs()
-            self._console.show_model_difference_summary(
-                context_diff=plan.context_diff,
-                environment_naming_info=plan.environment_naming_info,
-                default_catalog=self._context.default_catalog,
-                no_diff=False,
-            )
+            self._console.consume_captured_output()
+            if plan.restatements:
+                self._console._print("\n**Restating models**\n")
+            else:
+                self._console.show_environment_difference_summary(
+                    context_diff=plan.context_diff,
+                    no_diff=False,
+                )
+            if plan.context_diff.has_changes:
+                self._console.show_model_difference_summary(
+                    context_diff=plan.context_diff,
+                    environment_naming_info=plan.environment_naming_info,
+                    default_catalog=self._context.default_catalog,
+                    no_diff=False,
+                )
             difference_summary = self._console.consume_captured_output()
             self._console._show_missing_dates(plan, self._context.default_catalog)
             missing_dates = self._console.consume_captured_output()
-            if not difference_summary and not missing_dates:
-                return "No changes to apply."
-            return f"{difference_summary}\n{missing_dates}"
-        except PlanError as e:
-            return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
 
-    def run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
+            plan_flags_section = (
+                f"\n\n{self._generate_plan_flags_section(plan.user_provided_flags)}"
+                if plan.user_provided_flags
+                else ""
+            )
+
+            if not difference_summary and not missing_dates:
+                return f"No changes to apply.{plan_flags_section}"
+
+            warnings_block = self._console.consume_captured_warnings()
+            errors_block = self._console.consume_captured_errors()
+
+            return f"{warnings_block}{errors_block}{difference_summary}\n{missing_dates}{plan_flags_section}"
+        except PlanError as e:
+            logger.exception("Plan failed to generate")
+            return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
+        finally:
+            self._console.verbosity = orig_verbosity
+
+    def get_pr_environment_summary(
+        self, conclusion: GithubCheckConclusion, exception: t.Optional[Exception] = None
+    ) -> str:
+        heading = ""
+        summary = ""
+
+        if conclusion.is_success:
+            summary = self._get_pr_environment_summary_success()
+        elif conclusion.is_action_required:
+            heading = f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}` :warning:"
+            summary = self._get_pr_environment_summary_action_required(exception)
+        elif conclusion.is_failure:
+            heading = (
+                f":x: Failed to create or update PR Environment `{self.pr_environment_name}` :x:"
+            )
+            summary = self._get_pr_environment_summary_failure(exception)
+        elif conclusion.is_skipped:
+            heading = f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` :next_track_button:"
+            summary = self._get_pr_environment_summary_skipped(exception)
+        else:
+            heading = f":interrobang: Got an unexpected conclusion: {conclusion.value}"
+
+        # note: we just add warnings here, errors will be covered by the "failure" conclusion
+        if warnings := self._console.consume_captured_warnings():
+            summary = f"{warnings}\n{summary}"
+
+        return f"{heading}\n\n{summary}".strip()
+
+    def _get_pr_environment_summary_success(self) -> str:
+        prod_plan = self.prod_plan_with_gaps
+
+        if not prod_plan.has_changes:
+            summary = "No models were modified in this PR.\n"
+        else:
+            intro = self._generate_pr_environment_summary_intro()
+            summary = intro + self._generate_pr_environment_summary_list(prod_plan)
+
+        if prod_plan.user_provided_flags:
+            summary += self._generate_plan_flags_section(prod_plan.user_provided_flags)
+
+        return summary
+
+    def _get_pr_environment_summary_skipped(self, exception: t.Optional[Exception] = None) -> str:
+        if isinstance(exception, NoChangesPlanError):
+            skip_reason = "No changes were detected compared to the prod environment."
+        elif isinstance(exception, TestFailure):
+            skip_reason = "Unit Test(s) Failed so skipping PR creation"
+        else:
+            skip_reason = "A prior stage failed resulting in skipping PR creation."
+
+        return skip_reason
+
+    def _get_pr_environment_summary_action_required(
+        self, exception: t.Optional[Exception] = None
+    ) -> str:
+        plan = self.pr_plan_or_none
+        if isinstance(exception, UncategorizedPlanError) and plan:
+            failure_msg = f"The following models could not be categorized automatically:\n"
+            for snapshot in plan.uncategorized:
+                failure_msg += f"- {snapshot.name}\n"
+            failure_msg += (
+                f"\nRun `sqlmesh plan {self.pr_environment_name}` locally to apply these changes.\n\n"
+                "If you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
+            )
+        else:
+            failure_msg = "Please check the Actions Workflow logs for more information."
+
+        return failure_msg
+
+    def _get_pr_environment_summary_failure(self, exception: t.Optional[Exception] = None) -> str:
+        console_output = self._console.consume_captured_output()
+        failure_msg = ""
+
+        if isinstance(exception, PlanError):
+            if exception.args and (msg := exception.args[0]) and isinstance(msg, str):
+                failure_msg += f"*{msg}*\n"
+            if console_output:
+                failure_msg += f"\n{console_output}"
+        elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
+            # this logic is taken from the global error handler attached to the CLI, which uses `click.echo()` to output the message
+            # so cant be re-used here because it bypasses the Console
+            failure_msg = f"**Error:** {str(exception)}"
+        elif exception:
+            logger.debug(
+                "Got unexpected error. Error Type: "
+                + str(type(exception))
+                + " Stack trace: "
+                + traceback.format_exc()
+            )
+            failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
+
+        if captured_errors := self._console.consume_captured_errors():
+            failure_msg = f"{captured_errors}\n{failure_msg}"
+
+        if plan_flags := self.pr_plan_flags:
+            failure_msg += f"\n\n{self._generate_plan_flags_section(plan_flags)}"
+
+        return failure_msg
+
+    def run_tests(self) -> t.Tuple[ModelTextTestResult, str]:
         """
         Run tests for the PR
         """
@@ -482,7 +673,7 @@ class GithubController:
         """
         Run linter for the PR
         """
-        self._console.clear_captured_outputs()
+        self._console.consume_captured_output()
         self._context.lint_models()
 
     def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
@@ -554,7 +745,22 @@ class GithubController:
         Creates a PR environment from the logic present in the PR. If the PR contains changes that are
         uncategorized, then an error will be raised.
         """
-        self._context.apply(self.pr_plan)
+        self._console.consume_captured_output()  # clear output buffer
+        self._context.apply(self.pr_plan)  # will raise if PR environment creation fails
+
+        # update PR info comment
+        vde_title = "- :eyes: To **review** this PR's changes, use virtual data environment:"
+        comment_value = f"{vde_title}\n  - `{self.pr_environment_name}`"
+        if self.bot_config.enable_deploy_command:
+            full_command = f"{self.bot_config.command_namespace or ''}/deploy"
+            comment_value += f"\n- :arrow_forward: To **apply** this PR's plan to prod, comment:\n  - `{full_command}`"
+        dedup_regex = vde_title.replace("*", r"\*") + r".*"
+        updated_comment, _ = self.update_sqlmesh_comment_info(
+            value=comment_value,
+            dedup_regex=dedup_regex,
+        )
+        if updated_comment:
+            self._append_output("created_pr_environment", "true")
 
     def deploy_to_prod(self) -> None:
         """
@@ -579,6 +785,11 @@ class GithubController:
 </details>
 
 """
+        if self.forward_only_plan:
+            plan_summary = (
+                f"{self.get_forward_only_plan_post_deployment_tip(self.prod_plan)}\n{plan_summary}"
+            )
+
         self.update_sqlmesh_comment_info(
             value=plan_summary,
             dedup_regex=None,
@@ -625,15 +836,31 @@ class GithubController:
         if text:
             kwargs["output"]["text"] = text
         logger.debug(f"Updating check with kwargs: {kwargs}")
-        if name in self._check_run_mapping:
-            logger.debug(f"Found check run in mapping so updating it. Name: {name}")
-            check_run = self._check_run_mapping[name]
-            check_run.edit(
-                **{k: v for k, v in kwargs.items() if k not in ("name", "head_sha", "started_at")}
-            )
+
+        if self.running_in_github_actions:
+            # Only make the API call to update the checks if we are running within GitHub Actions
+            # One very annoying limitation of the Pull Request Checks API is that its only available to GitHub Apps
+            # and not personal access tokens, which makes it unable to be utilized during local development
+            if name in self._check_run_mapping:
+                logger.debug(f"Found check run in mapping so updating it. Name: {name}")
+                check_run = self._check_run_mapping[name]
+                check_run.edit(
+                    **{
+                        k: v
+                        for k, v in kwargs.items()
+                        if k not in ("name", "head_sha", "started_at")
+                    }
+                )
+            else:
+                logger.debug(f"Did not find check run in mapping so creating it. Name: {name}")
+                self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
         else:
-            logger.debug(f"Did not find check run in mapping so creating it. Name: {name}")
-            self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
+            # Output the summary using print() so the newlines are resolved and the result can easily
+            # be disambiguated from the rest of the console output and copy+pasted into a Markdown renderer
+            print(
+                f"---CHECK OUTPUT START: {kwargs['output']['title']} ---\n{kwargs['output']['summary']}\n---CHECK OUTPUT END---\n"
+            )
+
         if conclusion:
             self._append_output(
                 word_characters_only(name.replace("SQLMesh - ", "").lower()), conclusion.value
@@ -696,8 +923,8 @@ class GithubController:
         self,
         status: GithubCheckStatus,
         conclusion: t.Optional[GithubCheckConclusion] = None,
-        result: t.Optional[unittest.result.TestResult] = None,
-        output: t.Optional[str] = None,
+        result: t.Optional[ModelTextTestResult] = None,
+        traceback: t.Optional[str] = None,
     ) -> None:
         """
         Updates the status of tests for code in the PR
@@ -705,16 +932,14 @@ class GithubController:
 
         def conclusion_handler(
             conclusion: GithubCheckConclusion,
-            result: t.Optional[unittest.result.TestResult],
-            output: t.Optional[str],
+            result: t.Optional[ModelTextTestResult],
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if result:
                 # Clear out console
                 self._console.consume_captured_output()
                 self._console.log_test_results(
                     result,
-                    output,
-                    self._context._test_connection_config._engine_adapter.DIALECT,
+                    self._context.test_connection_config._engine_adapter.DIALECT,
                 )
                 test_summary = self._console.consume_captured_output()
                 test_title = "Tests Passed" if result.wasSuccessful() else "Tests Failed"
@@ -724,8 +949,11 @@ class GithubController:
                     else GithubCheckConclusion.FAILURE
                 )
                 return test_conclusion, test_title, test_summary
+            if traceback:
+                self._console._print(traceback)
+
             test_title = "Skipped Tests" if conclusion.is_skipped else "Tests Failed"
-            return conclusion, test_title, output
+            return conclusion, test_title, traceback
 
         self._update_check_handler(
             check_name="SQLMesh - Run Unit Tests",
@@ -738,7 +966,7 @@ class GithubController:
                 }[status],
                 None,
             ),
-            conclusion_handler=functools.partial(conclusion_handler, result=result, output=output),
+            conclusion_handler=functools.partial(conclusion_handler, result=result),
         )
 
     def update_required_approval_check(
@@ -781,9 +1009,7 @@ class GithubController:
         )
 
     def update_pr_environment_check(
-        self,
-        status: GithubCheckStatus,
-        exception: t.Optional[Exception] = None,
+        self, status: GithubCheckStatus, exception: t.Optional[Exception] = None
     ) -> t.Optional[GithubCheckConclusion]:
         """
         Updates the status of the merge commit for the PR environment.
@@ -804,106 +1030,7 @@ class GithubController:
         def conclusion_handler(
             conclusion: GithubCheckConclusion, exception: t.Optional[Exception]
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
-            if conclusion.is_success:
-                if not self.modified_snapshots:
-                    summary = "No models were modified in this PR.\n"
-                else:
-                    header_rows = [
-                        h("th", {"colspan": "3"}, "PR Environment Summary"),
-                        [
-                            h("th", "Model"),
-                            h("th", "Change Type"),
-                            h("th", "Dates Loaded"),
-                        ],
-                    ]
-                    body_rows: List[Element | List[Element]] = []
-                    for modified_snapshot in self.modified_snapshots.values():
-                        # We don't want to display indirect non-breaking since to users these are effectively no-op changes
-                        if modified_snapshot.is_indirect_non_breaking:
-                            continue
-                        if modified_snapshot.snapshot_id in self.removed_snapshots:
-                            # This will be an FQN since we don't have access to node name from a snapshot table info
-                            # which is what a removed snapshot is
-                            model_name = modified_snapshot.name
-                            change_category = SNAPSHOT_CHANGE_CATEGORY_STR[
-                                SnapshotChangeCategory.BREAKING
-                            ]
-                            interval_output = "REMOVED"
-                        else:
-                            assert isinstance(modified_snapshot, Snapshot)
-                            model_name = modified_snapshot.node.name
-                            change_category = (
-                                "Uncategorized"
-                                if not modified_snapshot.change_category
-                                else SNAPSHOT_CHANGE_CATEGORY_STR[modified_snapshot.change_category]
-                            )
-                            intervals = (
-                                modified_snapshot.dev_intervals
-                                if modified_snapshot.is_forward_only
-                                else modified_snapshot.intervals
-                            )
-                            interval_output = (
-                                format_intervals(intervals, modified_snapshot.node.interval_unit)
-                                if intervals
-                                else "N/A"
-                            )
-                        body_rows.append(
-                            [
-                                h("td", model_name, autoescape=False),
-                                h("td", change_category),
-                                h("td", interval_output),
-                            ]
-                        )
-                    table_header = h("thead", [h("tr", row) for row in header_rows])
-                    table_body = h("tbody", [h("tr", row) for row in body_rows])
-                    summary = str(h("table", [table_header, table_body]))
-                vde_title = (
-                    "- :eyes: To **review** this PR's changes, use virtual data environment:"
-                )
-                comment_value = f"{vde_title}\n  - `{self.pr_environment_name}`"
-                if self.bot_config.enable_deploy_command:
-                    comment_value += "\n- :arrow_forward: To **apply** this PR's plan to prod, comment:\n  - `/deploy`"
-                dedup_regex = vde_title.replace("*", r"\*") + r".*"
-                updated_comment, _ = self.update_sqlmesh_comment_info(
-                    value=comment_value,
-                    dedup_regex=dedup_regex,
-                )
-                if updated_comment:
-                    self._append_output("created_pr_environment", "true")
-            else:
-                if isinstance(exception, NoChangesPlanError):
-                    skip_reason = "No changes were detected compared to the prod environment."
-                elif isinstance(exception, TestFailure):
-                    skip_reason = "Unit Test(s) Failed so skipping PR creation"
-                else:
-                    skip_reason = "A prior stage failed resulting in skipping PR creation."
-
-                captured_errors = self._console.consume_captured_errors()
-                if captured_errors:
-                    logger.debug(f"Captured errors: {captured_errors}")
-                    failure_msg = f"**Errors:**\n{captured_errors}\n"
-                elif isinstance(exception, NodeExecutionFailedError):
-                    logger.debug(
-                        "Got Node Execution Failed Error. Stack trace: " + traceback.format_exc()
-                    )
-                    failure_msg = f"Node `{exception.node.name}` failed to apply.\n\n**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
-                else:
-                    logger.debug(
-                        "Got unexpected error. Error Type: "
-                        + str(type(exception))
-                        + " Stack trace: "
-                        + traceback.format_exc()
-                    )
-                    failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
-                conclusion_to_summary = {
-                    GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
-                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n{failure_msg}",
-                    GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
-                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information.",
-                }
-                summary = conclusion_to_summary.get(
-                    conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
-                )
+            summary = self.get_pr_environment_summary(conclusion, exception)
             self._append_output("pr_environment_name", self.pr_environment_name)
             return conclusion, check_title, summary
 
@@ -944,6 +1071,12 @@ class GithubController:
             title = conclusion_to_title.get(
                 conclusion, f"Got an unexpected conclusion: {conclusion.value}"
             )
+            if conclusion == GithubCheckConclusion.SUCCESS and summary:
+                summary = (
+                    f"This is a preview that shows the differences between this PR environment `{self.pr_environment_name}` and `prod`.\n\n"
+                    "These are the changes that would be deployed.\n\n"
+                ) + summary
+
             return conclusion, title, summary
 
         self._update_check_handler(
@@ -965,6 +1098,7 @@ class GithubController:
         status: GithubCheckStatus,
         conclusion: t.Optional[GithubCheckConclusion] = None,
         skip_reason: t.Optional[str] = None,
+        plan_error: t.Optional[PlanError] = None,
     ) -> None:
         """
         Updates the status of the merge commit for the prod environment.
@@ -976,22 +1110,29 @@ class GithubController:
             conclusion_to_title = {
                 GithubCheckConclusion.SUCCESS: "Deployed to Prod",
                 GithubCheckConclusion.CANCELLED: "Cancelled deploying to prod",
-                GithubCheckConclusion.SKIPPED: skip_reason,
+                GithubCheckConclusion.SKIPPED: "Skipped deployment",
                 GithubCheckConclusion.FAILURE: "Failed to deploy to prod",
+                GithubCheckConclusion.ACTION_REQUIRED: "Failed due to error applying plan",
             }
             title = (
                 conclusion_to_title.get(conclusion)
                 or f"Got an unexpected conclusion: {conclusion.value}"
             )
             if conclusion.is_skipped:
-                summary = title
+                summary = skip_reason
             elif conclusion.is_failure:
                 captured_errors = self._console.consume_captured_errors()
                 summary = (
                     captured_errors or f"{title}\n\n**Error:**\n```\n{traceback.format_exc()}\n```"
                 )
+            elif conclusion.is_action_required:
+                if plan_error:
+                    summary = f"**Plan error:**\n```\n{plan_error}\n```"
+                else:
+                    summary = "Got an action required conclusion but no plan error was provided. This is unexpected."
             else:
                 summary = "**Generated Prod Plan**\n" + self.get_plan_summary(self.prod_plan)
+
             return conclusion, title, summary
 
         self._update_check_handler(
@@ -1042,3 +1183,236 @@ class GithubController:
             message_encoded[i : i + self.MAX_BYTE_LENGTH].decode("utf-8", "ignore")
             for i in range(0, len(message_encoded), self.MAX_BYTE_LENGTH)
         ]
+
+    @property
+    def running_in_github_actions(self) -> bool:
+        return os.environ.get("GITHUB_ACTIONS", None) == "true"
+
+    @property
+    def version_info(self) -> str:
+        from sqlmesh.cli.main import _sqlmesh_version
+
+        return _sqlmesh_version()
+
+    def _generate_plan_flags_section(
+        self, user_provided_flags: t.Dict[str, UserProvidedFlags]
+    ) -> str:
+        # collapsed section syntax:
+        # https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/organizing-information-with-collapsed-sections#creating-a-collapsed-section
+        section = "<details>\n\n<summary>Plan flags</summary>\n\n"
+        for flag_name, flag_value in user_provided_flags.items():
+            section += f"- `{flag_name}` = `{flag_value}`\n"
+        section += "\n</details>"
+
+        return section
+
+    def _generate_pr_environment_summary_intro(self) -> str:
+        note = ""
+        subset_reasons = []
+
+        if self.bot_config.skip_pr_backfill:
+            subset_reasons.append("`skip_pr_backfill` is enabled")
+
+        if default_pr_start := self.bot_config.default_pr_start:
+            subset_reasons.append(f"`default_pr_start` is set to `{default_pr_start}`")
+
+        if subset_reasons:
+            note = (
+                "> [!IMPORTANT]\n"
+                f"> This PR environment may only contain a subset of data because:\n"
+                + "\n".join(f"> - {r}" for r in subset_reasons)
+                + "\n"
+                "> \n"
+                "> This means that deploying to `prod` may not be a simple virtual update if there is still some data to load.\n"
+                "> See `Dates not loaded in PR` below or the `Prod Plan Preview` check for more information.\n\n"
+            )
+
+        return (
+            f"Here is a summary of data that has been loaded into the PR environment `{self.pr_environment_name}` and could be deployed to `prod`.\n\n"
+            + note
+        )
+
+    def _generate_pr_environment_summary_list(self, plan: Plan) -> str:
+        added_snapshot_ids = set(plan.context_diff.added)
+        modified_snapshot_ids = set(
+            s.snapshot_id for s, _ in plan.context_diff.modified_snapshots.values()
+        )
+        removed_snapshot_ids = set(plan.context_diff.removed_snapshots.keys())
+
+        # note: we sort these to get a deterministic order for the output tests
+        table_records = sorted(
+            [
+                SnapshotSummaryRecord(snapshot_id=snapshot_id, plan=plan)
+                for snapshot_id in (
+                    added_snapshot_ids | modified_snapshot_ids | removed_snapshot_ids
+                )
+            ],
+            key=lambda r: r.display_name,
+        )
+
+        sections = [
+            ("### Added", [r for r in table_records if r.is_added]),
+            ("### Removed", [r for r in table_records if r.is_removed]),
+            ("### Directly Modified", [r for r in table_records if r.is_directly_modified]),
+            ("### Indirectly Modified", [r for r in table_records if r.is_indirectly_modified]),
+            (
+                "### Metadata Updated",
+                [r for r in table_records if r.is_metadata_updated and not r.is_modified],
+            ),
+        ]
+
+        summary = ""
+        for title, records in sections:
+            if records:
+                summary += f"\n{title}\n"
+
+            for record in records:
+                summary += f"{record.as_markdown_list_item}\n"
+
+        return summary
+
+
+@dataclass
+class SnapshotSummaryRecord:
+    snapshot_id: SnapshotId
+    plan: Plan
+
+    @property
+    def snapshot(self) -> Snapshot:
+        if self.is_removed:
+            raise ValueError("Removed snapshots only have SnapshotTableInfo available")
+        return self.plan.snapshots[self.snapshot_id]
+
+    @cached_property
+    def snapshot_table_info(self) -> SnapshotTableInfo:
+        if self.is_removed:
+            return self.plan.modified_snapshots[self.snapshot_id].table_info
+        return self.plan.snapshots[self.snapshot_id].table_info
+
+    @property
+    def display_name(self) -> str:
+        dialect = None if self.is_removed else self.snapshot.node.dialect
+        return self.snapshot_table_info.display_name(
+            self.plan.environment_naming_info, default_catalog=None, dialect=dialect
+        )
+
+    @property
+    def change_category(self) -> str:
+        if self.is_removed:
+            return SNAPSHOT_CHANGE_CATEGORY_STR[SnapshotChangeCategory.BREAKING]
+
+        if change_category := self.snapshot.change_category:
+            return SNAPSHOT_CHANGE_CATEGORY_STR[change_category]
+
+        return "Uncategorized"
+
+    @property
+    def is_added(self) -> bool:
+        return self.snapshot_id in self.plan.context_diff.added
+
+    @property
+    def is_removed(self) -> bool:
+        return self.snapshot_id in self.plan.context_diff.removed_snapshots
+
+    @property
+    def is_dev_preview(self) -> bool:
+        return not self.plan.deployability_index.is_deployable(self.snapshot_id)
+
+    @property
+    def is_directly_modified(self) -> bool:
+        return self.plan.context_diff.directly_modified(self.snapshot_table_info.name)
+
+    @property
+    def is_indirectly_modified(self) -> bool:
+        return self.plan.context_diff.indirectly_modified(self.snapshot_table_info.name)
+
+    @property
+    def is_modified(self) -> bool:
+        return self.is_directly_modified or self.is_indirectly_modified
+
+    @property
+    def is_metadata_updated(self) -> bool:
+        return self.plan.context_diff.metadata_updated(self.snapshot_table_info.name)
+
+    @property
+    def is_incremental(self) -> bool:
+        return self.snapshot_table_info.is_incremental
+
+    @property
+    def modification_type(self) -> str:
+        if self.is_directly_modified:
+            return "Directly modified"
+        if self.is_indirectly_modified:
+            return "Indirectly modified"
+        if self.is_metadata_updated:
+            return "Metadata updated"
+
+        return "Unknown"
+
+    @property
+    def loaded_intervals(self) -> SnapshotIntervals:
+        if self.is_removed:
+            raise ValueError("Removed snapshots dont have loaded intervals available")
+
+        return SnapshotIntervals(
+            snapshot_id=self.snapshot_id,
+            intervals=(
+                self.snapshot.dev_intervals
+                if self.snapshot.is_forward_only
+                else self.snapshot.intervals
+            ),
+        )
+
+    @property
+    def loaded_intervals_rendered(self) -> str:
+        if self.is_removed:
+            return "REMOVED"
+
+        return self._format_intervals(self.loaded_intervals)
+
+    @property
+    def missing_intervals(self) -> t.Optional[SnapshotIntervals]:
+        return next(
+            (si for si in self.plan.missing_intervals if si.snapshot_id == self.snapshot_id),
+            None,
+        )
+
+    @property
+    def missing_intervals_formatted(self) -> str:
+        if not self.is_removed and (intervals := self.missing_intervals):
+            return self._format_intervals(intervals)
+
+        return "N/A"
+
+    @property
+    def as_markdown_list_item(self) -> str:
+        if self.is_removed:
+            return f"- `{self.display_name}` ({self.change_category})"
+
+        how_applied = ""
+
+        if not self.is_incremental:
+            from sqlmesh.core.console import _format_missing_intervals
+
+            # note: this is to re-use the '[recreate view]' and '[full refresh]' text and keep it in sync with updates to the CLI
+            # it doesnt actually use the passed intervals, those are handled differently
+            how_applied = _format_missing_intervals(self.snapshot, self.loaded_intervals)
+
+        how_applied_str = f" [{how_applied}]" if how_applied else ""
+
+        item = f"- `{self.display_name}` ({self.change_category})\n"
+
+        if self.snapshot_table_info.model_kind_name:
+            item += f"  **Kind:** {self.snapshot_table_info.model_kind_name}{how_applied_str}\n"
+
+        if self.is_incremental:
+            # in-depth interval info is only relevant for incremental models
+            item += f"  **Dates loaded in PR:** [{self.loaded_intervals_rendered}]\n"
+            if self.missing_intervals:
+                item += f"  **Dates *not* loaded in PR:** [{self.missing_intervals_formatted}]\n"
+
+        return item
+
+    def _format_intervals(self, intervals: SnapshotIntervals) -> str:
+        preview_modifier = " (**preview**)" if self.is_dev_preview else ""
+        return f"{intervals.format_intervals(self.snapshot.node.interval_unit)}{preview_modifier}"

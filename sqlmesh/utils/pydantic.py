@@ -16,6 +16,8 @@ from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
 
 if t.TYPE_CHECKING:
+    from sqlglot._typing import E
+
     Model = t.TypeVar("Model", bound="PydanticModel")
 
 
@@ -149,8 +151,7 @@ class PydanticModel(pydantic.BaseModel):
         if (PYDANTIC_MAJOR_VERSION, PYDANTIC_MINOR_VERSION) < (2, 6):
             if isinstance(other, pydantic.BaseModel):
                 return self.dict() == other.dict()
-            else:
-                return self.dict() == other
+            return self.dict() == other
         return super().__eq__(other)
 
     def __hash__(self) -> int:
@@ -194,6 +195,12 @@ def validate_string(v: t.Any) -> str:
     return str(v)
 
 
+def validate_expression(expression: E, dialect: str) -> E:
+    # this normalizes and quotes identifiers in the given expression according the specified dialect
+    # it also sets expression.meta["dialect"] so that when we serialize for state, the expression is serialized in the correct dialect
+    return _get_field(expression, {"dialect": dialect})  # type: ignore
+
+
 def bool_validator(v: t.Any) -> bool:
     if isinstance(v, exp.Boolean):
         return v.this
@@ -210,6 +217,21 @@ def positive_int_validator(v: t.Any) -> int:
     if v <= 0:
         raise ValueError(f"Invalid num {v}. Value must be a positive integer")
     return v
+
+
+def validation_error_message(error: pydantic.ValidationError, base: str) -> str:
+    errors = "\n  ".join(_formatted_validation_errors(error))
+    return f"{base}\n  {errors}"
+
+
+def _formatted_validation_errors(error: pydantic.ValidationError) -> t.List[str]:
+    result = []
+    for e in error.errors():
+        msg = e["msg"]
+        loc: t.Optional[t.Tuple] = e.get("loc")
+        loc_str = ".".join(loc) if loc else None
+        result.append(f"Invalid field '{loc_str}':\n    {msg}" if loc_str else msg)
+    return result
 
 
 def _get_field(
@@ -267,13 +289,13 @@ def column_validator(v: t.Any, values: t.Any) -> exp.Column:
     return expression
 
 
-def list_of_columns_or_star_validator(
+def list_of_fields_or_star_validator(
     v: t.Any, values: t.Any
-) -> t.Union[exp.Star, t.List[exp.Column]]:
+) -> t.Union[exp.Star, t.List[exp.Expression]]:
     expressions = _get_fields(v, values)
     if len(expressions) == 1 and isinstance(expressions[0], exp.Star):
         return t.cast(exp.Star, expressions[0])
-    return t.cast(t.List[exp.Column], expressions)
+    return t.cast(t.List[exp.Expression], expressions)
 
 
 def cron_validator(v: t.Any) -> str:
@@ -282,11 +304,32 @@ def cron_validator(v: t.Any) -> str:
 
     from croniter import CroniterBadCronError, croniter
 
+    if not isinstance(v, str):
+        raise ValueError(f"Invalid cron expression '{v}'. Value must be a string.")
+
     try:
         croniter(v)
     except CroniterBadCronError:
         raise ValueError(f"Invalid cron expression '{v}'")
     return v
+
+
+def get_concrete_types_from_typehint(typehint: type[t.Any]) -> set[type[t.Any]]:
+    concrete_types = set()
+    unpacked = t.get_origin(typehint)
+    if unpacked is None:
+        if type(typehint) == type(type):
+            return {typehint}
+    elif unpacked is t.Union:
+        for item in t.get_args(typehint):
+            if str(item).startswith("typing."):
+                concrete_types |= get_concrete_types_from_typehint(item)
+            else:
+                concrete_types.add(item)
+    else:
+        concrete_types.add(unpacked)
+
+    return concrete_types
 
 
 if t.TYPE_CHECKING:
@@ -296,7 +339,7 @@ if t.TYPE_CHECKING:
     SQLGlotPositiveInt = int
     SQLGlotColumn = exp.Column
     SQLGlotListOfFields = t.List[exp.Expression]
-    SQLGlotListOfColumnsOrStar = t.Union[t.List[exp.Column], exp.Star]
+    SQLGlotListOfFieldsOrStar = t.Union[SQLGlotListOfFields, exp.Star]
     SQLGlotCron = str
 else:
     from pydantic.functional_validators import BeforeValidator
@@ -309,7 +352,7 @@ else:
     SQLGlotListOfFields = t.Annotated[
         t.List[exp.Expression], BeforeValidator(list_of_fields_validator)
     ]
-    SQLGlotListOfColumnsOrStar = t.Annotated[
-        t.Union[t.List[exp.Column], exp.Star], BeforeValidator(list_of_columns_or_star_validator)
+    SQLGlotListOfFieldsOrStar = t.Annotated[
+        t.Union[SQLGlotListOfFields, exp.Star], BeforeValidator(list_of_fields_or_star_validator)
     ]
     SQLGlotCron = t.Annotated[str, BeforeValidator(cron_validator)]

@@ -52,7 +52,7 @@ $ pip install tobiko-cloud-scheduler-facade[airflow]
 
 ### Connect Airflow to Tobiko Cloud
 
-First, provision an OAuth Client for Airflow to use by following the guide on how to [provision client credentials](../single_sign_on.md#provisioning-client-credentials).
+First, provision an OAuth Client for Airflow to use by following the guide on how to [provision client credentials](../security/single_sign_on.md#provisioning-client-credentials).
 
 After provisioning the credentials, you can obtain the `Client ID` and `Client Secret` values for Airflow to use to connect to Tobiko Cloud.
 

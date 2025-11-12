@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, Depends, Request, Response
 from starlette.status import HTTP_204_NO_CONTENT
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import make_inclusive, to_ds
@@ -132,7 +133,7 @@ def _get_plan_changes(context: Context, plan: Plan) -> models.PlanChanges:
 def _get_plan_backfills(context: Context, plan: Plan) -> t.Dict[str, t.Any]:
     """Get plan backfills"""
     merged_intervals = context.scheduler().merged_missing_intervals()
-    batches = context.scheduler().batch_intervals(merged_intervals)
+    batches = context.scheduler().batch_intervals(merged_intervals, None, EnvironmentNamingInfo())
     tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
     snapshots = plan.context_diff.snapshots
     default_catalog = context.default_catalog

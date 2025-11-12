@@ -97,12 +97,12 @@ First, open a terminal within your terminal/IDE (ex: VSCode). Then follow the fo
 
     > Note: your Tobiko Solutions Architect will provide you a pinned version of `tcloud`
 
-3. Create a Python virtual environment in the project directory and install `tcloud` (example is using [uv](https://docs.astral.sh/uv/pip/environments/#creating-a-virtual-environment)):
+3. Create a Python virtual environment in the project directory and install `tcloud`. The following demonstrates how to do this using [uv](https://docs.astral.sh/uv/pip/environments/#creating-a-virtual-environment) ([installation instructions](#prerequisites)):
 
     ```bash linenums="1"
     uv venv --python 3.12 --seed  # create a virtual environment inside the project directory
     source .venv/bin/activate # activate the virtual environment
-    pip install -r requirements.txt # install the tcloud CLI
+    uv pip install -r requirements.txt # install the tcloud CLI
     which tcloud # verify the tcloud CLI is installed in the venv in the path above
     ```
 
@@ -139,10 +139,11 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
 
     ```yaml
     projects:
-        public-demo: # TODO: update this for the project name in the URL
-            url: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/ # TODO: update for your unique URL
-            gateway: tobiko_cloud
-            extras: bigquery,web,github  # TODO: update bigquery for your data warehouse
+      public-demo: # TODO: update this for the project name in the URL
+        url: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/ # TODO: update for your unique URL
+        gateway: tobiko_cloud
+        extras: bigquery,web,github  # TODO: update bigquery for your data warehouse
+        pip_executable: uv pip
     default_project: public-demo # TODO: update this for the project name in the URL
     ```
 
@@ -267,9 +268,6 @@ Models needing backfill (missing dates):
 ├── sqlmesh_example.incremental_model: 2020-01-01 - 2024-11-24
 └── sqlmesh_example.seed_model: 2024-11-24 - 2024-11-24
 Apply - Backfill Tables [y/n]: y
-Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
-
-All model versions have been created successfully
 
 [1/1] sqlmesh_example.seed_model evaluated in 0.00s
 [1/1] sqlmesh_example.incremental_model evaluated in 0.01s

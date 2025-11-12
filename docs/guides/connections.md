@@ -2,8 +2,6 @@
 
 ## Overview
 
-**Note:** The following guide only applies when using the built-in scheduler. Connections are configured differently when using an external scheduler such as Airflow. See the [Scheduling guide](scheduling.md) for more details.
-
 In order to deploy models and to apply changes to them, you must configure a connection to your Data Warehouse and, optionally, connection to the database where the SQLMesh state is stored. This can be done in either the `config.yaml` file in your project folder, or the one in `~/.sqlmesh`.
 
 Each connection is configured as part of a gateway which has a unique name associated with it. The gateway name can be used to select a specific combination of connection settings  when using the CLI. For example:
@@ -23,7 +21,7 @@ sqlmesh --gateway local_db plan
 
 ## State connection
 
-By default, the data warehouse connection is also used to store the SQLMesh state, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers, the state connection defaults to the scheduler's database.
+By default, the data warehouse connection is also used to store the SQLMesh state.
 
 The state connection can be changed by providing different connection settings in the `state_connection` key of the gateway configuration:
 

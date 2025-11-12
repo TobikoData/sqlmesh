@@ -1,46 +1,45 @@
-import logging
-from contextlib import contextmanager
+import json
+import os
+import pytest
+import string
+import time_machine
 from os import getcwd, path, remove
 from pathlib import Path
 from shutil import rmtree
-from click import ClickException
-import pytest
-from click.testing import CliRunner
-import time_machine
-import json
+from unittest.mock import MagicMock
 
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from click import ClickException
+from click.testing import CliRunner
+from sqlmesh import RuntimeEnv
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
 from sqlmesh.utils.date import now_ds, time_like_to_str, timedelta, to_datetime, yesterday_ds
+from sqlmesh.core.config.connection import DIALECT_TO_TYPE
 
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
 pytestmark = pytest.mark.slow
 
 
+@pytest.fixture(autouse=True)
+def mock_runtime_env(monkeypatch):
+    monkeypatch.setattr("sqlmesh.RuntimeEnv.get", MagicMock(return_value=RuntimeEnv.TERMINAL))
+
+
 @pytest.fixture(scope="session")
 def runner() -> CliRunner:
-    return CliRunner()
+    return CliRunner(env={"COLUMNS": "80"})
 
 
-@contextmanager
-def disable_logging():
-    logging.disable(logging.CRITICAL)
-    try:
-        yield
-    finally:
-        logging.disable(logging.NOTSET)
-
-
-def create_example_project(temp_dir) -> None:
+def create_example_project(temp_dir, template=ProjectTemplate.DEFAULT) -> None:
     """
     Sets up CLI tests requiring a real SQLMesh project by:
         - Creating the SQLMesh example project in the temp_dir directory
         - Overwriting the config.yaml file so the duckdb database file will be created in the temp_dir directory
     """
-    init_example_project(temp_dir, "duckdb")
+    init_example_project(temp_dir, engine_type="duckdb", template=template)
     with open(temp_dir / "config.yaml", "w", encoding="utf-8") as f:
         f.write(
             f"""gateways:
@@ -129,10 +128,6 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
     ) in result.output
 
 
-def assert_physical_layer_updated(result) -> None:
-    assert "Physical layer updated" in result.output
-
-
 def assert_model_batches_executed(result) -> None:
     assert "Model batches executed" in result.output
 
@@ -142,7 +137,6 @@ def assert_virtual_layer_updated(result) -> None:
 
 
 def assert_backfill_success(result) -> None:
-    assert_physical_layer_updated(result)
     assert_model_batches_executed(result)
     assert_virtual_layer_updated(result)
 
@@ -152,10 +146,6 @@ def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
     assert_duckdb_test(result)
     assert_new_env(result, new_env, from_env)
     assert_backfill_success(result)
-
-
-def assert_virtual_update(result) -> None:
-    assert "Virtual Update executed" in result.output
 
 
 def test_version(runner, tmp_path):
@@ -173,6 +163,7 @@ def test_plan_no_config(runner, tmp_path):
     assert "Error: SQLMesh project config could not be found" in result.output
 
 
+@time_machine.travel(FREEZE_TIME)
 def test_plan(runner, tmp_path):
     create_example_project(tmp_path)
 
@@ -183,6 +174,9 @@ def test_plan(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan"], input="y\n"
     )
     assert_plan_success(result)
+    # 'Models needing backfill' section and eval progress bar should display the same inclusive intervals
+    assert "sqlmesh_example.incremental_model: [2020-01-01 - 2022-12-31]" in result.output
+    assert "sqlmesh_example.incremental_model   [insert 2020-01-01 - 2022-12-31]" in result.output
 
 
 def test_plan_skip_tests(runner, tmp_path):
@@ -242,10 +236,10 @@ def test_plan_restate_model(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_duckdb_test(result)
-    assert "No changes to plan: project files match the `prod` environment" in result.output
-    assert "sqlmesh_example.full_model                           [full refresh" in result.output
+    assert "Models selected for restatement" in result.output
+    assert "sqlmesh_example.full_model   [full refresh" in result.output
     assert_model_batches_executed(result)
-    assert_virtual_layer_updated(result)
+    assert "Virtual layer updated" not in result.output
 
 
 @pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
@@ -255,10 +249,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
     # plan for `prod` errors if `--skip-backfill` is passed without --no-gaps
     result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", flag])
     assert result.exit_code == 1
-    assert (
-        "Error: When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
-        in result.output
-    )
+    assert "Skipping the backfill stage for production can lead to unexpected" in result.output
 
     # plan executes virtual update without executing model batches
     # Input: `y` to perform virtual update
@@ -268,7 +259,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
         input="y\n",
     )
     assert result.exit_code == 0
-    assert_virtual_update(result)
+    assert_virtual_layer_updated(result)
     assert "Model batches executed" not in result.output
 
 
@@ -294,8 +285,23 @@ def test_plan_verbose(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
     )
     assert_plan_success(result)
-    assert "sqlmesh_example.seed_model                           created" in result.output
-    assert "sqlmesh_example.seed_model                           promoted" in result.output
+    assert "sqlmesh_example.seed_model         created" in result.output
+    assert "sqlmesh_example.full_model         created" in result.output
+
+    # confirm virtual layer action labels correct
+    update_incremental_model(tmp_path)
+    import os
+
+    os.remove(tmp_path / "models" / "full_model.sql")
+
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
+    )
+    assert result.exit_code == 0
+    assert_backfill_success(result)
+    assert "sqlmesh_example.incremental_model  updated" in result.output
+    assert "sqlmesh_example.full_model         dropped" in result.output
 
 
 def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
@@ -397,8 +403,9 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev", initialize=False)
+    assert "SKIP: No physical layer updates to perform" in result.output
+    assert "SKIP: No model batches to execute" in result.output
     assert_virtual_layer_updated(result)
-    assert_virtual_update(result)
 
 
 def test_plan_dev_create_from(runner, tmp_path):
@@ -535,7 +542,56 @@ def test_plan_dev_no_changes(runner, tmp_path):
     assert result.exit_code == 0
     assert_new_env(result, "dev", initialize=False)
     assert_virtual_layer_updated(result)
-    assert_virtual_update(result)
+
+
+def test_plan_dev_longnames(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    long_model_names = {
+        "full": f"full_{'a' * 80}",
+        "incremental": f"incremental_{'b' * 80}",
+        "seed": f"seed_{'c' * 80}",
+    }
+    for model_name in long_model_names:
+        with open(tmp_path / "models" / f"{model_name}_model.sql", "r") as f:
+            model_text = f.read()
+            for more_model_names in long_model_names:
+                model_text = model_text.replace(
+                    f"sqlmesh_example.{more_model_names}_model",
+                    f"sqlmesh_example.{long_model_names[more_model_names]}_model",
+                )
+        with open(tmp_path / "models" / f"{model_name}_model.sql", "w") as f:
+            f.write(model_text)
+
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev_butamuchlongerenvironmentname",
+            "--skip-tests",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+    assert (
+        "sqlmesh_example__dev_butamuchlongerenvironmentname.seed_cccccccccccccccccccccccc\ncccccccccccccccccccccccccccccccccccccccccccccccccccccccc_model          [insert \nseed file]"
+        in result.output
+    )
+    assert (
+        "sqlmesh_example__dev_butamuchlongerenvironmentname.incremental_bbbbbbbbbbbbbbbbb\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_model   [insert "
+        in result.output
+    )
+    assert (
+        "sqlmesh_example__dev_butamuchlongerenvironmentname.full_aaaaaaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_model          [full \nrefresh"
+        in result.output
+    )
+    assert_backfill_success(result)
 
 
 def test_plan_nonbreaking(runner, tmp_path):
@@ -553,8 +609,8 @@ def test_plan_nonbreaking(runner, tmp_path):
     assert "+  'a' AS new_col" in result.output
     assert "Directly Modified: sqlmesh_example.incremental_model (Non-breaking)" in result.output
     assert "sqlmesh_example.full_model (Indirect Non-breaking)" in result.output
-    assert "sqlmesh_example.incremental_model                    [insert" in result.output
-    assert "sqlmesh_example.full_model evaluated [full refresh" not in result.output
+    assert "sqlmesh_example.incremental_model   [insert" in result.output
+    assert "sqlmesh_example.full_model   [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -611,8 +667,8 @@ def test_plan_breaking(runner, tmp_path):
     assert result.exit_code == 0
     assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example.full_model (Breaking)" in result.output
-    assert "sqlmesh_example.full_model                           [full refresh" in result.output
-    assert "sqlmesh_example.incremental_model                     [insert" not in result.output
+    assert "sqlmesh_example.full_model   [full refresh" in result.output
+    assert "sqlmesh_example.incremental_model   [insert" not in result.output
     assert_backfill_success(result)
 
 
@@ -650,8 +706,8 @@ def test_plan_dev_select(runner, tmp_path):
     assert "+  item_id + 1 AS item_id," not in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" not in result.output
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
-    assert "sqlmesh_example__dev.full_model                    [full refresh" not in result.output
+    assert "sqlmesh_example__dev.incremental_model   [insert" in result.output
+    assert "sqlmesh_example__dev.full_model   [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -689,8 +745,8 @@ def test_plan_dev_backfill(runner, tmp_path):
         "Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)" in result.output
     )
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
-    assert "sqlmesh_example__dev.full_model                      [full refresh" not in result.output
+    assert "sqlmesh_example__dev.incremental_model   [insert" in result.output
+    assert "sqlmesh_example__dev.full_model   [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -728,8 +784,7 @@ def test_run_cron_not_elapsed(runner, tmp_path, caplog):
     init_prod_and_backfill(runner, tmp_path)
 
     # No error if `prod` environment exists and cron has not elapsed
-    with disable_logging():
-        result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
+    result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
     assert result.exit_code == 0
 
     assert (
@@ -776,18 +831,17 @@ def test_table_name(runner, tmp_path):
     # Create and backfill `prod` environment
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)
-    with disable_logging():
-        result = runner.invoke(
-            cli,
-            [
-                "--log-file-dir",
-                tmp_path,
-                "--paths",
-                tmp_path,
-                "table_name",
-                "sqlmesh_example.full_model",
-            ],
-        )
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "table_name",
+            "sqlmesh_example.full_model",
+        ],
+    )
     assert result.exit_code == 0
     assert result.output.startswith("db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__")
 
@@ -805,7 +859,6 @@ def test_info_on_new_project_does_not_create_state_sync(runner, tmp_path):
     assert not context.engine_adapter.table_exists("sqlmesh._snapshots")
     assert not context.engine_adapter.table_exists("sqlmesh._environments")
     assert not context.engine_adapter.table_exists("sqlmesh._intervals")
-    assert not context.engine_adapter.table_exists("sqlmesh._plan_dags")
     assert not context.engine_adapter.table_exists("sqlmesh._versions")
 
 
@@ -813,7 +866,7 @@ def test_dlt_pipeline_errors(runner, tmp_path):
     # Error if no pipeline is provided
     result = runner.invoke(cli, ["--paths", tmp_path, "init", "-t", "dlt", "duckdb"])
     assert (
-        "Error: DLT pipeline is a required argument to generate a SQLMesh project from DLT"
+        "Error: Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT"
         in result.output
     )
 
@@ -841,7 +894,9 @@ def test_dlt_filesystem_pipeline(tmp_path):
     info = filesystem_pipeline.run([{"item_id": 1}], table_name="equipment")
     assert not info.has_failed_jobs
 
-    init_example_project(tmp_path, "athena", ProjectTemplate.DLT, "filesystem_pipeline")
+    init_example_project(
+        tmp_path, "athena", template=ProjectTemplate.DLT, pipeline="filesystem_pipeline"
+    )
 
     # Validate generated sqlmesh config and models
     config_path = tmp_path / "config.yaml"
@@ -876,17 +931,20 @@ WHERE
     assert incremental_model == expected_incremental_model
 
     expected_config = (
+        "# --- Gateway Connection ---\n"
         "gateways:\n"
         "  athena:\n"
         "    connection:\n"
         "      # For more information on configuring the connection to your execution engine, visit:\n"
-        "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
+        "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connection\n"
         "      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/athena/#connection-options\n"
         "      type: athena\n"
         "      # concurrent_tasks: 4\n"
         "      # register_comments: False\n"
         "      # pre_ping: False\n"
         "      # pretty_sql: False\n"
+        "      # schema_differ_overrides: \n"
+        "      # catalog_type_overrides: \n"
         "      # aws_access_key_id: \n"
         "      # aws_secret_access_key: \n"
         "      # role_arn: \n"
@@ -896,11 +954,23 @@ WHERE
         "      # s3_staging_dir: \n"
         "      # schema_name: \n"
         "      # catalog_name: \n"
-        "      # s3_warehouse_location: \n\n\n"
+        "      # s3_warehouse_location: \n\n"
         "default_gateway: athena\n\n"
+        "# --- Model Defaults ---\n"
+        "# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults\n\n"
         "model_defaults:\n"
         "  dialect: athena\n"
-        f"  start: {yesterday_ds()}\n"
+        f"  start: {yesterday_ds()} # Start date for backfill history\n"
+        "  cron: '@daily'    # Run models daily at 12am UTC (can override per model)\n\n"
+        "# --- Linting Rules ---\n"
+        "# Enforce standards for your team\n"
+        "# https://sqlmesh.readthedocs.io/en/stable/guides/linter/\n\n"
+        "linter:\n"
+        "  enabled: true\n"
+        "  rules:\n"
+        "    - ambiguousorinvalidcolumn\n"
+        "    - invalidselectstarexpansion\n"
+        "    - noambiguousprojections\n"
     )
 
     with open(config_path) as file:
@@ -913,7 +983,7 @@ WHERE
 
 
 @time_machine.travel(FREEZE_TIME)
-def test_plan_dlt(runner, tmp_path):
+def test_dlt_pipeline(runner, tmp_path):
     from dlt.common.pipeline import get_dlt_pipelines_dir
 
     root_dir = path.abspath(getcwd())
@@ -929,24 +999,45 @@ def test_plan_dlt(runner, tmp_path):
     # This should fail since it won't be able to locate the pipeline in this path
     with pytest.raises(ClickException, match=r".*Could not attach to pipeline*"):
         init_example_project(
-            tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path="./dlt2/pipelines"
+            tmp_path,
+            "duckdb",
+            template=ProjectTemplate.DLT,
+            pipeline="sushi",
+            dlt_path="./dlt2/pipelines",
         )
 
     # By setting the pipelines path where the pipeline directory is located, it should work
     dlt_path = get_dlt_pipelines_dir()
-    init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path=dlt_path)
+    init_example_project(
+        tmp_path, "duckdb", template=ProjectTemplate.DLT, pipeline="sushi", dlt_path=dlt_path
+    )
 
-    expected_config = f"""gateways:
+    expected_config = f"""# --- Gateway Connection ---
+gateways:
   duckdb:
     connection:
       type: duckdb
       database: {dataset_path}
-
 default_gateway: duckdb
+
+# --- Model Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
   dialect: duckdb
-  start: {yesterday_ds()}
+  start: {yesterday_ds()} # Start date for backfill history
+  cron: '@daily'    # Run models daily at 12am UTC (can override per model)
+
+# --- Linting Rules ---
+# Enforce standards for your team
+# https://sqlmesh.readthedocs.io/en/stable/guides/linter/
+
+linter:
+  enabled: true
+  rules:
+    - ambiguousorinvalidcolumn
+    - invalidselectstarexpansion
+    - noambiguousprojections
 """
 
     with open(tmp_path / "config.yaml") as file:
@@ -1093,30 +1184,6 @@ WHERE
         assert dlt_sushi_twice_nested_model_path.exists()
     finally:
         remove(dataset_path)
-
-
-@time_machine.travel(FREEZE_TIME)
-def test_init_project_dialects(tmp_path):
-    dialect_to_config = {
-        "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n      # enable_merge: ",
-        "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # impersonated_service_account: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
-        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # host: \n      # port: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
-        "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: False\n      # force_databricks_connect: False\n      # disable_databricks_connect: False\n      # disable_spark_session: False",
-        "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: False\n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: \n      # application_name: ",
-    }
-
-    for dialect, expected_config in dialect_to_config.items():
-        init_example_project(tmp_path, dialect=dialect)
-
-        config_start = f"gateways:\n  {dialect}:\n    connection:\n      # For more information on configuring the connection to your execution engine, visit:\n      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{dialect}/#connection-options\n      type: {dialect}\n      "
-        config_end = f"\n\n\ndefault_gateway: {dialect}\n\nmodel_defaults:\n  dialect: {dialect}\n  start: {yesterday_ds()}\n"
-
-        with open(tmp_path / "config.yaml") as file:
-            config = file.read()
-
-            assert config == f"{config_start}{expected_config}{config_end}"
-
-            remove(tmp_path / "config.yaml")
 
 
 @time_machine.travel(FREEZE_TIME)
@@ -1268,8 +1335,6 @@ def test_state_export(runner: CliRunner, tmp_path: Path) -> None:
         catch_exceptions=False,
     )
     assert result.exit_code == 0
-
-    # verify output
     assert "Gateway: local" in result.output
     assert "Type: duckdb" in result.output
     assert "Exporting versions" in result.output
@@ -1616,22 +1681,561 @@ def test_state_import_local(runner: CliRunner, tmp_path: Path) -> None:
     assert "Aborting" in result.output
 
 
-def test_dbt_init(tmp_path):
-    # The dbt init project doesn't require a dialect
-    init_example_project(tmp_path, dialect=None, template=ProjectTemplate.DBT)
+def test_ignore_warnings(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
 
-    config_path = tmp_path / "config.py"
+    # Add non-blocking audit to generate WARNING
+    with open(tmp_path / "models" / "full_model.sql", "w", encoding="utf-8") as f:
+        f.write("""
+MODEL (
+  name sqlmesh_example.full_model,
+  kind FULL,
+  cron '@daily',
+  grain item_id,
+  audits (full_nonblocking_audit),
+);
+
+SELECT
+  item_id,
+  COUNT(DISTINCT id) AS num_orders,
+FROM
+  sqlmesh_example.incremental_model
+GROUP BY item_id;
+
+AUDIT (
+    name full_nonblocking_audit,
+    blocking false,
+);
+select 1 as a;
+""")
+
+    audit_warning = "[WARNING] sqlmesh_example.full_model: 'full_nonblocking_audit' audit error: "
+
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "plan", "--no-prompts", "--auto-apply", "--skip-tests"],
+    )
+    assert result.exit_code == 0
+    assert audit_warning in result.output
+
+    result = runner.invoke(
+        cli,
+        [
+            "--ignore-warnings",
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+            "--skip-tests",
+        ],
+    )
+    assert result.exit_code == 0
+    assert audit_warning not in result.output
+
+
+def test_table_diff_schema_diff_ignore_case(runner: CliRunner, tmp_path: Path):
+    from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
+
+    create_example_project(tmp_path)
+
+    ctx = Context(paths=tmp_path)
+    assert isinstance(ctx.engine_adapter, DuckDBEngineAdapter)
+
+    ctx.engine_adapter.execute('create table t1 (id int, "naME" varchar)')
+    ctx.engine_adapter.execute('create table t2 (id int, "name" varchar)')
+
+    # default behavior (case sensitive)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "table_diff", "t1:t2", "-o", "id"],
+    )
+    assert result.exit_code == 0
+    stripped_output = "".join((x for x in result.output if x in string.printable))
+    assert "Added Columns:\n    name (TEXT)" in stripped_output
+    assert "Removed Columns:\n     naME (TEXT)" in stripped_output
+
+    # ignore case
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "table_diff", "t1:t2", "-o", "id", "--schema-diff-ignore-case"],
+    )
+    assert result.exit_code == 0
+    stripped_output = "".join((x for x in result.output if x in string.printable))
+    assert "Schema Diff Between 'T1' and 'T2':\n Schemas match" in stripped_output
+
+
+# passing an invalid engine_type errors
+def test_init_bad_engine_type(runner: CliRunner, tmp_path: Path):
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "invalid"],
+    )
+    assert result.exit_code == 1
+    assert "Invalid engine 'invalid'. Please specify one of " in result.output
+
+
+# passing an invalid template errors
+def test_init_bad_template(runner: CliRunner, tmp_path: Path):
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "invalid_template"],
+    )
+    assert result.exit_code == 1
+    assert "Invalid project template 'invalid_template'. Please specify one of " in result.output
+
+
+# empty template should not produce example project files
+def test_init_empty_template(runner: CliRunner, tmp_path: Path):
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "duckdb", "-t", "empty"],
+    )
+    assert result.exit_code == 0
+
+    # Directories should exist, but example project files should not.
+    assert (tmp_path / "models").exists()
+    assert not (tmp_path / "models" / "full_model.sql").exists()
+    assert not (tmp_path / "models" / "incremental_model.sql").exists()
+    assert not (tmp_path / "seeds" / "seed_data.csv").exists()
+
+
+# interactive init begins when no engine_type is provided and template is not dbt
+def test_init_interactive_start(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert "Choose your SQL engine" in result.output
+
+    # dbt template passed, so no interactive
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "dbt"],
+    )
+    assert "Choose your SQL engine" not in result.output
+
+
+# passing an invalid integer response displays error
+def test_init_interactive_invalid_int(runner: CliRunner, tmp_path: Path):
+    # First response is invalid (0) followed by valid selections.
+    # Input: 0 (invalid), 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="0\n1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert (
+        "'0' is not a valid project type number - please enter a number between 1" in result.output
+    )
+
+
+# interactive init template step should not appear if a template is passed
+def test_init_interactive_template_passed(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "empty"],
+        input="1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert "What type of project do you want to set up?" not in result.output
+
+
+def test_init_interactive_cli_mode_default(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+
+    config_path = tmp_path / "config.yaml"
+    assert config_path.exists()
+    assert "no_diff: true" not in config_path.read_text()
+
+
+def test_init_interactive_cli_mode_simple(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 2 (SIMPLE CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n2\n",
+    )
+    assert result.exit_code == 0
+
+    config_path = tmp_path / "config.yaml"
+    assert config_path.exists()
+    assert "no_diff: true" in config_path.read_text()
+
+
+def test_init_interactive_engine_install_msg(runner: CliRunner, tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("sqlmesh.utils.rich.console.width", 80)
+
+    # Engine install text should not appear for built-in engines like DuckDB
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert "Run command in CLI to install your SQL engine" not in result.output
+
+    remove(tmp_path / "config.yaml")
+
+    # Input: 1 (DEFAULT template), 13 (gcp postgres engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n13\n1\n",
+    )
+    assert result.exit_code == 0
+    assert (
+        'Run command in CLI to install your SQL engine\'s Python dependencies: pip \ninstall "sqlmesh[gcppostgres]"'
+        in result.output
+    )
+
+
+# dbt template without dbt_project.yml in directory should error
+def test_init_dbt_template_no_dbt_project(runner: CliRunner, tmp_path: Path):
+    # template passed to init
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "dbt"],
+    )
+    assert result.exit_code == 1
+    assert (
+        "Required dbt project file 'dbt_project.yml' not found in the current directory."
+        in result.output
+    )
+
+    # interactive init
+    # Input: 2 (dbt template)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="2\n",
+    )
+    assert result.exit_code == 1
+    assert (
+        "Required dbt project file 'dbt_project.yml' not found in the current directory."
+        in result.output
+    )
+
+
+def test_init_dbt_template(runner: CliRunner, tmp_path: Path):
+    Path(tmp_path / "dbt_project.yml").touch()
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="2\n",
+    )
+    assert result.exit_code == 0
+
+    config_path = tmp_path / "sqlmesh.yaml"
     assert config_path.exists()
 
-    with open(config_path) as file:
-        config = file.read()
+    config = config_path.read_text()
 
-    assert (
-        config
-        == """from pathlib import Path
+    assert "model_defaults" in config
+    assert "start:" in config
 
-from sqlmesh.dbt.loader import sqlmesh_config
 
-config = sqlmesh_config(Path(__file__).parent)
+@time_machine.travel(FREEZE_TIME)
+def test_init_project_engine_configs(tmp_path):
+    engine_type_to_config = {
+        "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # schema_differ_overrides: \n      # catalog_type_overrides: \n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n      # enable_merge: ",
+        "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # schema_differ_overrides: \n      # catalog_type_overrides: \n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # impersonated_service_account: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
+        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # schema_differ_overrides: \n      # catalog_type_overrides: \n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # host: \n      # port: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
+        "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # schema_differ_overrides: \n      # catalog_type_overrides: \n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: False\n      # force_databricks_connect: False\n      # disable_databricks_connect: False\n      # disable_spark_session: False",
+        "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: False\n      # schema_differ_overrides: \n      # catalog_type_overrides: \n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: \n      # application_name: ",
+    }
+
+    for engine_type, expected_config in engine_type_to_config.items():
+        init_example_project(tmp_path, engine_type=engine_type)
+
+        config_start = f"# --- Gateway Connection ---\ngateways:\n  {engine_type}:\n    connection:\n      # For more information on configuring the connection to your execution engine, visit:\n      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connection\n      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{engine_type}/#connection-options\n      type: {engine_type}\n      "
+        config_end = f"""
+
+default_gateway: {engine_type}
+
+# --- Model Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
+
+model_defaults:
+  dialect: {DIALECT_TO_TYPE.get(engine_type)}
+  start: {yesterday_ds()} # Start date for backfill history
+  cron: '@daily'    # Run models daily at 12am UTC (can override per model)
+
+# --- Linting Rules ---
+# Enforce standards for your team
+# https://sqlmesh.readthedocs.io/en/stable/guides/linter/
+
+linter:
+  enabled: true
+  rules:
+    - ambiguousorinvalidcolumn
+    - invalidselectstarexpansion
+    - noambiguousprojections
+"""
+
+        with open(tmp_path / "config.yaml") as file:
+            config = file.read()
+
+            assert config == f"{config_start}{expected_config}{config_end}"
+
+            remove(tmp_path / "config.yaml")
+
+
+def test_render(runner: CliRunner, tmp_path: Path):
+    create_example_project(tmp_path)
+
+    ctx = Context(paths=tmp_path)
+
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "render",
+            "sqlmesh_example.full_model",
+            "--max-text-width",
+            "10",
+        ],
+    )
+    assert result.exit_code == 0
+
+    cleaned_output = "\n".join(l.rstrip(" ") for l in result.output.split("\n"))
+    expected = """SELECT
+  "incremental_model"."item_id" AS "item_id",
+  COUNT(
+    DISTINCT "incremental_model"."id"
+  ) AS "num_orders"
+FROM "db"."sqlmesh_example"."incremental_model" AS "incremental_model"
+GROUP BY
+  "incremental_model"."item_id"
+"""
+
+    assert expected in cleaned_output
+
+
+@time_machine.travel(FREEZE_TIME)
+def test_signals(runner: CliRunner, tmp_path: Path):
+    create_example_project(tmp_path, template=ProjectTemplate.EMPTY)
+
+    # Create signals module
+    signals_dir = tmp_path / "signals"
+    signals_dir.mkdir(exist_ok=True)
+
+    # Create signal definitions
+    (signals_dir / "signal.py").write_text(
+        """from sqlmesh import signal
+@signal()
+def only_first_two_ready(batch):
+    if len(batch) > 2:
+        return batch[:2]
+    return batch
+
+@signal()
+def none_ready(batch):
+    return False
 """
     )
+
+    # Create model with signals
+    (tmp_path / "models" / "model_with_signals.sql").write_text(
+        """MODEL (
+  name sqlmesh_example.model_with_signals,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column ds
+  ),
+  start '2022-12-28',
+  cron '@daily',
+  signals [
+    only_first_two_ready()
+  ]
+);
+
+SELECT
+  ds::DATE as ds,
+  'test' as value
+FROM VALUES
+  ('2022-12-28'),
+  ('2022-12-29'),
+  ('2022-12-30'),
+  ('2022-12-31'),
+  ('2023-01-01')
+AS t(ds)
+WHERE ds::DATE BETWEEN @start_ds AND @end_ds
+"""
+    )
+
+    # Create model with no ready intervals
+    (tmp_path / "models" / "model_with_unready.sql").write_text(
+        """MODEL (
+  name sqlmesh_example.model_with_unready,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column ds
+  ),
+  start '2022-12-28',
+  cron '@daily',
+  signals [
+    none_ready()
+  ]
+);
+
+SELECT
+  ds::DATE as ds,
+  'unready' as value
+FROM VALUES
+  ('2022-12-28'),
+  ('2022-12-29'),
+  ('2022-12-30'),
+  ('2022-12-31'),
+  ('2023-01-01')
+AS t(ds)
+WHERE ds::DATE BETWEEN @start_ds AND @end_ds
+"""
+    )
+
+    # Test 1: Normal plan flow with --no-prompts --auto-apply
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    assert "Checking signals for sqlmesh_example.model_with_signals" in result.output
+    assert "[1/1] only_first_two_ready" in result.output
+    assert "Check: 2022-12-28 - 2022-12-31" in result.output
+    assert "Some ready: 2022-12-28 - 2022-12-29" in result.output
+
+    assert "Checking signals for sqlmesh_example.model_with_unready" in result.output
+    assert "[1/1] none_ready" in result.output
+    assert "None ready: no intervals" in result.output
+
+    # Test 2: Run command with start and end dates
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "run",
+            "--start",
+            "2022-12-29",
+            "--end",
+            "2022-12-31",
+        ],
+    )
+    assert result.exit_code == 0
+
+    assert "Checking signals for sqlmesh_example.model_with_signals" in result.output
+    assert "[1/1] only_first_two_ready" in result.output
+    assert "Check: 2022-12-30 - 2022-12-31" in result.output
+    assert "All ready: 2022-12-30 - 2022-12-31" in result.output
+
+    assert "Checking signals for sqlmesh_example.model_with_unready" in result.output
+    assert "[1/1] none_ready" in result.output
+    assert "Check: 2022-12-29 - 2022-12-31" in result.output
+    assert "None ready: no intervals" in result.output
+
+    # Only one model was executed
+    assert "100.0% • 1/1 • 0:00:00" in result.output
+
+    rmtree(tmp_path)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    create_example_project(tmp_path)
+
+    # Example project models have start dates, so there are no date prompts
+    # for the `prod` environment.
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli, ["--log-file-dir", str(tmp_path), "--paths", str(tmp_path), "plan"], input="y\n"
+    )
+    assert_plan_success(result)
+
+    assert "Checking signals" not in result.output
+
+
+@pytest.mark.isolated
+@time_machine.travel(FREEZE_TIME)
+def test_format_leading_comma_default(runner: CliRunner, tmp_path: Path):
+    """Test that format command respects leading_comma environment variable."""
+    create_example_project(tmp_path, template=ProjectTemplate.EMPTY)
+
+    # Create a SQL file with trailing comma format
+    test_sql = tmp_path / "models" / "test_format.sql"
+    test_sql.write_text("""MODEL (
+  name sqlmesh_example.test_format,
+  kind FULL
+);
+
+SELECT
+  col1,
+  col2,
+  col3
+FROM table1""")
+
+    # Test 1: Default behavior (no env var set) - should not change the file
+    result = runner.invoke(cli, ["--paths", str(tmp_path), "format", "--check"])
+    assert result.exit_code == 0
+
+    # Test 2: Set env var to true - should require reformatting to leading comma
+    os.environ["SQLMESH__FORMAT__LEADING_COMMA"] = "true"
+    try:
+        result = runner.invoke(cli, ["--paths", str(tmp_path), "format", "--check"])
+        # Should exit with 1 because formatting is needed
+        assert result.exit_code == 1
+
+        # Actually format the file
+        result = runner.invoke(cli, ["--paths", str(tmp_path), "format"])
+        assert result.exit_code == 0
+
+        # Check that the file now has leading commas
+        formatted_content = test_sql.read_text()
+        assert ", col2" in formatted_content
+        assert ", col3" in formatted_content
+
+        # Now check should pass
+        result = runner.invoke(cli, ["--paths", str(tmp_path), "format", "--check"])
+        assert result.exit_code == 0
+    finally:
+        # Clean up env var
+        del os.environ["SQLMESH__FORMAT__LEADING_COMMA"]
+
+    # Test 3: Explicit command line flag overrides env var
+    os.environ["SQLMESH__FORMAT__LEADING_COMMA"] = "false"
+    try:
+        # Write file with leading commas
+        test_sql.write_text("""MODEL (
+  name sqlmesh_example.test_format,
+  kind FULL
+);
+
+SELECT
+  col1
+  , col2
+  , col3
+FROM table1""")
+
+        # Check with --leading-comma flag (should pass)
+        result = runner.invoke(
+            cli,
+            ["--paths", str(tmp_path), "format", "--check", "--leading-comma"],
+        )
+        assert result.exit_code == 0
+    finally:
+        del os.environ["SQLMESH__FORMAT__LEADING_COMMA"]

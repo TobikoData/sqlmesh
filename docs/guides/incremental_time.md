@@ -159,19 +159,49 @@ WHERE
 
 Alternatively, all the changes contained in a *specific plan* can be classified as forward-only with a flag: `sqlmesh plan --forward-only`. A subsequent plan that did not include the forward-only flag would fully refresh the model's physical table. Learn more about forward-only plans [here](../concepts/plans.md#forward-only-plans).
 
-### Destructive changes
+### Schema changes
 
-Some model changes destroy existing data in a table. Dropping a column from the model is the most direct cause, but changing a column's data type (such as casting a column from a `STRING` to `INTEGER`) can also require a drop. (Whether or not a specific change requires dropping a column may differ across SQL engines.)
+When SQLMesh processes forward-only changes to incremental models, it compares the model's new schema with the existing physical table schema to detect potential data loss or compatibility issues. SQLMesh categorizes schema changes into two types:
 
-Forward-only models are used to retain existing data. Before executing forward-only changes to incremental models, SQLMesh performs a check to determine if existing data will be destroyed.
+#### Destructive changes
 
-The check is performed at plan time based on the model definition. SQLMesh may not be able to resolve all of a model's column data types and complete the check, so the check is performed again at run time based on the physical tables underlying the model.
+Some model changes destroy existing data in a table. Examples include:
+
+- **Dropping a column** from the model
+- **Renaming a column**
+- **Modifying a column data type** in a ways that could cause data loss
+
+Whether a specific change is destructive may differ across SQL engines based on their schema evolution capabilities.
+
+#### Additive changes
+
+Additive changes are any changes to the table's columns that aren't categorized as destructive. A simple example would be adding a column to a table but another would be changing a column data type to a type that is compatible (ex: INT -> STRING).
+
+SQLMesh performs schema change detection at plan time based on the model definition. If SQLMesh cannot resolve all of a model's column data types at plan time, the check is performed again at run time based on the physical tables underlying the model.
 
 #### Changes to forward-only models
 
-A model's `on_destructive_change` [configuration setting](../reference/model_configuration.md#incremental-models) determines what happens when SQLMesh detects a destructive change.
+SQLMesh provides two configuration settings to control how schema changes are handled:
 
-By default, SQLMesh will error so no data is lost. You can set `on_destructive_change` to `warn` or `allow` in the model's `MODEL` block to allow destructive changes.
+- **`on_destructive_change`** - Controls behavior for destructive schema changes
+- **`on_additive_change`** - Controls behavior for additive schema changes
+
+##### Configuration options
+
+Both properties support four values:
+
+- **`error`** (default for `on_destructive_change`): Stop execution and raise an error
+- **`warn`**: Log a warning but proceed with the change
+- **`allow`** (default for `on_additive_change`): Silently proceed with the change
+- **`ignore`**: Skip the schema change check entirely for this change type
+
+!!! warning "Ignore is Dangerous"
+
+`ignore` is dangerous since it can result in error or data loss. It likely should never be used but could be useful as an "escape-hatch" or a way to workaround unexpected behavior.
+
+##### Destructive change handling
+
+The `on_destructive_change` [configuration setting](../reference/model_configuration.md#incremental-models) determines what happens when SQLMesh detects a destructive change. By default, SQLMesh will error so no data is lost.
 
 This example configures a model to silently `allow` destructive changes:
 
@@ -186,12 +216,93 @@ MODEL (
 );
 ```
 
-A default `on_destructive_change` value can be set for all incremental models that do not specify it themselves in the [model defaults configuration](../reference/model_configuration.md#model-defaults).
+##### Additive change handling
+
+The `on_additive_change` configuration setting determines what happens when SQLMesh detects an additive change like adding new columns. By default, SQLMesh allows these changes since they don't destroy existing data.
+
+This example configures a model to raise an error for additive changes (useful for strict schema control):
+
+``` sql linenums="1"
+MODEL (
+    name sqlmesh_example.new_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column model_time_column,
+        forward_only true,
+        on_additive_change error
+    ),
+);
+```
+
+##### Combining both settings
+
+You can configure both settings together to have fine-grained control over schema evolution:
+
+``` sql linenums="1"
+MODEL (
+    name sqlmesh_example.new_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column model_time_column,
+        forward_only true,
+        on_destructive_change warn,  -- Warn but allow destructive changes
+        on_additive_change allow     -- Silently allow new columns
+    ),
+);
+```
+
+##### Model defaults
+
+Default values for both `on_destructive_change` and `on_additive_change` can be set for all incremental models in the [model defaults configuration](../reference/model_configuration.md#model-defaults).
+
+##### Common use cases
+
+Here are some common patterns for configuring schema change handling:
+
+**Strict schema control** - Prevent any schema changes:
+```sql linenums="1"
+MODEL (
+    name sqlmesh_example.strict_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column event_date,
+        forward_only true,
+        on_destructive_change error,  -- Block destructive changes
+        on_additive_change error      -- Block even new columns
+    ),
+);
+```
+
+**Permissive development model** - Allow all schema changes:
+```sql linenums="1"
+MODEL (
+    name sqlmesh_example.dev_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column event_date,
+        forward_only true,
+        on_destructive_change allow,  -- Allow dropping columns
+        on_additive_change allow      -- Allow new columns (`allow` is the default value for this setting, so it can be omitted here)
+    ),
+);
+```
+
+**Production safety** - Allow safe changes, warn about risky ones:
+```sql linenums="1"
+MODEL (
+    name sqlmesh_example.production_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column event_date,
+        forward_only true,
+        on_destructive_change warn,   -- Warn about destructive changes
+        on_additive_change allow      -- Allow new columns (`allow` is the default value for this setting, so it can be omitted here)
+    ),
+);
+```
 
 #### Changes in forward-only plans
 
-The SQLMesh `plan` [`--forward-only` option](../concepts/plans.md#forward-only-plans) treats all the plan's model changes as forward-only. When this option is specified, SQLMesh will check all modified incremental models for destructive schema changes, not just models configured with `forward_only true`.
+The SQLMesh `plan` [`--forward-only` option](../concepts/plans.md#forward-only-plans) treats all the plan's model changes as forward-only. When this option is specified, SQLMesh will check all modified incremental models for both destructive and additive schema changes, not just models configured with `forward_only true`.
 
-SQLMesh determines what to do for each model based on this setting hierarchy: the model's `on_destructive_change` value (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`.
+SQLMesh determines what to do for each model based on this setting hierarchy:
 
-If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's [`--allow-destructive-change` selector](../concepts/plans.md#destructive-changes) to specify which models. Learn more about model selectors [here](../guides/model_selection.md).
+- **For destructive changes**: the model's `on_destructive_change` value (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`
+- **For additive changes**: the model's `on_additive_change` value (if present), the `on_additive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `allow`
+
+If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's [`--allow-destructive-model` selector](../concepts/plans.md#destructive-changes) to specify which models. Similarly, if you want to temporarily allow additive changes to models configured with `on_additive_change=error`, use the [`--allow-additive-model` selector](../concepts/plans.md#destructive-changes). Learn more about model selectors [here](../guides/model_selection.md).

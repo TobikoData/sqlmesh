@@ -6,10 +6,18 @@ from shutil import copytree
 import pytest
 from dbt.adapters.base import BaseRelation, Column
 from pytest_mock import MockerFixture
+
+from sqlglot import exp
+
+from sqlmesh import Context
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
-from sqlmesh.core.model.kind import OnDestructiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
+from sqlmesh.dbt.builtin import Api
+from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.loader import sqlmesh_config
@@ -35,10 +43,12 @@ from sqlmesh.dbt.target import (
     TrinoConfig,
     AthenaConfig,
     ClickhouseConfig,
+    SCHEMA_DIFFER_OVERRIDES,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.yaml import load as yaml_load
+from sqlmesh.utils.yaml import load as yaml_load, dump as yaml_dump
+from tests.dbt.conftest import EmptyProjectCreator
 
 pytestmark = pytest.mark.dbt
 
@@ -81,10 +91,12 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_to_sqlmesh_fields():
+def test_model_to_sqlmesh_fields(dbt_dummy_postgres_config: PostgresConfig):
     model_config = ModelConfig(
+        unique_id="model.package.name",
         name="name",
         package_name="package",
+        fqn=["package", "name"],
         alias="model",
         schema="custom",
         database="database",
@@ -96,7 +108,7 @@ def test_model_to_sqlmesh_fields():
         cluster_by=["a", '"b"'],
         incremental_predicates=[
             "55 > DBT_INTERNAL_SOURCE.b",
-            "DBT_INTERNAL_DEST.session_start > dateadd(day, -7, current_date)",
+            "DBT_INTERNAL_DEST.session_start > date_add(current_date, interval 7 day)",
         ],
         cron="@hourly",
         interval_unit="FIVE_MINUTE",
@@ -110,15 +122,17 @@ def test_model_to_sqlmesh_fields():
     )
     context = DbtContext()
     context.project_name = "Foo"
-    context.target = DuckDbConfig(name="target", schema="foo")
+    context.target = dbt_dummy_postgres_config
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
     assert model.name == "database.custom.model"
+    assert model.dbt_unique_id == "model.package.name"
+    assert model.dbt_fqn == "package.name"
     assert model.description == "test model"
     assert (
         model.render_query_or_raise().sql()
-        == 'SELECT 1 AS "a" FROM "memory"."foo"."table" AS "table"'
+        == 'SELECT 1 AS "a" FROM "dbname"."foo"."table" AS "table"'
     )
     assert model.start == "Jan 1 2023"
     assert [col.sql() for col in model.partitioned_by] == ['"a"']
@@ -126,16 +140,18 @@ def test_model_to_sqlmesh_fields():
     assert model.cron == "@hourly"
     assert model.interval_unit.value == "five_minute"
     assert model.stamp == "bar"
-    assert model.dialect == "duckdb"
+    assert model.dialect == "postgres"
     assert model.owner == "Sally"
     assert model.tags == ["test", "incremental"]
+    assert model.allow_partials
     kind = t.cast(IncrementalByUniqueKeyKind, model.kind)
     assert kind.batch_size == 5
     assert kind.lookback == 3
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
+    assert kind.on_additive_change == OnAdditiveChange.ALLOW
     assert (
-        kind.merge_filter.sql()
-        == "55 > __MERGE_SOURCE__.b AND __MERGE_TARGET__.session_start > DATEADD(day, -7, CURRENT_DATE)"
+        kind.merge_filter.sql(dialect=model.dialect)  # type: ignore
+        == """55 > "__MERGE_SOURCE__"."b" AND "__MERGE_TARGET__"."session_start" > CURRENT_DATE + INTERVAL '7'"""
     )
 
     model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)
@@ -145,7 +161,7 @@ def test_model_to_sqlmesh_fields():
         sqlmesh_config=Config(model_defaults=ModelDefaultsConfig(dialect="bigquery"))
     )
     bq_default_context.project_name = "Foo"
-    bq_default_context.target = DuckDbConfig(name="target", schema="foo")
+    bq_default_context.target = dbt_dummy_postgres_config
     model_config.cluster_by = ["a", "`b`"]
     model = model_config.to_sqlmesh(bq_default_context)
     assert model.dialect == "bigquery"
@@ -162,17 +178,22 @@ def test_model_to_sqlmesh_fields():
         start="Jan 1 2023",
         batch_size=5,
         batch_concurrency=2,
+        on_schema_change="ignore",
     )
     model = model_config.to_sqlmesh(context)
     assert isinstance(model.kind, IncrementalByTimeRangeKind)
     assert model.kind.batch_concurrency == 2
     assert model.kind.time_column.column.name == "ds"
+    assert model.kind.on_destructive_change == OnDestructiveChange.IGNORE
+    assert model.kind.on_additive_change == OnAdditiveChange.IGNORE
 
 
 def test_test_to_sqlmesh_fields():
     sql = "SELECT * FROM FOO WHERE cost > 100"
     test_config = TestConfig(
+        unique_id="test.test_package.foo_test",
         name="foo_test",
+        fqn=["test_package", "foo_test"],
         sql=sql,
         model_name="Foo",
         column_name="cost",
@@ -186,6 +207,8 @@ def test_test_to_sqlmesh_fields():
     audit = test_config.to_sqlmesh(context)
 
     assert audit.name == "foo_test"
+    assert audit.dbt_unique_id == "test.test_package.foo_test"
+    assert audit.dbt_fqn == "test_package.foo_test"
     assert audit.dialect == "duckdb"
     assert not audit.skip
     assert audit.blocking
@@ -224,7 +247,32 @@ def test_test_to_sqlmesh_fields():
     assert audit.dialect == "bigquery"
 
 
-def test_singular_test_to_standalone_audit():
+def test_test_config_canonical_name():
+    test_config_upper_case_package = TestConfig(
+        name="foo_test",
+        package_name="TEST_PACKAGE",
+        sql="SELECT 1",
+    )
+
+    assert test_config_upper_case_package.canonical_name == "test_package.foo_test"
+
+    test_config_mixed_case_package = TestConfig(
+        name="Bar_Test",
+        package_name="MixedCase_Package",
+        sql="SELECT 1",
+    )
+
+    assert test_config_mixed_case_package.canonical_name == "mixedcase_package.bar_test"
+
+    test_config_no_package = TestConfig(
+        name="foo_bar_test",
+        sql="SELECT 1",
+    )
+
+    assert test_config_no_package.canonical_name == "foo_bar_test"
+
+
+def test_singular_test_to_standalone_audit(dbt_dummy_postgres_config: PostgresConfig):
     sql = "SELECT * FROM FOO.BAR WHERE cost > 100"
     test_config = TestConfig(
         name="bar_test",
@@ -246,8 +294,8 @@ def test_singular_test_to_standalone_audit():
     context = DbtContext()
     context.add_models({model.name: model})
     context._project_name = "Foo"
-    context.target = DuckDbConfig(name="target", schema="foo")
-    standalone_audit = test_config.to_sqlmesh(context)
+    context.target = dbt_dummy_postgres_config
+    standalone_audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
 
     assert standalone_audit.name == "bar_test"
     assert standalone_audit.description == "test description"
@@ -255,51 +303,16 @@ def test_singular_test_to_standalone_audit():
     assert standalone_audit.stamp == "bump"
     assert standalone_audit.cron == "@monthly"
     assert standalone_audit.interval_unit.value == "day"
-    assert standalone_audit.dialect == "duckdb"
+    assert standalone_audit.dialect == "postgres"
     assert standalone_audit.query == jinja_query(sql)
-    assert standalone_audit.depends_on == {'"memory"."foo"."bar"'}
+    assert standalone_audit.depends_on == {'"dbname"."foo"."bar"'}
 
     test_config.dialect_ = "bigquery"
-    standalone_audit = test_config.to_sqlmesh(context)
+    standalone_audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert standalone_audit.dialect == "bigquery"
 
 
-def test_model_config_sql_no_config():
-    assert (
-        ModelConfig(
-            sql="""{{
-  config(
-    materialized='table',
-    incremental_strategy='delete+"insert'
-  )
-}}
-query"""
-        ).sql_no_config.strip()
-        == "query"
-    )
-
-    assert (
-        ModelConfig(
-            sql="""{{
-  config(
-    materialized='table',
-    incremental_strategy='delete+insert',
-    post_hook=" '{{ var('new') }}' "
-  )
-}}
-query"""
-        ).sql_no_config.strip()
-        == "query"
-    )
-
-    assert (
-        ModelConfig(
-            sql="""before {{config(materialized='table', post_hook=" {{ var('new') }} ")}} after"""
-        ).sql_no_config.strip()
-        == "before  after"
-    )
-
-
+@pytest.mark.slow
 def test_variables(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
@@ -337,7 +350,6 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"
-    model_config._sql_no_config = None
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
@@ -349,14 +361,14 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {
-        "start": "Jan 1 2022",
         "yet_another_var": 1,
-        "top_waiters:limit": 10,
+        "top_waiters:limit": "{{ get_top_waiters_limit() }}",
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
         "nested_vars": {
             "some_nested_var": 2,
         },
+        "dynamic_test_var": 3,
         "list_var": [
             {"name": "item1", "value": 1},
             {"name": "item2", "value": 2},
@@ -366,45 +378,61 @@ def test_variables(assert_exp_eq, sushi_test_project):
             "customers:customer_id": "customer_id",
             "some_var": ["foo", "bar"],
         },
+        "some_var": "should be overridden in customers package",
+        "invalid_var": "{{ ref('ref_without_closing_paren' }}",
     }
     expected_customer_variables = {
-        "some_var": ["foo", "bar"],
+        "some_var": ["foo", "bar"],  # Takes precedence over the root project variable
         "some_other_var": 5,
-        "yet_another_var": 1,
         "customers:bla": False,
         "customers:customer_id": "customer_id",
-        "start": "Jan 1 2022",
-        "top_waiters:limit": 10,
+        "yet_another_var": 1,  # Make sure that the project variable takes precedence
+        "top_waiters:limit": "{{ get_top_waiters_limit() }}",
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
         "nested_vars": {
             "some_nested_var": 2,
         },
+        "dynamic_test_var": 3,
         "list_var": [
             {"name": "item1", "value": 1},
             {"name": "item2", "value": 2},
         ],
-        "customers": {
-            "customers:bla": False,
-            "customers:customer_id": "customer_id",
-            "some_var": ["foo", "bar"],
-        },
+        "invalid_var": "{{ ref('ref_without_closing_paren' }}",
     }
-
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
     assert sushi_test_project.packages["customers"].variables == expected_customer_variables
 
 
+@pytest.mark.slow
+def test_variables_override(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context(
+        "tests/fixtures/dbt/sushi_test", config="test_config_with_var_override"
+    )
+    dbt_project = context._loaders[0]._load_projects()[0]  # type: ignore
+    assert dbt_project.packages["sushi"].variables["some_var"] == "overridden_from_config_py"
+    assert dbt_project.packages["customers"].variables["some_var"] == "overridden_from_config_py"
+
+
+@pytest.mark.slow
+def test_jinja_in_dbt_variables(sushi_test_dbt_context: Context):
+    assert sushi_test_dbt_context.render("sushi.top_waiters").sql().endswith("LIMIT 10")
+
+
+@pytest.mark.slow
 def test_nested_variables(sushi_test_project):
     model_config = ModelConfig(
         alias="sushi.test_nested",
         sql="SELECT {{ var('nested_vars')['some_nested_var'] }}",
         dependencies=Dependencies(variables=["nested_vars"]),
     )
-    sqlmesh_model = model_config.to_sqlmesh(sushi_test_project.context)
+    context = sushi_test_project.context.copy()
+    context.set_and_render_variables(sushi_test_project.packages["sushi"].variables, "sushi")
+    sqlmesh_model = model_config.to_sqlmesh(context)
     assert sqlmesh_model.jinja_macros.global_objs["vars"]["nested_vars"] == {"some_nested_var": 2}
 
 
+@pytest.mark.slow
 def test_source_config(sushi_test_project: Project):
     source_configs = sushi_test_project.packages["sushi"].sources
     assert set(source_configs) == {
@@ -435,9 +463,10 @@ def test_source_config(sushi_test_project: Project):
     )
 
 
+@pytest.mark.slow
 def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     seed_configs = sushi_test_project.packages["sushi"].seeds
-    assert set(seed_configs) == {"waiter_names"}
+    assert set(seed_configs) == {"waiter_names", "waiter_revenue_semicolon"}
     raw_items_seed = seed_configs["waiter_names"]
 
     expected_config = {
@@ -457,6 +486,25 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
         raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn
         == '"MEMORY"."SUSHI"."WAITER_NAMES"'
     )
+
+    waiter_revenue_semicolon_seed = seed_configs["waiter_revenue_semicolon"]
+
+    expected_config_semicolon = {
+        "path": Path(sushi_test_project.context.project_root, "seeds/waiter_revenue_semicolon.csv"),
+        "schema_": "sushi",
+        "delimiter": ";",
+    }
+    actual_config_semicolon = {
+        k: getattr(waiter_revenue_semicolon_seed, k) for k, v in expected_config_semicolon.items()
+    }
+    assert actual_config_semicolon == expected_config_semicolon
+
+    assert waiter_revenue_semicolon_seed.canonical_name(context) == "sushi.waiter_revenue_semicolon"
+    assert (
+        waiter_revenue_semicolon_seed.to_sqlmesh(context).name == "sushi.waiter_revenue_semicolon"
+    )
+    assert waiter_revenue_semicolon_seed.delimiter == ";"
+    assert set(waiter_revenue_semicolon_seed.columns.keys()) == {"waiter_id", "revenue", "quarter"}
 
 
 def test_quoting():
@@ -538,6 +586,9 @@ def test_snowflake_config():
     )
     sqlmesh_config = config.to_sqlmesh()
     assert sqlmesh_config.application == "Tobiko_SQLMesh"
+    assert (
+        sqlmesh_config.schema_differ_overrides == SCHEMA_DIFFER_OVERRIDES["schema_differ_overrides"]
+    )
 
 
 def test_snowflake_config_private_key_path():
@@ -650,6 +701,28 @@ def test_postgres_config():
         "outputs",
         "dev",
     )
+    # 'pass' field instead of 'password'
+    _test_warehouse_config(
+        """
+        dbt-postgres:
+          target: dev
+          outputs:
+            dev:
+              type: postgres
+              host: postgres
+              user: postgres
+              pass: postgres
+              port: 5432
+              dbname: postgres
+              schema: demo
+              threads: 3
+              keepalives_idle: 0
+        """,
+        PostgresConfig,
+        "dbt-postgres",
+        "outputs",
+        "dev",
+    )
 
 
 def test_redshift_config():
@@ -663,6 +736,28 @@ def test_redshift_config():
               host: hostname.region.redshift.amazonaws.com
               user: username
               password: password1
+              port: 5439
+              dbname: analytics
+              schema: analytics
+              threads: 4
+              ra3_node: false
+        """,
+        RedshiftConfig,
+        "dbt-redshift",
+        "outputs",
+        "dev",
+    )
+    # 'pass' field instead of 'password'
+    _test_warehouse_config(
+        """
+        dbt-redshift:
+          target: dev
+          outputs:
+            dev:
+              type: redshift
+              host: hostname.region.redshift.amazonaws.com
+              user: username
+              pass: password1
               port: 5439
               dbname: analytics
               schema: analytics
@@ -723,6 +818,7 @@ def test_databricks_config_oauth():
     assert as_sqlmesh.auth_type == "databricks-oauth"
     assert as_sqlmesh.oauth_client_id == "client-id"
     assert as_sqlmesh.oauth_client_secret == "client-secret"
+    assert as_sqlmesh.schema_differ_overrides == SCHEMA_DIFFER_OVERRIDES["schema_differ_overrides"]
 
 
 def test_bigquery_config():
@@ -895,10 +991,10 @@ def test_connection_args(tmp_path):
     dbt_project_dir = "tests/fixtures/dbt/sushi_test"
 
     config = sqlmesh_config(dbt_project_dir)
-    assert config.gateways["in_memory"].connection.register_comments
-
-    config = sqlmesh_config(dbt_project_dir, register_comments=False)
     assert not config.gateways["in_memory"].connection.register_comments
+
+    config = sqlmesh_config(dbt_project_dir, register_comments=True)
+    assert config.gateways["in_memory"].connection.register_comments
 
 
 def test_custom_dbt_loader():
@@ -916,6 +1012,7 @@ def test_custom_dbt_loader():
 
 
 @pytest.mark.cicdonly
+@pytest.mark.slow
 def test_db_type_to_relation_class():
     from dbt.adapters.bigquery.relation import BigQueryRelation
     from dbt.adapters.databricks.relation import DatabricksRelation
@@ -939,17 +1036,16 @@ def test_db_type_to_relation_class():
 
 
 @pytest.mark.cicdonly
+@pytest.mark.slow
 def test_db_type_to_column_class():
     from dbt.adapters.bigquery import BigQueryColumn
     from dbt.adapters.databricks.column import DatabricksColumn
     from dbt.adapters.snowflake import SnowflakeColumn
-    from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
-    assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
 
     from dbt.adapters.clickhouse.column import ClickHouseColumn
     from dbt.adapters.trino.column import TrinoColumn
@@ -967,12 +1063,16 @@ def test_db_type_to_quote_policy():
 def test_variable_override():
     project_root = "tests/fixtures/dbt/sushi_test"
     project = Project.load(
-        DbtContext(project_root=Path(project_root)),
-        variables={"yet_another_var": 2, "start": "2021-01-01"},
+        DbtContext(
+            project_root=Path(project_root),
+            sqlmesh_config=Config(model_defaults=ModelDefaultsConfig(start="2021-01-01")),
+        ),
+        variables={"yet_another_var": 2},
     )
     assert project.packages["sushi"].variables["yet_another_var"] == 2
 
 
+@pytest.mark.slow
 def test_depends_on(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
     context = sushi_test_project.context
@@ -990,3 +1090,160 @@ def test_depends_on(assert_exp_eq, sushi_test_project):
 
     # Make sure the query wasn't rendered
     assert not sqlmesh_model._query_renderer._cache
+
+
+@pytest.mark.parametrize(
+    "on_schema_change, expected_additive, expected_destructive",
+    [
+        ("ignore", OnAdditiveChange.IGNORE, OnDestructiveChange.IGNORE),
+        ("fail", OnAdditiveChange.ERROR, OnDestructiveChange.ERROR),
+        ("append_new_columns", OnAdditiveChange.ALLOW, OnDestructiveChange.IGNORE),
+        ("sync_all_columns", OnAdditiveChange.ALLOW, OnDestructiveChange.ALLOW),
+    ],
+)
+def test_on_schema_change_properties(
+    on_schema_change: str,
+    expected_additive: OnAdditiveChange,
+    expected_destructive: OnDestructiveChange,
+):
+    model_config = ModelConfig(
+        name="name",
+        package_name="package",
+        alias="model",
+        schema="custom",
+        database="database",
+        materialized=Materialization.INCREMENTAL,
+        sql="SELECT * FROM foo.table",
+        time_column="ds",
+        start="Jan 1 2023",
+        batch_size=5,
+        batch_concurrency=2,
+        on_schema_change=on_schema_change,
+    )
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="foo")
+    model = model_config.to_sqlmesh(context)
+
+    assert model.on_additive_change == expected_additive
+    assert model.on_destructive_change == expected_destructive
+
+
+def test_sqlmesh_model_kwargs_columns_override():
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="foo")
+
+    kwargs = ModelConfig(dialect="duckdb").sqlmesh_model_kwargs(
+        context,
+        {"c": ColumnConfig(name="c", data_type="uinteger")},
+    )
+    assert kwargs.get("columns") == {"c": exp.DataType.build(exp.DataType.Type.UINT)}
+
+
+@pytest.mark.parametrize(
+    "dialect",
+    [
+        "databricks",
+        "duckdb",
+        "postgres",
+        "redshift",
+        "snowflake",
+        "bigquery",
+        "trino",
+        "clickhouse",
+    ],
+)
+def test_api_class_loading(dialect: str):
+    Api(dialect)
+
+
+def test_empty_vars_config(tmp_path):
+    """Test that a dbt project can be loaded with an empty vars config."""
+    dbt_project_dir = tmp_path / "test_project"
+    dbt_project_dir.mkdir()
+
+    # Create a minimal dbt_project.yml with empty vars
+    dbt_project_yml = dbt_project_dir / "dbt_project.yml"
+    dbt_project_yml.write_text("""
+name: test_empty_vars
+
+version: "1.0.0"
+config-version: 2
+
+profile: test_empty_vars
+
+models:
+  +start: Jan 1 2022
+
+# Empty vars section - various ways to specify empty
+vars:
+    """)
+
+    # Create a minimal profiles.yml
+    profiles_yml = dbt_project_dir / "profiles.yml"
+    profiles_yml.write_text("""
+test_empty_vars:
+  outputs:
+    dev:
+      type: duckdb
+      schema: test
+  target: dev
+    """)
+
+    # Create a simple model
+    model = dbt_project_dir / "models" / "some_model.sql"
+    model.parent.mkdir(parents=True, exist_ok=True)
+    model.write_text("SELECT 1 as id")
+
+    # Load the project
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.project import Project
+    from sqlmesh.core.config import Config
+
+    context = DbtContext(project_root=dbt_project_dir, sqlmesh_config=Config())
+
+    # This should not raise an error even with empty vars
+    project = Project.load(context)
+
+    # Verify the project loaded successfully
+    assert project.packages["test_empty_vars"] is not None
+    assert project.packages["test_empty_vars"].name == "test_empty_vars"
+
+    # Verify the variables are empty (not causing any issues)
+    assert project.packages["test_empty_vars"].variables == {}
+    assert project.context.variables == {}
+
+
+def test_infer_state_schema_name(create_empty_project: EmptyProjectCreator):
+    project_dir, _ = create_empty_project("test_foo", "dev")
+
+    # infer_state_schema_name defaults to False if omitted
+    config = sqlmesh_config(project_root=project_dir)
+    assert config.dbt
+    assert not config.dbt.infer_state_schema_name
+    assert config.get_state_schema() == "sqlmesh"
+
+    # create_empty_project() uses the default dbt template for sqlmesh yaml config which
+    # sets infer_state_schema_name=True
+    ctx = Context(paths=[project_dir])
+    assert ctx.config.dbt
+    assert ctx.config.dbt.infer_state_schema_name
+    assert ctx.config.get_state_schema() == "sqlmesh_state_test_foo_main"
+    assert isinstance(ctx.state_sync, CachingStateSync)
+    assert isinstance(ctx.state_sync.state_sync, EngineAdapterStateSync)
+    assert ctx.state_sync.state_sync.schema == "sqlmesh_state_test_foo_main"
+
+    # If the user delberately overrides state_schema then we should respect this choice
+    config_file = project_dir / "sqlmesh.yaml"
+    config_yaml = yaml_load(config_file)
+    config_yaml["gateways"] = {"dev": {"state_schema": "state_override"}}
+    config_file.write_text(yaml_dump(config_yaml))
+
+    ctx = Context(paths=[project_dir])
+    assert ctx.config.dbt
+    assert ctx.config.dbt.infer_state_schema_name
+    assert ctx.config.get_state_schema() == "state_override"
+    assert isinstance(ctx.state_sync, CachingStateSync)
+    assert isinstance(ctx.state_sync.state_sync, EngineAdapterStateSync)
+    assert ctx.state_sync.state_sync.schema == "state_override"

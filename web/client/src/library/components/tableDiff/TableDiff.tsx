@@ -101,10 +101,10 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                     header in diff.schema_diff.added
                       ? 'border-t-2 border-l-2 border-r-2 border-success-500'
                       : header in diff.schema_diff.removed
-                      ? 'border-t-2 border-l-2 border-r-2 border-danger-500'
-                      : grain.includes(header)
-                      ? 'border-brand-500 border-l-2 border-t-2 border-r-2'
-                      : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                        ? 'border-t-2 border-l-2 border-r-2 border-danger-500'
+                        : grain.includes(header)
+                          ? 'border-brand-500 border-l-2 border-t-2 border-r-2'
+                          : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
                     grain.includes(header) ? 'bg-brand-10' : 'bg-neutral-5',
                   )}
                 >
@@ -199,10 +199,10 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                           header in diff.schema_diff.added
                             ? 'bg-success-10 border-l-2 border-r-2 border-success-500 text-success-500 font-bold'
                             : header in diff.schema_diff.removed
-                            ? 'bg-danger-5 border-l-2 border-r-2 border-danger-500 !text-danger-500 font-bold'
-                            : grain.includes(header)
-                            ? 'border-brand-500 border-l-2 border-r-2'
-                            : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                              ? 'bg-danger-5 border-l-2 border-r-2 border-danger-500 !text-danger-500 font-bold'
+                              : grain.includes(header)
+                                ? 'border-brand-500 border-l-2 border-r-2'
+                                : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
                           isDeletedRow(diff, rowKey, diff.on) &&
                             '!bg-danger-5 text-danger-500 font-bold',
                           isAddedRow(diff, rowKey, diff.on) &&
@@ -284,10 +284,10 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                         header in diff.schema_diff.added
                           ? 'border-b-2 border-l-2 border-r-2 border-success-500'
                           : header in diff.schema_diff.removed
-                          ? 'border-b-2 border-l-2 border-r-2 border-danger-500'
-                          : grain.includes(header)
-                          ? 'border-brand-500 border-l-2 border-b-2 border-r-2'
-                          : 'border-r border-t border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                            ? 'border-b-2 border-l-2 border-r-2 border-danger-500'
+                            : grain.includes(header)
+                              ? 'border-brand-500 border-l-2 border-b-2 border-r-2'
+                              : 'border-r border-t border-neutral-100 dark:border-neutral-700 last:border-r-0',
                         grain.includes(header)
                           ? 'bg-brand-10'
                           : 'bg-neutral-10',

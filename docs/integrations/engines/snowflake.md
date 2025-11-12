@@ -2,7 +2,7 @@
 
 This page provides information about how to use SQLMesh with the Snowflake SQL engine.
 
-It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to Snowflake, or you can skip directly to information about using Snowflake with the [built-in](#localbuilt-in-scheduler) or [airflow](#airflow-scheduler) schedulers.
+It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to Snowflake, or you can skip directly to information about using Snowflake with the [built-in](#localbuilt-in-scheduler).
 
 ## Connection quickstart
 
@@ -249,6 +249,14 @@ And confirm that our schemas and objects exist in the Snowflake catalog:
 ![Sqlmesh plan objects in snowflake](./snowflake/snowflake_db-guide_sqlmesh-plan-objects.png){ loading=lazy }
 
 Congratulations - your SQLMesh project is up and running on Snowflake!
+
+### Where are the row counts?
+
+SQLMesh reports the number of rows processed by each model in its `plan` and `run` terminal output.
+
+However, due to limitations in the Snowflake Python connector, row counts cannot be determined for `CREATE TABLE AS` statements. Therefore, SQLMesh does not report row counts for certain model kinds, such as `FULL` models.
+
+Learn more about the connector limitation [on Github](https://github.com/snowflakedb/snowflake-connector-python/issues/645).
 
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `snowflake`
@@ -513,30 +521,6 @@ __Private Key Bytes__
 
 The authenticator method is assumed to be `snowflake_jwt` when `private_key` is provided, but it can also be explicitly provided in the connection configuration.
 
-## Airflow Scheduler
-**Engine Name:** `snowflake`
-
-The SQLMesh Snowflake Operator is similar to the [SnowflakeOperator](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/operators/snowflake.html), and relies on the same [SnowflakeHook](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/_api/airflow/providers/snowflake/hooks/snowflake/index.html) implementation.
-
-To enable support for this operator, the Airflow Snowflake provider package should be installed on the target Airflow cluster along with SQLMesh with the Snowflake extra:
-```
-pip install "apache-airflow-providers-snowflake[common.sql]"
-pip install "sqlmesh[snowflake]"
-```
-
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Snowflake account. Refer to [Snowflake connection](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/connections/snowflake.html) for more details.
-
-By default, the connection ID is set to `snowflake_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "snowflake",
-    default_catalog="<database name>",
-    engine_operator_args={
-        "snowflake_conn_id": "<Connection ID>"
-    },
-)
-```
-
 ## Configuring Virtual Warehouses
 
 The Snowflake Virtual Warehouse a model should use can be specified in the `session_properties` attribute of the model definition:
@@ -549,7 +533,7 @@ MODEL (
   ),
 );
 ```
- 
+
 ## Custom View and Table types
 
 SQLMesh supports custom view and table types for Snowflake models. You can apply these modifiers to either the physical layer or virtual layer of a model using the `physical_properties` and `virtual_properties` attributes respectively. For example:
@@ -559,8 +543,8 @@ SQLMesh supports custom view and table types for Snowflake models. You can apply
 A table can be exposed through a `SECURE` view in the virtual layer by specifying the `creatable_type` property and setting it to `SECURE`:
 
 ```sql linenums="1"
-Model (
-  name = schema_name.model_name,
+MODEL (
+  name schema_name.model_name,
   virtual_properties (
       creatable_type = SECURE
   )
@@ -574,8 +558,8 @@ SELECT a FROM schema_name.model_b;
 A model can use a `TRANSIENT` table in the physical layer by specifying the `creatable_type` property and setting it to `TRANSIENT`:
 
 ```sql linenums="1"
-Model (
-  name = schema_name.model_name,
+MODEL (
+  name schema_name.model_name,
   physical_properties (
       creatable_type = TRANSIENT
   )
@@ -583,6 +567,52 @@ Model (
 
 SELECT a FROM schema_name.model_b;
 ```
+
+### Iceberg Tables
+
+In order for Snowflake to be able to create an Iceberg table, there must be an [External Volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume) configured to store the Iceberg table data on.
+
+Once that is configured, you can create a model backed by an Iceberg table by using `table_format iceberg` like so:
+
+```sql linenums="1" hl_lines="4 6-7"
+MODEL (
+  name schema_name.model_name,
+  kind FULL,
+  table_format iceberg,
+  physical_properties (
+    catalog = 'snowflake',
+    external_volume = '<external volume name>'
+  )
+);
+```
+
+To prevent having to specify `catalog = 'snowflake'` and `external_volume = '<external volume name>'` on every model, see the Snowflake documentation for:
+
+  - [Configuring a default Catalog](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration#set-a-default-catalog-at-the-account-database-or-schema-level)
+  - [Configuring a default External Volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume#set-a-default-external-volume-at-the-account-database-or-schema-level)
+
+Alternatively you can also use [model defaults](../../guides/configuration.md#model-defaults) to set defaults at the SQLMesh level instead.
+
+To utilize the wide variety of [optional properties](https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table-snowflake#optional-parameters) that Snowflake makes available for Iceberg tables, simply specify them as `physical_properties`:
+
+```sql linenums="1" hl_lines="8"
+MODEL (
+  name schema_name.model_name,
+  kind FULL,
+  table_format iceberg,
+  physical_properties (
+    catalog = 'snowflake',
+    external_volume = 'my_external_volume',
+    base_location = 'my/product_reviews/'
+  )
+);
+```
+
+!!! warning "External catalogs"
+
+    Setting `catalog = 'snowflake'` to use Snowflake's internal catalog is a good default because SQLMesh needs to be able to write to the tables it's managing and Snowflake [does not support](https://docs.snowflake.com/en/user-guide/tables-iceberg#catalog-options) writing to Iceberg tables configured under external catalogs.
+
+    You can however still reference a table from an external catalog in your model as a normal [external table](../../concepts/models/external_models.md).
 
 ## Troubleshooting
 

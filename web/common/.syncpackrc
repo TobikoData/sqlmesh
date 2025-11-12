@@ -1,0 +1,29 @@
+{
+  "versionGroups": [
+    {
+      "label": "Sync peer deps with dev deps",
+      "dependencies": [
+        "**"
+      ],
+      "dependencyTypes": [
+        "dev",
+        "peer"
+      ],
+      "policy": "same"
+    }
+  ],
+  "semverGroups": [
+    {
+      "label": "Use exact versions for all dependencies",
+      "dependencies": [
+        "**"
+      ],
+      "dependencyTypes": [
+        "dev",
+        "peer",
+        "prod"
+      ],
+      "range": ""
+    }
+  ]
+}

@@ -38,6 +38,59 @@ It uses the following five step approach to accomplish this:
 
 5. Modify the semantic representation of the SQL query with the substituted variable values from (3) and functions from (4).
 
+### Embedding variables in strings
+
+SQLMesh always incorporates macro variable values into the semantic representation of a SQL query (step 5 above). To do that, it infers the role each macro variable value plays in the query.
+
+For context, two commonly used types of string in SQL are:
+
+- String literals, which represent text values and are surrounded by single quotes, such as `'the_string'`
+- Identifiers, which reference database objects like column, table, alias, and function names
+    - They may be unquoted or quoted with double quotes, backticks, or brackets, depending on the SQL dialect
+
+In a normal query, SQLMesh can easily determine which role a given string is playing. However, it is more difficult if a macro variable is embedded directly into a string - especially if the string is in the `MODEL` block (and not the query itself).
+
+For example, consider a project that defines a [gateway variable](#gateway-variables) named `gateway_var`. The project includes a model that references `@gateway_var` as part of the schema in the model's `name`, which is a SQL *identifier*.
+
+This is how we might try to write the model:
+
+``` sql title="Incorrectly rendered to string literal"
+MODEL (
+  name the_@gateway_var_schema.table
+);
+```
+
+From SQLMesh's perspective, the model schema is the combination of three sub-strings: `the_`, the value of `@gateway_var`, and `_schema`.
+
+SQLMesh will concatenate those strings, but it does not have the context to know that it is building a SQL identifier and will return a string literal.
+
+To provide the context SQLMesh needs, you must add curly braces to the macro variable reference: `@{gateway_var}` instead of `@gateway_var`:
+
+``` sql title="Correctly rendered to identifier"
+MODEL (
+  name the_@{gateway_var}_schema.table
+);
+```
+
+The curly braces let SQLMesh know that it should treat the string as a SQL identifier, which it will then quote based on the SQL dialect's quoting rules.
+
+The most common use of the curly brace syntax is embedding macro variables into strings, it can also be used to differentiate string literals and identifiers in SQL queries. For example, consider a macro variable `my_variable` whose value is `col`.
+
+If we `SELECT` this value with regular macro syntax, it will render to a string literal:
+
+``` sql
+SELECT @my_variable AS the_column; -- renders to SELECT 'col' AS the_column
+```
+
+`'col'` is surrounded with single quotes, and the SQL engine will use that string as the column's data value.
+
+If we use curly braces, SQLMesh will know that we want to use the rendered string as an identifier:
+
+``` sql
+SELECT @{my_variable} AS the_column; -- renders to SELECT col AS the_column
+```
+
+`col` is not surrounded with single quotes, and the SQL engine will determine that the query is referencing a column or other object named `col`.
 
 ## User-defined variables
 
@@ -163,16 +216,35 @@ MODEL (
   name @customer.some_table,
   kind FULL,
   blueprints (
-    (customer := customer1, field_a := x, field_b := y),
-    (customer := customer2, field_a := z, field_b := w)
+    (customer := customer1, field_a := x, field_b := y, field_c := 'foo'),
+    (customer := customer2, field_a := z, field_b := w, field_c := 'bar')
   )
 );
 
 SELECT
   @field_a,
-  @{field_b} AS field_b
+  @{field_b} AS field_b,
+  @field_c AS @{field_c}
 FROM @customer.some_source
+
+/*
+When rendered for customer1.some_table:
+SELECT
+  x,
+  y AS field_b,
+  'foo' AS foo
+FROM customer1.some_source
+
+When rendered for customer2.some_table:
+SELECT
+  z,
+  w AS field_b,
+  'bar' AS bar
+FROM customer2.some_source
+*/
 ```
+
+Note the use of both regular `@field_a` and curly brace syntax `@{field_b}` macro variable references in the model query. Both of these will be rendered as identifiers. In the case of `field_c`, which in the blueprints is a string, it would be rendered as a string literal when used with the regular macro syntax `@field_c` and if we want to use the string as an identifier then we use the curly braces `@{field_c}`. Learn more [above](#embedding-variables-in-strings)
 
 Blueprint variables can be accessed using the syntax shown above, or through the `@BLUEPRINT_VAR()` macro function, which also supports specifying default values in case the variable is undefined (similar to `@VAR()`).
 
@@ -448,7 +520,13 @@ FROM table
 
 This syntax works regardless of whether the array values are quoted or not.
 
-NOTE: SQLMesh macros support placing macro values at the end of a column name simply using `column_@x`. However if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit substitution syntax `@{}`. This avoids ambiguity. These are valid uses: `@{x}_column` or `my_@{x}_column`.
+!!! note "Embedding macros in strings"
+
+    SQLMesh macros support placing macro values at the end of a column name using `column_@x`.
+
+    However, if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit curly brace syntax `@{}` to avoid ambiguity. For example, these are valid uses: `@{x}_column` or `my_@{x}_column`.
+
+    Learn more about embedding macros in strings [above](#embedding-variables-in-strings)
 
 ### @IF
 
@@ -855,7 +933,9 @@ FROM foo
 
 `@UNION` returns a `UNION` query that selects all columns with matching names and data types from the tables.
 
-Its first argument is the `UNION` "type", `'DISTINCT'` (removing duplicated rows) or `'ALL'` (returning all rows). Subsequent arguments are the tables to be combined.
+Its first argument can be either a condition or the `UNION` "type". If the first argument evaluates to a boolean (`TRUE` or `FALSE`), it's treated as a condition. If the condition is `FALSE`, only the first table is returned. If it's `TRUE`, the union operation is performed.
+
+If the first argument is not a boolean condition, it's treated as the `UNION` "type": either `'DISTINCT'` (removing duplicated rows) or `'ALL'` (returning all rows). Subsequent arguments are the tables to be combined.
 
 Let's assume that:
 
@@ -880,6 +960,47 @@ SELECT
   CAST(a AS INT) AS a,
   CAST(c AS TEXT) AS c
 FROM bar
+```
+
+If the union type is omitted, `'ALL'` is used as the default. So the following expression:
+
+```sql linenums="1"
+@UNION(foo, bar)
+```
+
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM foo
+UNION ALL
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM bar
+```
+
+You can also use a condition to control whether the union happens:
+
+```sql linenums="1"
+@UNION(1 > 0, 'all', foo, bar)
+```
+
+This would render the same as above. However, if the condition is `FALSE`:
+
+```sql linenums="1"
+@UNION(1 > 2, 'all', foo, bar)
+```
+
+Only the first table would be selected:
+
+```sql linenums="1"
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM foo
 ```
 
 ### @HAVERSINE_DISTANCE
@@ -1044,7 +1165,9 @@ The `template` can contain the following placeholders that will be substituted:
   - `@{schema_name}` - The name of the physical schema that SQLMesh is using for the model version table, eg `sqlmesh__landing`
   - `@{table_name}` - The name of the physical table that SQLMesh is using for the model version, eg `landing__customers__2517971505`
 
-It can be used in a `MODEL` block:
+Note the use of the curly brace syntax `@{}` in the template placeholders - learn more [above](#embedding-variables-in-strings).
+
+The `@resolve_template` macro can be used in a `MODEL` block:
 
 ```sql linenums="1" hl_lines="5"
 MODEL (
@@ -1635,6 +1758,73 @@ from sqlmesh.core.macros import macro
 def some_macro(evaluator):
     var_value = evaluator.var("<var_name>") # Default value is `None`
     another_var_value = evaluator.var("<another_var_name>", "default_value") # Default value is `"default_value"`
+    ...
+```
+
+#### Accessing model, physical table, and virtual layer view names
+
+All SQLMesh models have a name in their `MODEL` specification. We refer to that as the model's "unresolved" name because it may not correspond to any specific object in the SQL engine.
+
+When SQLMesh renders and executes a model, it converts the model name into three forms at different stages:
+
+1. The *fully qualified* name
+
+    - If the model name is of the form `schema.table`, SQLMesh determines the correct catalog and adds it, like `catalog.schema.table`
+    - SQLMesh quotes each component of the name using the SQL engine's quoting and case-sensitivity rules, like `"catalog"."schema"."table"`
+
+2. The *resolved* physical table name
+
+    - The qualified name of the model's underlying physical table
+
+3. The *resolved* virtual layer view name
+
+    - The qualified name of the model's virtual layer view in the environment where the model is being executed
+
+You can access any of these three forms in a Python macro through properties of the `evaluation` context object.
+
+Access the unresolved, fully-qualified name through the `this_model_fqn` property.
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    # Example:
+    # Name in model definition: landing.customers
+    # Value returned here: '"datalake"."landing"."customers"'
+    unresolved_model_fqn = evaluator.this_model_fqn
+    ...
+```
+
+Access the resolved physical table and virtual layer view names through the `this_model` property.
+
+The `this_model` property returns different names depending on the runtime stage:
+
+- `promoting` runtime stage: `this_model` resolves to the virtual layer view name
+
+    - Example
+        - Model name is `db.test_model`
+        - `plan` is running in the `dev` environment
+        - `this_model` resolves to `"catalog"."db__dev"."test_model"` (note the `__dev` suffix in the schema name)
+
+- All other runtime stages: `this_model` resolves to the physical table name
+
+    - Example
+        - Model name is `db.test_model`
+        - `plan` is running in any environment
+        - `this_model` resolves to `"catalog"."sqlmesh__project"."project__test_model__684351896"`
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    if evaluator.runtime_stage == "promoting":
+        # virtual layer view name '"catalog"."db__dev"."test_model"'
+        resolved_name = evaluator.this_model
+    else:
+        # physical table name '"catalog"."sqlmesh__project"."project__test_model__684351896"'
+        resolved_name = evaluator.this_model
     ...
 ```
 

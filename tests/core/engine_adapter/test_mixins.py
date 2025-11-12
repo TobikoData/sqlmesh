@@ -23,7 +23,7 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, ts, val FROM source")),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType(this=exp.DataType.Type.INT),
             "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
             "val": exp.DataType(this=exp.DataType.Type.INT),
@@ -48,7 +48,7 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, ts, val FROM source")),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType(this=exp.DataType.Type.INT),
             "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
             "val": exp.DataType(this=exp.DataType.Type.INT),

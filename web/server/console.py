@@ -3,16 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 import typing as t
-import unittest
-
 from fastapi.encoders import jsonable_encoder
 from sse_starlette.sse import ServerSentEvent
-from sqlmesh.core.snapshot.definition import Interval
+from sqlmesh.core.snapshot.definition import Interval, Intervals
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import EvaluatablePlan
-from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike
+from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike, SnapshotTableInfo, SnapshotId
+from sqlmesh.core.snapshot.execution_tracker import QueryExecutionStats
 from sqlmesh.core.test import ModelTest
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.utils.date import now_timestamp
 from web.server import models
 from web.server.exceptions import ApiException
@@ -41,14 +41,14 @@ class ApiConsole(TerminalConsole):
 
     def start_creation_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
         if self.plan_apply_stage_tracker:
             self.plan_apply_stage_tracker.add_stage(
                 models.PlanStage.creation,
-                models.PlanStageCreation(total_tasks=total_tasks, num_tasks=0),
+                models.PlanStageCreation(total_tasks=len(snapshots), num_tasks=0),
             )
 
         self.log_event_plan_apply()
@@ -91,11 +91,18 @@ class ApiConsole(TerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batch_sizes: t.Dict[Snapshot, int],
+        batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        audit_only: bool = False,
     ) -> None:
+        if audit_only:
+            return
+
         if self.plan_apply_stage_tracker:
+            batch_sizes = {
+                snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()
+            }
             tasks = {
                 snapshot.name: models.BackfillTask(
                     completed=0,
@@ -116,7 +123,12 @@ class ApiConsole(TerminalConsole):
 
         self.log_event_plan_apply()
 
-    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+    def start_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, audit_only: bool = False
+    ) -> None:
+        if audit_only:
+            return
+
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
             self.plan_apply_stage_tracker.backfill.queue.add(snapshot.name)
 
@@ -130,7 +142,13 @@ class ApiConsole(TerminalConsole):
         duration_ms: t.Optional[int],
         num_audits_passed: int,
         num_audits_failed: int,
+        audit_only: bool = False,
+        execution_stats: t.Optional[QueryExecutionStats] = None,
+        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
+        if audit_only:
+            return
+
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
             task = self.plan_apply_stage_tracker.backfill.tasks[snapshot.name]
             task.completed += 1
@@ -154,7 +172,7 @@ class ApiConsole(TerminalConsole):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[SnapshotTableInfo],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -162,7 +180,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.add_stage(
                 models.PlanStage.promote,
                 models.PlanStagePromote(
-                    total_tasks=total_tasks,
+                    total_tasks=len(snapshots),
                     num_tasks=0,
                     target_environment=environment_naming_info.name,
                 ),
@@ -243,9 +261,7 @@ class ApiConsole(TerminalConsole):
             )
         )
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         if result.wasSuccessful():
             self.log_event(
                 event=models.EventName.TESTS,
@@ -264,6 +280,8 @@ class ApiConsole(TerminalConsole):
                         details=details,
                     )
                 )
+
+        output = self._captured_unit_test_results(result)
         self.log_event(
             event=models.EventName.TESTS,
             data=models.ReportTestsFailure(

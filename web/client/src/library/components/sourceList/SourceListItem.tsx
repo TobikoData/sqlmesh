@@ -1,6 +1,6 @@
 import { isNotNil } from '@utils/index'
 import clsx from 'clsx'
-import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router'
 import { EnumVariant, type Variant } from '~/types/enum'
 
 export default function SourceListItem({
@@ -41,8 +41,8 @@ export default function SourceListItem({
             ? variant === EnumVariant.Primary
               ? 'text-primary-500 bg-primary-10'
               : variant === EnumVariant.Danger
-              ? 'text-danger-500 bg-danger-5'
-              : 'text-neutral-600 dark:text-neutral-100 bg-neutral-10'
+                ? 'text-danger-500 bg-danger-5'
+                : 'text-neutral-600 dark:text-neutral-100 bg-neutral-10'
             : 'hover:bg-neutral-5 text-neutral-500 dark:text-neutral-400',
         )
       }

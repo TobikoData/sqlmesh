@@ -5,16 +5,22 @@ from enum import Enum
 from functools import partial
 from pathlib import Path
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
-from dbt.cli.main import dbtRunner
+
+from sqlmesh.dbt.util import DBT_VERSION
+
+if DBT_VERSION >= (1, 5, 0):
+    from dbt.cli.main import dbtRunner  # type: ignore
+
 import time_machine
 
 from sqlmesh import Context
 from sqlmesh.core.config.connection import DuckDBConnectionConfig
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
 from sqlmesh.utils.pandas import columns_to_types_from_df
-from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils.yaml import YAML, load as yaml_load, dump as yaml_dump
+from sqlmesh_dbt.operations import init_project_if_required
 from tests.utils.pandas import compare_dataframes, create_df
 
 # Some developers had issues with this test freezing locally so we mark it as cicdonly
@@ -22,6 +28,8 @@ pytestmark = [pytest.mark.dbt, pytest.mark.slow, pytest.mark.cicdonly]
 
 
 class TestType(str, Enum):
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     DBT_RUNTIME = "dbt_runtime"
     DBT_ADAPTER = "dbt_adapter"
     SQLMESH = "sqlmesh"
@@ -48,6 +56,8 @@ class TestType(str, Enum):
 
 
 class TestStrategy(str, Enum):
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     CHECK = "check"
     TIMESTAMP = "timestamp"
 
@@ -137,7 +147,6 @@ class TestSCDType2:
                     f.write(
                         """from pathlib import Path
 
-from sqlmesh.core.config import AirflowSchedulerConfig
 from sqlmesh.dbt.loader import sqlmesh_config
 
 config = sqlmesh_config(Path(__file__).parent)
@@ -195,9 +204,11 @@ test_config = config"""
         columns_to_types = columns_to_types_from_df(df)
 
         if values:
-            adapter.replace_query("sushi.raw_marketing", df, columns_to_types=columns_to_types)
+            adapter.replace_query(
+                "sushi.raw_marketing", df, target_columns_to_types=columns_to_types
+            )
         else:
-            adapter.create_table("sushi.raw_marketing", columns_to_types=columns_to_types)
+            adapter.create_table("sushi.raw_marketing", target_columns_to_types=columns_to_types)
 
     def _normalize_dbt_dataframe(
         self,
@@ -302,6 +313,9 @@ test_config = config"""
         test_type: TestType,
         invalidate_hard_deletes: bool,
     ):
+        if test_type.is_dbt_runtime and DBT_VERSION < (1, 5, 0):
+            pytest.skip("The dbt version being tested doesn't support the dbtRunner so skipping.")
+
         run, adapter, context = self._init_test(
             create_scd_type_2_dbt_project,
             create_scd_type_2_sqlmesh_project,
@@ -527,3 +541,114 @@ test_config = config"""
                 )
                 df_expected = create_df(expected_table_data, self.target_schema)
                 compare_dataframes(df_actual, df_expected, msg=f"Failed on time {time}")
+
+
+def test_dbt_node_info(jaffle_shop_duckdb_context: Context):
+    ctx = jaffle_shop_duckdb_context
+
+    customers = ctx.models['"jaffle_shop"."main"."customers"']
+    assert customers.dbt_unique_id == "model.jaffle_shop.customers"
+    assert customers.dbt_fqn == "jaffle_shop.customers"
+    assert customers.dbt_node_info
+    assert customers.dbt_node_info.name == "customers"
+
+    orders = ctx.models['"jaffle_shop"."main"."orders"']
+    assert orders.dbt_unique_id == "model.jaffle_shop.orders"
+    assert orders.dbt_fqn == "jaffle_shop.orders"
+    assert orders.dbt_node_info
+    assert orders.dbt_node_info.name == "orders"
+
+    stg_customers = ctx.models['"jaffle_shop"."main"."stg_customers"']
+    assert stg_customers.dbt_unique_id == "model.jaffle_shop.stg_customers"
+    assert stg_customers.dbt_fqn == "jaffle_shop.staging.stg_customers"
+    assert stg_customers.dbt_node_info
+    assert stg_customers.dbt_node_info.name == "stg_customers"
+
+    stg_orders = ctx.models['"jaffle_shop"."main"."stg_orders"']
+    assert stg_orders.dbt_unique_id == "model.jaffle_shop.stg_orders"
+    assert stg_orders.dbt_fqn == "jaffle_shop.staging.stg_orders"
+    assert stg_orders.dbt_node_info
+    assert stg_orders.dbt_node_info.name == "stg_orders"
+
+    raw_customers = ctx.models['"jaffle_shop"."main"."raw_customers"']
+    assert raw_customers.dbt_unique_id == "seed.jaffle_shop.raw_customers"
+    assert raw_customers.dbt_fqn == "jaffle_shop.raw_customers"
+    assert raw_customers.dbt_node_info
+    assert raw_customers.dbt_node_info.name == "raw_customers"
+
+    raw_orders = ctx.models['"jaffle_shop"."main"."raw_orders"']
+    assert raw_orders.dbt_unique_id == "seed.jaffle_shop.raw_orders"
+    assert raw_orders.dbt_fqn == "jaffle_shop.raw_orders"
+    assert raw_orders.dbt_node_info
+    assert raw_orders.dbt_node_info.name == "raw_orders"
+
+    raw_payments = ctx.models['"jaffle_shop"."main"."raw_payments"']
+    assert raw_payments.dbt_unique_id == "seed.jaffle_shop.raw_payments"
+    assert raw_payments.dbt_fqn == "jaffle_shop.raw_payments"
+    assert raw_payments.dbt_node_info
+    assert raw_payments.dbt_node_info.name == "raw_payments"
+
+    relationship_audit = ctx.snapshots[
+        "relationships_orders_customer_id__customer_id__ref_customers_"
+    ]
+    assert relationship_audit.node.is_audit
+    assert (
+        relationship_audit.node.dbt_unique_id
+        == "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_customers_.c6ec7f58f2"
+    )
+    assert (
+        relationship_audit.node.dbt_fqn
+        == "jaffle_shop.relationships_orders_customer_id__customer_id__ref_customers_"
+    )
+    assert relationship_audit.node.dbt_node_info
+    assert (
+        relationship_audit.node.dbt_node_info.name
+        == "relationships_orders_customer_id__customer_id__ref_customers_"
+    )
+
+
+def test_state_schema_isolation_per_target(jaffle_shop_duckdb: Path):
+    profiles_file = jaffle_shop_duckdb / "profiles.yml"
+
+    profiles_yml = yaml_load(profiles_file)
+
+    # make prod / dev config identical with the exception of a different default schema to simulate using the same warehouse
+    profiles_yml["jaffle_shop"]["outputs"]["prod"] = {
+        **profiles_yml["jaffle_shop"]["outputs"]["dev"]
+    }
+    profiles_yml["jaffle_shop"]["outputs"]["prod"]["schema"] = "prod_schema"
+    profiles_yml["jaffle_shop"]["outputs"]["dev"]["schema"] = "dev_schema"
+
+    profiles_file.write_text(yaml_dump(profiles_yml))
+
+    init_project_if_required(jaffle_shop_duckdb)
+
+    # start off with the prod target
+    prod_ctx = Context(paths=[jaffle_shop_duckdb], config_loader_kwargs={"target": "prod"})
+    assert prod_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_prod_schema"
+    assert all("prod_schema" in fqn for fqn in prod_ctx.models)
+    assert prod_ctx.plan(auto_apply=True).has_changes
+    assert not prod_ctx.plan(auto_apply=True).has_changes
+
+    # dev target should have changes - new state separate from prod
+    dev_ctx = Context(paths=[jaffle_shop_duckdb], config_loader_kwargs={"target": "dev"})
+    assert dev_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_dev_schema"
+    assert all("dev_schema" in fqn for fqn in dev_ctx.models)
+    assert dev_ctx.plan(auto_apply=True).has_changes
+    assert not dev_ctx.plan(auto_apply=True).has_changes
+
+    # no explicitly specified target should use dev because that's what's set for the default in the profiles.yml
+    assert profiles_yml["jaffle_shop"]["target"] == "dev"
+    default_ctx = Context(paths=[jaffle_shop_duckdb])
+    assert default_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_dev_schema"
+    assert all("dev_schema" in fqn for fqn in default_ctx.models)
+    assert not default_ctx.plan(auto_apply=True).has_changes
+
+    # an explicit state schema override set in `sqlmesh.yaml` should use that
+    sqlmesh_yaml_file = jaffle_shop_duckdb / "sqlmesh.yaml"
+    sqlmesh_yaml = yaml_load(sqlmesh_yaml_file)
+    sqlmesh_yaml["gateways"] = {"dev": {"state_schema": "sqlmesh_dev_state_override"}}
+    sqlmesh_yaml_file.write_text(yaml_dump(sqlmesh_yaml))
+    default_ctx = Context(paths=[jaffle_shop_duckdb])
+    assert default_ctx.config.get_state_schema() == "sqlmesh_dev_state_override"
+    assert all("dev_schema" in fqn for fqn in default_ctx.models)

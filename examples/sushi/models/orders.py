@@ -2,7 +2,7 @@ import random
 import typing as t
 from datetime import datetime, timedelta
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from helper import iter_dates  # type: ignore
 
 from sqlmesh import ExecutionContext, model
@@ -36,6 +36,7 @@ WAITERS = list(range(0, 10))
         "end_ts": "int",
         "event_date": "date",
     },
+    signals=[("test_signal", {"arg": 1})],
 )
 def execute(
     context: ExecutionContext,

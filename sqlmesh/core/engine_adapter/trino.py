@@ -1,9 +1,10 @@
 from __future__ import annotations
+
+import contextlib
 import re
 import typing as t
 from functools import lru_cache
-import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
 from sqlglot import exp
 from sqlglot.helper import seq_get
 from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_result
@@ -25,12 +26,15 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils import get_source_columns_to_types
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.date import TimeLike
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+
+CATALOG_TYPES_SUPPORTING_REPLACE_TABLE = {"iceberg", "delta_lake"}
 
 
 @set_catalog()
@@ -50,22 +54,24 @@ class TrinoEngineAdapter(
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
     SUPPORTS_REPLACE_TABLE = False
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
     DEFAULT_CATALOG_TYPE = "hive"
     QUOTE_IDENTIFIERS_IN_VIEWS = False
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             # default decimal precision varies across backends
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],
             exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(3,)],
         },
-    )
+    }
     # some catalogs support microsecond (precision 6) but it has to be specifically enabled (Hive) or just isnt available (Delta / TIMESTAMP WITH TIME ZONE)
     # and even if you have a TIMESTAMP(6) the date formatting functions still only support millisecond precision
     MAX_TIMESTAMP_PRECISION = 3
 
     @property
-    def schema_location_mapping(self) -> t.Optional[dict[re.Pattern, str]]:
+    def schema_location_mapping(self) -> t.Optional[t.Dict[re.Pattern, str]]:
         return self._extra_config.get("schema_location_mapping")
 
     @property
@@ -80,6 +86,8 @@ class TrinoEngineAdapter(
     def get_catalog_type(self, catalog: t.Optional[str]) -> str:
         row: t.Tuple = tuple()
         if catalog:
+            if catalog_type_override := self._catalog_type_overrides.get(catalog):
+                return catalog_type_override
             row = (
                 self.fetchone(
                     f"select connector_name from system.metadata.catalogs where catalog_name='{catalog}'"
@@ -88,11 +96,65 @@ class TrinoEngineAdapter(
             )
         return seq_get(row, 0) or self.DEFAULT_CATALOG_TYPE
 
+    @contextlib.contextmanager
+    def session(self, properties: SessionProperties) -> t.Iterator[None]:
+        authorization = properties.get("authorization")
+        if not authorization:
+            yield
+            return
+
+        if not isinstance(authorization, exp.Expression):
+            authorization = exp.Literal.string(authorization)
+
+        if not authorization.is_string:
+            raise SQLMeshError(
+                "Invalid value for `session_properties.authorization`. Must be a string literal."
+            )
+
+        authorization_sql = authorization.sql(dialect=self.dialect)
+
+        self.execute(f"SET SESSION AUTHORIZATION {authorization_sql}")
+        try:
+            yield
+        finally:
+            self.execute(f"RESET SESSION AUTHORIZATION")
+
+    def replace_query(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+        supports_replace_table_override: t.Optional[bool] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        catalog_type = self.get_catalog_type_from_table(table_name)
+        # User may have a custom catalog type name so we are assuming they keep the catalog type still in the name
+        # Ex: `acme_iceberg` would be identified as an iceberg catalog and therefore supports replace table
+        supports_replace_table_override = None
+        for replace_table_catalog_type in CATALOG_TYPES_SUPPORTING_REPLACE_TABLE:
+            if replace_table_catalog_type in catalog_type:
+                supports_replace_table_override = True
+                break
+
+        super().replace_query(
+            table_name=table_name,
+            query_or_df=query_or_df,
+            target_columns_to_types=target_columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            source_columns=source_columns,
+            supports_replace_table_override=supports_replace_table_override,
+            **kwargs,
+        )
+
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
@@ -105,14 +167,14 @@ class TrinoEngineAdapter(
             # "Session property 'catalog.insert_existing_partitions_behavior' does not exist"
             self.execute(f"SET SESSION {catalog}.insert_existing_partitions_behavior='OVERWRITE'")
             super()._insert_overwrite_by_condition(
-                table_name, source_queries, columns_to_types, where
+                table_name, source_queries, target_columns_to_types, where
             )
             self.execute(f"SET SESSION {catalog}.insert_existing_partitions_behavior='APPEND'")
         else:
             super()._insert_overwrite_by_condition(
                 table_name,
                 source_queries,
-                columns_to_types,
+                target_columns_to_types,
                 where,
                 insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
             )
@@ -190,35 +252,44 @@ class TrinoEngineAdapter(
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+        from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
         assert isinstance(df, pd.DataFrame)
+        source_columns_to_types = get_source_columns_to_types(
+            target_columns_to_types, source_columns
+        )
 
         # Trino does not accept timestamps in ISOFORMAT that include the "T". `execution_time` is stored in
         # Pandas with that format, so we convert the column to a string with the proper format and CAST to
         # timestamp in Trino.
-        for column, kind in (columns_to_types or {}).items():
+        for column, kind in source_columns_to_types.items():
             dtype = df.dtypes[column]
             if is_datetime64_any_dtype(dtype) and getattr(dtype, "tz", None) is not None:
                 df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))
 
-        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        return super()._df_to_source_queries(
+            df, target_columns_to_types, batch_size, target_table, source_columns=source_columns
+        )
 
     def _build_schema_exp(
         self,
         table: exp.Table,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         expressions: t.Optional[t.List[exp.PrimaryKey]] = None,
         is_view: bool = False,
     ) -> exp.Schema:
-        if self.current_catalog_type == "delta_lake":
-            columns_to_types = self._to_delta_ts(columns_to_types)
+        if "delta_lake" in self.get_catalog_type_from_table(table):
+            target_columns_to_types = self._to_delta_ts(target_columns_to_types)
 
         return super()._build_schema_exp(
-            table, columns_to_types, column_descriptions, expressions, is_view
+            table, target_columns_to_types, column_descriptions, expressions, is_view
         )
 
     def _scd_type_2(
@@ -228,20 +299,23 @@ class TrinoEngineAdapter(
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
-        execution_time: TimeLike,
+        execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
-        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Expression]]] = None,
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
-        if columns_to_types and self.current_catalog_type == "delta_lake":
-            columns_to_types = self._to_delta_ts(columns_to_types)
+        if target_columns_to_types and "delta_lake" in self.get_catalog_type_from_table(
+            target_table
+        ):
+            target_columns_to_types = self._to_delta_ts(target_columns_to_types)
 
         return super()._scd_type_2(
             target_table,
@@ -255,10 +329,11 @@ class TrinoEngineAdapter(
             check_columns,
             updated_at_as_valid_from,
             execution_time_as_valid_from,
-            columns_to_types,
+            target_columns_to_types,
             table_description,
             column_descriptions,
             truncate,
+            source_columns,
             **kwargs,
         )
 
@@ -316,10 +391,11 @@ class TrinoEngineAdapter(
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        track_rows_processed: bool = True,
         **kwargs: t.Any,
     ) -> None:
         super()._create_table(
@@ -327,10 +403,11 @@ class TrinoEngineAdapter(
             expression=expression,
             exists=exists,
             replace=replace,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,
+            track_rows_processed=track_rows_processed,
             **kwargs,
         )
 
@@ -341,7 +418,7 @@ class TrinoEngineAdapter(
         else:
             table_name = table_name_or_schema
 
-        if self.current_catalog_type == "hive":
+        if "hive" in self.get_catalog_type_from_table(table_name):
             # the Trino Hive connector can take a few seconds for metadata changes to propagate to all internal threads
             # (even if metadata TTL is set to 0s)
             # Blocking until the table shows up means that subsequent code expecting it to exist immediately will not fail
@@ -353,8 +430,8 @@ class TrinoEngineAdapter(
             match_key = schema.db
 
             # only consider the catalog if it is present
-            if catalog := schema.catalog:
-                match_key = f"{catalog}.{match_key}"
+            if schema.catalog:
+                match_key = f"{schema.catalog}.{match_key}"
 
             for k, v in mapping.items():
                 if re.match(k, match_key):

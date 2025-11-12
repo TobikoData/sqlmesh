@@ -67,6 +67,8 @@ For example, pre/post-statements might modify settings or create a table index. 
 
 Pre/post-statements are just standard SQL commands located before/after the model query. They must end with a semi-colon, and the model query must end with a semi-colon if a post-statement is present. The [example above](#example) contains both pre- and post-statements.
 
+**Project-level defaults:** You can also define pre/post-statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
+
 !!! warning
 
     Pre/post-statements are evaluated twice: when a model's table is created and when its query logic is evaluated. Executing statements more than once can have unintended side-effects, so you can [conditionally execute](../macros/sqlmesh_macros.md#prepost-statements) them based on SQLMesh's [runtime stage](../macros/macro_variables.md#runtime-variables).
@@ -95,7 +97,9 @@ Note that the SQL command `UNCACHE TABLE countries` inside the `@IF()` macro doe
 
 The optional on-virtual-update statements allow you to execute SQL commands after the completion of the [Virtual Update](#virtual-update).
 
-These can be used, for example, to grant privileges on views of the virtual layer. 
+These can be used, for example, to grant privileges on views of the virtual layer.
+
+**Project-level defaults:** You can also define on-virtual-update statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
 
 These SQL statements must be enclosed within an `ON_VIRTUAL_UPDATE_BEGIN;` ...; `ON_VIRTUAL_UPDATE_END;` block like this:
 
@@ -109,11 +113,11 @@ SELECT
   r.id::INT
 FROM raw.restaurants AS r;
 
-ON_VIRTUAL_UPDATE_BEGIN; 
+ON_VIRTUAL_UPDATE_BEGIN;
 GRANT SELECT ON VIEW @this_model TO ROLE role_name;
-JINJA_STATEMENT_BEGIN;     
+JINJA_STATEMENT_BEGIN;
 GRANT SELECT ON VIEW {{ this_model }} TO ROLE admin;
-JINJA_END;  
+JINJA_END;
 ON_VIRTUAL_UPDATE_END;
 ```
 
@@ -175,6 +179,38 @@ SELECT
 FROM customer2.some_source
 ```
 
+Note the use of curly brace syntax `@{field_b} AS field_b` in the model query above. It is used to tell SQLMesh that the rendered variable value should be treated as a SQL identifier instead of a string literal.
+
+You can see the different behavior in the first rendered model. `@field_a` is resolved to the string literal `'x'` (with single quotes) and `@{field_b}` is resolved to the identifier `y` (without quotes). Learn more about the curly brace syntax [here](../../concepts/macros/sqlmesh_macros.md#embedding-variables-in-strings).
+
+Blueprint variable mappings can also be constructed dynamically, e.g., by using a macro: `blueprints @gen_blueprints()`. This is useful in cases where the `blueprints` list needs to be sourced from external sources, such as CSV files.
+
+For example, the definition of the `gen_blueprints` may look like this:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def gen_blueprints(evaluator):
+    return (
+        "((customer := customer1, field_a := x, field_b := y),"
+        " (customer := customer2, field_a := z, field_b := w))"
+    )
+```
+
+It's also possible to use the `@EACH` macro, combined with a global list variable (`@values`):
+
+```sql linenums="1"
+MODEL (
+  name @customer.some_table,
+  kind FULL,
+  blueprints @EACH(@values, x -> (customer := schema_@x)),
+);
+
+SELECT
+  1 AS c
+```
+
 ## Python-based definition
 
 The Python-based definition of SQL models consists of a single python function, decorated with SQLMesh's `@model` [decorator](https://wiki.python.org/moin/PythonDecorators). The decorator is required to have the `is_sql` keyword argument set to `True` to distinguish it from [Python models](./python_models.md) that return DataFrame instances.
@@ -221,7 +257,7 @@ One could also define this model by simply returning a string that contained the
 
 The `@model` decorator is the Python equivalent of the `MODEL` DDL.
 
-In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements`, `post_statements` and `on_virtual_update` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements and on-virtual-update-statements of the model, respectively. 
+In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements`, `post_statements` and `on_virtual_update` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements and on-virtual-update-statements of the model, respectively.
 
 !!! note
 
@@ -258,6 +294,34 @@ def entrypoint(evaluator: MacroEvaluator) -> str | exp.Expression:
 
 The two models produced from this template are the same as in the [example](#SQL-model-blueprinting) for SQL-based blueprinting.
 
+Blueprint variable mappings can also be constructed dynamically, e.g., by using a macro: `blueprints="@gen_blueprints()"`. This is useful in cases where the `blueprints` list needs to be sourced from external sources, such as CSV files.
+
+For example, the definition of the `gen_blueprints` may look like this:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def gen_blueprints(evaluator):
+    return (
+        "((customer := customer1, field_a := x, field_b := y),"
+        " (customer := customer2, field_a := z, field_b := w))"
+    )
+```
+
+It's also possible to use the `@EACH` macro, combined with a global list variable (`@values`):
+
+```python linenums="1"
+
+@model(
+    "@{customer}.some_table",
+    is_sql=True,
+    blueprints="@EACH(@values, x -> (customer := schema_@x))",
+    ...
+)
+...
+```
+
 ## Automatic dependencies
 
 SQLMesh parses your SQL, so it understands what the code does and how it relates to other models. There is no need for you to manually specify dependencies to other models with special tags or commands.
@@ -273,7 +337,7 @@ JOIN countries
 
 SQLMesh will detect that the model depends on both `employees` and `countries`. When executing this model, it will ensure that `employees` and `countries` are executed first.
 
-External dependencies not defined in SQLMesh are also supported. SQLMesh can either depend on them implicitly through the order in which they are executed, or through signals if you are using [Airflow](../../integrations/airflow.md).
+External dependencies not defined in SQLMesh are also supported. SQLMesh can either depend on them implicitly through the order in which they are executed, or through [signals](../../guides/signals.md).
 
 Although automatic dependency detection works most of the time, there may be specific cases for which you want to define dependencies manually. You can do so in the `MODEL` DDL with the [dependencies property](./overview.md#properties).
 

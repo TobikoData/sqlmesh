@@ -4,15 +4,16 @@ import logging
 import typing as t
 from collections import defaultdict
 
-import pandas as pd
 from sqlglot import exp, parse_one
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.base import _get_data_object_cache_key
 from sqlmesh.core.engine_adapter.mixins import (
-    InsertOverwriteWithMergeMixin,
     ClusteredByMixin,
+    GrantsFromInfoSchemaMixin,
     RowDiffMixin,
+    TableAlterClusterByOperation,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -20,23 +21,27 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     SourceQuery,
     set_catalog,
+    InsertOverwriteStrategy,
 )
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import optional_import
+from sqlmesh.core.schema_diff import TableAlterOperation, NestedSupport
+from sqlmesh.utils import optional_import, get_source_columns_to_types
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pandas import columns_to_types_from_dtypes
 
 if t.TYPE_CHECKING:
+    import pandas as pd
     from google.api_core.retry import Retry
     from google.cloud import bigquery
     from google.cloud.bigquery import StandardSqlDataType
     from google.cloud.bigquery.client import Client as BigQueryClient
+    from google.cloud.bigquery.job import QueryJob
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, Query
+    from sqlmesh.core.engine_adapter._typing import BigframeSession, DCL, DF, GrantsConfig, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
@@ -49,12 +54,9 @@ bigframes_pd = optional_import("bigframes.pandas")
 NestedField = t.Tuple[str, str, t.List[str]]
 NestedFieldsDict = t.Dict[str, t.List[NestedField]]
 
-# used to tag AST nodes to be specially handled in alter_table()
-_CLUSTERING_META_KEY = "__sqlmesh_update_table_clustering"
-
 
 @set_catalog()
-class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, RowDiffMixin):
+class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchemaMixin):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
     """
@@ -64,11 +66,19 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
+    SUPPORTS_GRANTS = True
+    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expression = exp.func("session_user")
+    SUPPORTS_MULTIPLE_GRANT_PRINCIPALS = True
+    USE_CATALOG_IN_GRANTS = True
+    GRANT_INFORMATION_SCHEMA_TABLE_NAME = "OBJECT_PRIVILEGES"
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.MERGE
 
-    SCHEMA_DIFFER = SchemaDiffer(
-        compatible_types={
+    SCHEMA_DIFFER_KWARGS = {
+        "compatible_types": {
             exp.DataType.build("INT64", dialect=DIALECT): {
                 exp.DataType.build("NUMERIC", dialect=DIALECT),
                 exp.DataType.build("FLOAT64", dialect=DIALECT),
@@ -82,17 +92,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 exp.DataType.build("DATETIME", dialect=DIALECT),
             },
         },
-        coerceable_types={
+        "coerceable_types": {
             exp.DataType.build("FLOAT64", dialect=DIALECT): {
                 exp.DataType.build("BIGNUMERIC", dialect=DIALECT),
             },
         },
-        support_coercing_compatible_types=True,
-        parameterized_type_defaults={
+        "support_coercing_compatible_types": True,
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(38, 9), (0,)],
             exp.DataType.build("BIGDECIMAL", dialect=DIALECT).this: [(76.76, 38), (0,)],
         },
-        types_with_unlimited_length={
+        "types_with_unlimited_length": {
             # parameterized `STRING(n)` can ALTER to unparameterized `STRING`
             exp.DataType.build("STRING", dialect=DIALECT).this: {
                 exp.DataType.build("STRING", dialect=DIALECT).this,
@@ -102,9 +112,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 exp.DataType.build("BYTES", dialect=DIALECT).this,
             },
         },
-        support_nested_operations=True,
-        support_nested_drop=False,
-    )
+        "nested_support": NestedSupport.ALL_BUT_DROP,
+    }
 
     @property
     def client(self) -> BigQueryClient:
@@ -133,6 +142,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         }
         if self._extra_config.get("maximum_bytes_billed"):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
+        if self.correlation_id:
+            # BigQuery label keys must be lowercase
+            key = self.correlation_id.job_type.value.lower()
+            params["labels"] = {key: self.correlation_id.job_id}
         return params
 
     @property
@@ -142,12 +155,19 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+
+        source_columns_to_types = get_source_columns_to_types(
+            target_columns_to_types, source_columns
+        )
+
         temp_bq_table = self.__get_temp_bq_table(
-            self._get_temp_table(target_table or "pandas"), columns_to_types
+            self._get_temp_table(target_table or "pandas"), source_columns_to_types
         )
         temp_table = exp.table_(
             temp_bq_table.table_id,
@@ -156,21 +176,24 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         )
 
         def query_factory() -> Query:
-            if bigframes_pd and isinstance(df, bigframes_pd.DataFrame):
-                df.to_gbq(
+            ordered_df = df[list(source_columns_to_types)]
+            if bigframes_pd and isinstance(ordered_df, bigframes_pd.DataFrame):
+                ordered_df.to_gbq(
                     f"{temp_bq_table.project}.{temp_bq_table.dataset_id}.{temp_bq_table.table_id}",
                     if_exists="replace",
                 )
             elif not self.table_exists(temp_table):
                 # Make mypy happy
-                assert isinstance(df, pd.DataFrame)
+                assert isinstance(ordered_df, pd.DataFrame)
                 self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
                 result = self.__load_pandas_to_table(
-                    temp_bq_table, df, columns_to_types, replace=False
+                    temp_bq_table, ordered_df, source_columns_to_types, replace=False
                 )
                 if result.errors:
                     raise SQLMeshError(result.errors)
-            return self._select_columns(columns_to_types).from_(temp_table)
+            return exp.select(
+                *self._casted_columns(target_columns_to_types, source_columns=source_columns)
+            ).from_(temp_table)
 
         return [
             SourceQuery(
@@ -179,10 +202,68 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             )
         ]
 
+    def close(self) -> t.Any:
+        # Cancel all pending query jobs across all threads
+        all_query_jobs = self._connection_pool.get_all_attributes("query_job")
+        for query_job in all_query_jobs:
+            if query_job:
+                try:
+                    if not self._db_call(query_job.done):
+                        self._db_call(query_job.cancel)
+                        logger.debug(
+                            "Cancelled BigQuery job: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s",
+                            query_job.project,
+                            query_job.location,
+                            query_job.job_id,
+                        )
+                except Exception as ex:
+                    logger.debug(
+                        "Failed to cancel BigQuery job: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s. %s",
+                        query_job.project,
+                        query_job.location,
+                        query_job.job_id,
+                        str(ex),
+                    )
+
+        return super().close()
+
     def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
-        job = self.client.query("SELECT 1;", job_config=QueryJobConfig(create_session=True))
+        query_label_property = properties.get("query_label")
+        parsed_query_label: list[tuple[str, str]] = []
+        if isinstance(query_label_property, (exp.Array, exp.Paren, exp.Tuple)):
+            label_tuples = (
+                [query_label_property.unnest()]
+                if isinstance(query_label_property, exp.Paren)
+                else query_label_property.expressions
+            )
+
+            # query_label is a Paren, Array or Tuple of 2-tuples and validated at load time
+            parsed_query_label.extend(
+                (label_tuple.expressions[0].name, label_tuple.expressions[1].name)
+                for label_tuple in label_tuples
+            )
+        elif query_label_property is not None:
+            raise SQLMeshError(
+                "Invalid value for `session_properties.query_label`. Must be an array or tuple."
+            )
+
+        if self.correlation_id:
+            parsed_query_label.append(
+                (self.correlation_id.job_type.value.lower(), self.correlation_id.job_id)
+            )
+
+        if parsed_query_label:
+            query_label_str = ",".join([":".join(label) for label in parsed_query_label])
+            query = f'SET @@query_label = "{query_label_str}";SELECT 1;'
+        else:
+            query = "SELECT 1;"
+
+        job = self.client.query(
+            query,
+            job_config=QueryJobConfig(create_session=True),
+        )
         session_info = job.session_info
         session_id = session_info.session_id if session_info else None
         self._session_id = session_id
@@ -225,6 +306,15 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             if not warn_on_error:
                 raise
             logger.warning("Failed to create schema '%s': %s", schema_name, e)
+
+    def get_bq_schema(self, table_name: TableName) -> t.List[bigquery.SchemaField]:
+        table = exp.to_table(table_name)
+        if len(table.parts) == 3 and "." in table.name:
+            self.execute(exp.select("*").from_(table).limit(0))
+            query_job = self._query_job
+            assert query_job is not None
+            return query_job._query_results.schema
+        return self._get_table(table).schema
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
@@ -278,48 +368,65 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         if len(table.parts) == 3 and "." in table.name:
             # The client's `get_table` method can't handle paths with >3 identifiers
             self.execute(exp.select("*").from_(table).limit(0))
-            query_results = self._query_job._query_results
+            query_job = self._query_job
+            assert query_job is not None
+
+            query_results = query_job._query_results
             columns = create_mapping_schema(query_results.schema)
         else:
             bq_table = self._get_table(table)
             columns = create_mapping_schema(bq_table.schema)
 
-            if (
-                include_pseudo_columns
-                and bq_table.time_partitioning
-                and not bq_table.time_partitioning.field
-            ):
-                columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP")
-                if bq_table.time_partitioning.type_ == "DAY":
-                    columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
+            if include_pseudo_columns:
+                if bq_table.time_partitioning and not bq_table.time_partitioning.field:
+                    columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP", dialect="bigquery")
+                    if bq_table.time_partitioning.type_ == "DAY":
+                        columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
+                if bq_table.table_id.endswith("*"):
+                    columns["_TABLE_SUFFIX"] = exp.DataType.build("STRING", dialect="bigquery")
+                if (
+                    bq_table.external_data_configuration is not None
+                    and bq_table.external_data_configuration.source_format
+                    in (
+                        "CSV",
+                        "NEWLINE_DELIMITED_JSON",
+                        "AVRO",
+                        "PARQUET",
+                        "ORC",
+                        "DATASTORE_BACKUP",
+                    )
+                ):
+                    columns["_FILE_NAME"] = exp.DataType.build("STRING", dialect="bigquery")
 
         return columns
 
     def alter_table(
         self,
-        alter_expressions: t.List[exp.Alter],
+        alter_expressions: t.Union[t.List[exp.Alter], t.List[TableAlterOperation]],
     ) -> None:
         """
         Performs the alter statements to change the current table into the structure of the target table,
         and uses the API to add columns to structs, where SQL is not supported.
         """
+        if not alter_expressions:
+            return
 
-        nested_fields, non_nested_expressions = self._split_alter_expressions(alter_expressions)
+        cluster_by_operations, alter_statements = [], []
+        for e in alter_expressions:
+            if isinstance(e, TableAlterClusterByOperation):
+                cluster_by_operations.append(e)
+            elif isinstance(e, TableAlterOperation):
+                alter_statements.append(e.expression)
+            else:
+                alter_statements.append(e)
+
+        for op in cluster_by_operations:
+            self._update_clustering_key(op)
+
+        nested_fields, non_nested_expressions = self._split_alter_expressions(alter_statements)
 
         if nested_fields:
-            self._update_table_schema_nested_fields(nested_fields, alter_expressions[0].this)
-
-        # this is easier than trying to detect exp.Cluster nodes
-        # or exp.Command nodes that contain the string "DROP CLUSTERING KEY"
-        clustering_change_operations = [
-            e for e in non_nested_expressions if _CLUSTERING_META_KEY in e.meta
-        ]
-        for op in clustering_change_operations:
-            non_nested_expressions.remove(op)
-            table, cluster_by = op.meta[_CLUSTERING_META_KEY]
-            assert isinstance(table, str) or isinstance(table, exp.Table)
-
-            self._update_clustering_key(table, cluster_by)
+            self._update_table_schema_nested_fields(nested_fields, alter_statements[0].this)
 
         if non_nested_expressions:
             super().alter_table(non_nested_expressions)
@@ -583,7 +690,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         table_name: TableName,
         query_or_df: QueryOrDF,
         partitioned_by: t.List[exp.Expression],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         if len(partitioned_by) != 1:
             raise SQLMeshError(
@@ -602,15 +710,23 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             raise SQLMeshError(
                 f"The partition expression '{partition_sql}' doesn't contain a column."
             )
-        with self.session({}), self.temp_table(
-            query_or_df, name=table_name, partitioned_by=partitioned_by
-        ) as temp_table_name:
-            if columns_to_types is None or columns_to_types[
+        with (
+            self.session({}),
+            self.temp_table(
+                query_or_df,
+                name=table_name,
+                partitioned_by=partitioned_by,
+                source_columns=source_columns,
+            ) as temp_table_name,
+        ):
+            if target_columns_to_types is None or target_columns_to_types[
                 partition_column.name
             ] == exp.DataType.build("unknown"):
-                columns_to_types = self.columns(temp_table_name)
+                target_columns_to_types = self.columns(table_name)
 
-            partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
+            partition_type_sql = target_columns_to_types[partition_column.name].sql(
+                dialect=self.dialect
+            )
 
             select_array_agg_partitions = select_partitions_expr(
                 temp_table_name.db,
@@ -630,11 +746,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             self._insert_overwrite_by_condition(
                 table_name,
                 [SourceQuery(query_factory=lambda: exp.select("*").from_(temp_table_name))],
-                columns_to_types,
+                target_columns_to_types,
                 where=where,
             )
 
     def table_exists(self, table_name: TableName) -> bool:
+        table = exp.to_table(table_name)
+        data_object_cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+        if data_object_cache_key in self._data_object_cache:
+            logger.debug("Table existence cache hit: %s", data_object_cache_key)
+            return self._data_object_cache[data_object_cache_key] is not None
+
         try:
             from google.cloud.exceptions import NotFound
         except ModuleNotFoundError:
@@ -645,6 +767,28 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             return True
         except NotFound:
             return False
+
+    def get_table_last_modified_ts(self, table_names: t.List[TableName]) -> t.List[int]:
+        from sqlmesh.utils.date import to_timestamp
+
+        datasets_to_tables: t.DefaultDict[str, t.List[str]] = defaultdict(list)
+        for table_name in table_names:
+            table = exp.to_table(table_name)
+            datasets_to_tables[table.db].append(table.name)
+
+        results = []
+
+        for dataset, tables in datasets_to_tables.items():
+            query = (
+                f"SELECT TIMESTAMP_MILLIS(last_modified_time) FROM `{dataset}.__TABLES__` WHERE "
+            )
+            for i, table_name in enumerate(tables):
+                query += f"TABLE_ID = '{table_name}'"
+                if i < len(tables) - 1:
+                    query += " OR "
+            results.extend(self.fetchall(query))
+
+        return [to_timestamp(row[0]) for row in results]
 
     def _get_table(self, table_name: TableName) -> BigQueryTable:
         """
@@ -662,7 +806,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
         self.execute(query, quote_identifiers=quote_identifiers)
-        return self._query_job.to_dataframe()
+        query_job = self._query_job
+        assert query_job is not None
+        return query_job.to_dataframe()
 
     def _create_column_comments(
         self,
@@ -720,7 +866,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         partitioned_by: t.List[exp.Expression],
         *,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.PartitionedByProperty]:
         if len(partitioned_by) > 1:
@@ -732,7 +878,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             and partition_interval_unit is not None
             and not partition_interval_unit.is_minute
         ):
-            column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
+            column_type: t.Optional[exp.DataType] = (target_columns_to_types or {}).get(this.name)
 
             if column_type == exp.DataType.build(
                 "date", dialect=self.dialect
@@ -767,7 +913,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -778,7 +924,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             partitioned_by_prop := self._build_partitioned_by_exp(
                 partitioned_by,
                 partition_interval_unit=partition_interval_unit,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=target_columns_to_types,
             )
         ):
             properties.append(partitioned_by_prop)
@@ -830,7 +976,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             return exp.DataType(this=col_type.this, expressions=column_expressions, nested=True)
 
         # Recursively build column definitions for BigQuery's RECORDs (struct) and REPEATED RECORDs (array of struct)
-        if isinstance(col_type, exp.DataType) and (expressions := col_type.expressions):
+        if isinstance(col_type, exp.DataType) and col_type.expressions:
+            expressions = col_type.expressions
             if col_type.is_type(exp.DataType.Type.STRUCT):
                 col_type = _build_struct_with_descriptions(col_type, nested_names + [col_name])
             elif col_type.is_type(exp.DataType.Type.ARRAY) and expressions[0].is_type(
@@ -922,12 +1069,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def create_state_table(
         self,
         table_name: str,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         primary_key: t.Optional[t.Tuple[str, ...]] = None,
     ) -> None:
         self.create_table(
             table_name,
-            columns_to_types,
+            target_columns_to_types,
         )
 
     def _db_call(self, func: t.Callable[..., t.Any], *args: t.Any, **kwargs: t.Any) -> t.Any:
@@ -940,6 +1087,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _execute(
         self,
         sql: str,
+        track_rows_processed: bool = False,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -965,22 +1113,42 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             job_config=job_config,
             timeout=self._extra_config.get("job_creation_timeout_seconds"),
         )
+        query_job = self._query_job
+        assert query_job is not None
 
         logger.debug(
             "BigQuery job created: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s",
-            self._query_job.project,
-            self._query_job.location,
-            self._query_job.job_id,
+            query_job.project,
+            query_job.location,
+            query_job.job_id,
         )
 
         results = self._db_call(
-            self._query_job.result,
+            query_job.result,
             timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
         )
+
         self._query_data = iter(results) if results.total_rows else iter([])
-        query_results = self._query_job._query_results
+        query_results = query_job._query_results
         self.cursor._set_rowcount(query_results)
         self.cursor._set_description(query_results.schema)
+
+        if (
+            track_rows_processed
+            and self._query_execution_tracker
+            and self._query_execution_tracker.is_tracking()
+        ):
+            num_rows = None
+            if query_job.statement_type == "CREATE_TABLE_AS_SELECT":
+                # since table was just created, number rows in table == number rows processed
+                query_table = self.client.get_table(query_job.destination)
+                num_rows = query_table.num_rows
+            elif query_job.statement_type in ["INSERT", "DELETE", "MERGE", "UPDATE"]:
+                num_rows = query_job.num_dml_affected_rows
+
+            self._query_execution_tracker.record_execution(
+                sql, num_rows, query_job.total_bytes_processed
+            )
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
@@ -1067,35 +1235,27 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             for row in df.itertuples()
         ]
 
-    def _change_clustering_key_expr(
-        self, table: exp.Table, cluster_by: t.List[exp.Expression]
-    ) -> exp.Alter:
-        expr = super()._change_clustering_key_expr(table=table, cluster_by=cluster_by)
-        expr.meta[_CLUSTERING_META_KEY] = (table, cluster_by)
-        return expr
+    def _update_clustering_key(self, operation: TableAlterClusterByOperation) -> None:
+        cluster_key_expressions = getattr(operation, "cluster_key_expressions", [])
+        bq_table = self._get_table(operation.target_table)
 
-    def _drop_clustering_key_expr(self, table: exp.Table) -> exp.Alter:
-        expr = super()._drop_clustering_key_expr(table=table)
-        expr.meta[_CLUSTERING_META_KEY] = (table, None)
-        return expr
-
-    def _update_clustering_key(
-        self, table_name: TableName, cluster_by: t.Optional[t.List[exp.Expression]]
-    ) -> None:
-        cluster_by = cluster_by or []
-        bq_table = self._get_table(table_name)
-
-        rendered_columns = [c.sql(dialect=self.dialect) for c in cluster_by]
+        rendered_columns = [c.sql(dialect=self.dialect) for c in cluster_key_expressions]
         bq_table.clustering_fields = (
             rendered_columns or None
         )  # causes a drop of the key if cluster_by is empty or None
 
         self._db_call(self.client.update_table, table=bq_table, fields=["clustering_fields"])
 
-        if cluster_by:
+        if cluster_key_expressions:
             # BigQuery only applies new clustering going forward, so this rewrites the columns to apply the new clustering to historical data
             # ref: https://cloud.google.com/bigquery/docs/creating-clustered-tables#modifying-cluster-spec
-            self.execute(exp.update(table_name, {c: c for c in cluster_by}, where=exp.true()))
+            self.execute(
+                exp.update(
+                    operation.target_table,
+                    {c: c for c in cluster_key_expressions},
+                    where=exp.true(),
+                )
+            )
 
     def _normalize_decimal_value(self, col: exp.Expression, precision: int) -> exp.Expression:
         return exp.func("FORMAT", exp.Literal.string(f"%.{precision}f"), col)
@@ -1103,21 +1263,66 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _normalize_nested_value(self, col: exp.Expression) -> exp.Expression:
         return exp.func("TO_JSON_STRING", col, dialect=self.dialect)
 
+    @t.overload
+    def _columns_to_types(
+        self,
+        query_or_df: DF,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Dict[str, exp.DataType], t.List[str]]: ...
+
+    @t.overload
+    def _columns_to_types(
+        self,
+        query_or_df: Query,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]: ...
+
+    def _columns_to_types(
+        self,
+        query_or_df: QueryOrDF,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]:
+        if (
+            not target_columns_to_types
+            and bigframes
+            and isinstance(query_or_df, bigframes.dataframe.DataFrame)
+        ):
+            # using dry_run=True attempts to prevent the DataFrame from being materialized just to read the column types from it
+            dtypes = query_or_df.to_pandas(dry_run=True).columnDtypes
+            target_columns_to_types = columns_to_types_from_dtypes(dtypes.items())
+            return target_columns_to_types, list(source_columns or target_columns_to_types)
+
+        return super()._columns_to_types(
+            query_or_df, target_columns_to_types, source_columns=source_columns
+        )
+
+    def _native_df_to_pandas_df(
+        self,
+        query_or_df: QueryOrDF,
+    ) -> t.Union[Query, pd.DataFrame]:
+        if bigframes and isinstance(query_or_df, bigframes.dataframe.DataFrame):
+            return query_or_df.to_pandas()
+
+        return super()._native_df_to_pandas_df(query_or_df)
+
     @property
     def _query_data(self) -> t.Any:
         return self._connection_pool.get_attribute("query_data")
 
     @_query_data.setter
     def _query_data(self, value: t.Any) -> None:
-        return self._connection_pool.set_attribute("query_data", value)
+        self._connection_pool.set_attribute("query_data", value)
 
     @property
-    def _query_job(self) -> t.Any:
+    def _query_job(self) -> t.Optional[QueryJob]:
         return self._connection_pool.get_attribute("query_job")
 
     @_query_job.setter
     def _query_job(self, value: t.Any) -> None:
-        return self._connection_pool.set_attribute("query_job", value)
+        self._connection_pool.set_attribute("query_job", value)
 
     @property
     def _session_id(self) -> t.Any:
@@ -1125,7 +1330,109 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
 
     @_session_id.setter
     def _session_id(self, value: t.Any) -> None:
-        return self._connection_pool.set_attribute("session_id", value)
+        self._connection_pool.set_attribute("session_id", value)
+
+    def _get_current_schema(self) -> str:
+        raise NotImplementedError("BigQuery does not support current schema")
+
+    def _get_bq_dataset_location(self, project: str, dataset: str) -> str:
+        return self._db_call(self.client.get_dataset, dataset_ref=f"{project}.{dataset}").location
+
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        if not table.db:
+            raise ValueError(
+                f"Table {table.sql(dialect=self.dialect)} does not have a schema (dataset)"
+            )
+        project = table.catalog or self.get_current_catalog()
+        if not project:
+            raise ValueError(
+                f"Table {table.sql(dialect=self.dialect)} does not have a catalog (project)"
+            )
+
+        dataset = table.db
+        table_name = table.name
+        location = self._get_bq_dataset_location(project, dataset)
+
+        # https://cloud.google.com/bigquery/docs/information-schema-object-privileges
+        # OBJECT_PRIVILEGES is a project-level INFORMATION_SCHEMA view with regional qualifier
+        object_privileges_table = exp.to_table(
+            f"`{project}`.`region-{location}`.INFORMATION_SCHEMA.{self.GRANT_INFORMATION_SCHEMA_TABLE_NAME}",
+            dialect=self.dialect,
+        )
+        return (
+            exp.select("privilege_type", "grantee")
+            .from_(object_privileges_table)
+            .where(
+                exp.and_(
+                    exp.column("object_schema").eq(exp.Literal.string(dataset)),
+                    exp.column("object_name").eq(exp.Literal.string(table_name)),
+                    # Filter out current_user
+                    # BigQuery grantees format: "user:email" or "group:name"
+                    exp.func("split", exp.column("grantee"), exp.Literal.string(":"))[
+                        exp.func("OFFSET", exp.Literal.number("1"))
+                    ].neq(self.CURRENT_USER_OR_ROLE_EXPRESSION),
+                )
+            )
+        )
+
+    @staticmethod
+    def _grant_object_kind(table_type: DataObjectType) -> str:
+        if table_type == DataObjectType.VIEW:
+            return "VIEW"
+        if table_type == DataObjectType.MATERIALIZED_VIEW:
+            # We actually need to use "MATERIALIZED VIEW" here even though it's not listed
+            # as a supported resource_type in the BigQuery DCL doc:
+            # https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
+            return "MATERIALIZED VIEW"
+        return "TABLE"
+
+    def _dcl_grants_config_expr(
+        self,
+        dcl_cmd: t.Type[DCL],
+        table: exp.Table,
+        grants_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        expressions: t.List[exp.Expression] = []
+        if not grants_config:
+            return expressions
+
+        # https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
+
+        def normalize_principal(p: str) -> str:
+            if ":" not in p:
+                raise ValueError(f"Principal '{p}' missing a prefix label")
+
+            # allUsers and allAuthenticatedUsers special groups that are cas-sensitive and must start with "specialGroup:"
+            if p.endswith("allUsers") or p.endswith("allAuthenticatedUsers"):
+                if not p.startswith("specialGroup:"):
+                    raise ValueError(
+                        f"Special group principal '{p}' must start with 'specialGroup:' prefix label"
+                    )
+                return p
+
+            label, principal = p.split(":", 1)
+            # always lowercase principals
+            return f"{label}:{principal.lower()}"
+
+        object_kind = self._grant_object_kind(table_type)
+        for privilege, principals in grants_config.items():
+            if not principals:
+                continue
+
+            noramlized_principals = [exp.Literal.string(normalize_principal(p)) for p in principals]
+            args: t.Dict[str, t.Any] = {
+                "privileges": [exp.GrantPrivilege(this=exp.to_identifier(privilege, quoted=True))],
+                "securable": table.copy(),
+                "principals": noramlized_principals,
+            }
+
+            if object_kind:
+                args["kind"] = exp.Var(this=object_kind)
+
+            expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+
+        return expressions
 
 
 class _ErrorCounter:
@@ -1157,7 +1464,7 @@ class _ErrorCounter:
 
         if isinstance(error, self.retryable_errors):
             return True
-        elif isinstance(error, Forbidden) and any(
+        if isinstance(error, Forbidden) and any(
             e["reason"] == "rateLimitExceeded" for e in error.errors
         ):
             return True

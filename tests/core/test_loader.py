@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.utils.errors import ConfigError
@@ -22,7 +22,7 @@ SELECT 1;
         },
         "python": {
             "contents": """import typing as t
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import ExecutionContext, model
 
 @model(
@@ -68,7 +68,7 @@ def test_duplicate_model_names_different_kind(tmp_path: Path, sample_models):
     else:
         model_2, model_3 = models[0], None
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 
     path_1: Path = tmp_path / model_1["path"]
@@ -85,20 +85,20 @@ def test_duplicate_model_names_different_kind(tmp_path: Path, sample_models):
         path_3.write_text(model_3["contents"])
 
     with pytest.raises(
-        ValueError, match=r'Duplicate model name\(s\) found: "memory"."test_schema"."test_model".'
+        ConfigError, match=r'Duplicate model name\(s\) found: "memory"."test_schema"."test_model".'
     ):
         Context(paths=tmp_path, config=config)
 
 
 @pytest.mark.parametrize("sample_models", ["sql", "external"], indirect=True)
 def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
-    """Test same (SQL and external) models with duplicate model names raises ValueError."""
+    """Test same (SQL and external) models with duplicate model names raises ConfigError."""
 
     def duplicate_model_path(fpath):
         return Path(fpath).parent / ("duplicate" + Path(fpath).suffix)
 
     model = sample_models[0]
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 
     path_1: Path = tmp_path / model["path"]
@@ -109,16 +109,16 @@ def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
     duplicate_fpath.write_text(model["contents"])
 
     with pytest.raises(
-        ValueError,
-        match=r'Duplicate key \'"memory"."test_schema"."test_model"\' found in UniqueKeyDict<models>. Call dict.update\(\.\.\.\) if this is intentional.',
+        ConfigError,
+        match=r".*Duplicate .* model name: 'test_schema.test_model'",
     ):
         Context(paths=tmp_path, config=config)
 
 
-@pytest.mark.isolated
+@pytest.mark.registry_isolation
 def test_duplicate_python_model_names_raise_error(tmp_path: Path) -> None:
     """Test python models with duplicate model names raises ConfigError if the functions are not identical."""
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     model_name = "test_schema.test_model"
 
@@ -134,7 +134,7 @@ def my_model(context, **kwargs):
     pass"""
 
     model_payload_b = f"""import typing as t
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import ExecutionContext, model
 
 @model(
@@ -159,7 +159,7 @@ def execute(
 
     with pytest.raises(
         ConfigError,
-        match=r"Failed to load model definition at '.*'.\nDuplicate key 'test_schema.test_model' found in UniqueKeyDict<python_models>.",
+        match=r"Failed to load model from file '.*'.\n\n  Duplicate name: 'test_schema.test_model'.",
     ):
         Context(paths=tmp_path, config=config)
 
@@ -167,7 +167,7 @@ def execute(
 @pytest.mark.slow
 def test_duplicate_python_model_names_no_error(tmp_path: Path) -> None:
     """Test python models with duplicate model names raises no error if the functions are identical."""
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     model_name = "test_schema.test_model"
 

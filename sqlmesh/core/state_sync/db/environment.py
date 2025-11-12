@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-import pandas as pd
 import json
 import logging
 from sqlglot import exp
@@ -12,10 +11,13 @@ from sqlmesh.core.state_sync.db.utils import (
     fetchall,
     fetchone,
 )
-from sqlmesh.core.environment import Environment, EnvironmentStatements
+from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,7 @@ class EnvironmentState:
             "catalog_name_override": exp.DataType.build("text"),
             "previous_finalized_snapshots": exp.DataType.build(blob_type),
             "normalize_name": exp.DataType.build("boolean"),
+            "gateway_managed": exp.DataType.build("boolean"),
             "requirements": exp.DataType.build(blob_type),
         }
 
@@ -74,7 +77,8 @@ class EnvironmentState:
         self.engine_adapter.insert_append(
             self.environments_table,
             _environment_to_df(environment),
-            columns_to_types=self._environment_columns_to_types,
+            target_columns_to_types=self._environment_columns_to_types,
+            track_rows_processed=False,
         )
 
     def update_environment_statements(
@@ -104,17 +108,19 @@ class EnvironmentState:
             self.engine_adapter.insert_append(
                 self.environment_statements_table,
                 _environment_statements_to_df(environment_name, plan_id, environment_statements),
-                columns_to_types=self._environment_statements_columns_to_types,
+                target_columns_to_types=self._environment_statements_columns_to_types,
+                track_rows_processed=False,
             )
 
-    def invalidate_environment(self, name: str) -> None:
+    def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         """Invalidates the environment.
 
         Args:
             name: The name of the environment
+            protect_prod: If True, prevents invalidation of the production environment.
         """
         name = name.lower()
-        if name == c.PROD:
+        if protect_prod and name == c.PROD:
             raise SQLMeshError("Cannot invalidate the production environment.")
 
         filter_expr = exp.column("name").eq(name)
@@ -150,8 +156,8 @@ class EnvironmentState:
         stored_plan_id = stored_plan_id_row[0]
         if stored_plan_id != environment.plan_id:
             raise SQLMeshError(
-                f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
-                f"Stored plan ID: '{stored_plan_id}'. Please recreate the plan and try again"
+                f"Another plan ({stored_plan_id}) was applied to the target environment '{environment.name}' while your current plan "
+                f"({environment.plan_id}) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
             )
 
         environment.finalized_ts = now_timestamp()
@@ -161,43 +167,44 @@ class EnvironmentState:
             where=environment_filter,
         )
 
-    def delete_expired_environments(self) -> t.List[Environment]:
+    def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
+        """Returns the expired environments.
+
+        Expired environments are environments that have exceeded their time-to-live value.
+        Returns:
+            The list of environment summaries to remove.
+        """
+        return self._fetch_environment_summaries(
+            where=self._create_expiration_filter_expr(current_ts)
+        )
+
+    def delete_expired_environments(
+        self, current_ts: t.Optional[int] = None
+    ) -> t.List[EnvironmentSummary]:
         """Deletes expired environments.
 
         Returns:
             A list of deleted environments.
         """
-        now_ts = now_timestamp()
-        filter_expr = exp.LTE(
-            this=exp.column("expiration_ts"),
-            expression=exp.Literal.number(now_ts),
-        )
-
-        rows = fetchall(
-            self.engine_adapter,
-            self._environments_query(
-                where=filter_expr,
-                lock_for_update=True,
-            ),
-        )
-        environments = [self._environment_from_row(r) for r in rows]
+        current_ts = current_ts or now_timestamp()
+        expired_environments = self.get_expired_environments(current_ts=current_ts)
 
         self.engine_adapter.delete_from(
             self.environments_table,
-            where=filter_expr,
+            where=self._create_expiration_filter_expr(current_ts),
         )
 
         # Delete the expired environments' corresponding environment statements
-        if expired_environments := [
+        if expired_environments_exprs := [
             exp.EQ(this=exp.column("environment_name"), expression=exp.Literal.string(env.name))
-            for env in environments
+            for env in expired_environments
         ]:
             self.engine_adapter.delete_from(
                 self.environment_statements_table,
-                where=exp.or_(*expired_environments),
+                where=exp.or_(*expired_environments_exprs),
             )
 
-        return environments
+        return expired_environments
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
@@ -210,18 +217,13 @@ class EnvironmentState:
             for row in fetchall(self.engine_adapter, self._environments_query())
         ]
 
-    def get_environments_summary(self) -> t.Dict[str, int]:
-        """Fetches all environment names along with expiry datetime.
+    def get_environments_summary(self) -> t.List[EnvironmentSummary]:
+        """Fetches summaries for all environments.
 
         Returns:
-            A dict of all environment names along with expiry datetime.
+            A list of all environment summaries.
         """
-        return dict(
-            fetchall(
-                self.engine_adapter,
-                self._environments_query(required_fields=["name", "expiration_ts"]),
-            ),
-        )
+        return self._fetch_environment_summaries()
 
     def get_environment(
         self, environment: str, lock_for_update: bool = False
@@ -283,7 +285,14 @@ class EnvironmentState:
         return []
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
-        return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
+        return Environment(
+            **{field: row[i] for i, field in enumerate(sorted(Environment.all_fields()))}
+        )
+
+    def _environment_summmary_from_row(self, row: t.Tuple[str, ...]) -> EnvironmentSummary:
+        return EnvironmentSummary(
+            **{field: row[i] for i, field in enumerate(sorted(EnvironmentSummary.all_fields()))}
+        )
 
     def _environments_query(
         self,
@@ -291,7 +300,7 @@ class EnvironmentState:
         lock_for_update: bool = False,
         required_fields: t.Optional[t.List[str]] = None,
     ) -> exp.Select:
-        query_fields = required_fields if required_fields else Environment.all_fields()
+        query_fields = required_fields if required_fields else sorted(Environment.all_fields())
         query = (
             exp.select(*(exp.to_identifier(field) for field in query_fields))
             .from_(self.environments_table)
@@ -301,8 +310,35 @@ class EnvironmentState:
             return query.lock(copy=False)
         return query
 
+    def _create_expiration_filter_expr(self, current_ts: int) -> exp.Expression:
+        """Creates a SQLGlot filter expression to find expired environments.
+
+        Args:
+            current_ts: The current timestamp.
+        """
+        return exp.LTE(
+            this=exp.column("expiration_ts"),
+            expression=exp.Literal.number(current_ts),
+        )
+
+    def _fetch_environment_summaries(
+        self, where: t.Optional[str | exp.Expression] = None
+    ) -> t.List[EnvironmentSummary]:
+        return [
+            self._environment_summmary_from_row(row)
+            for row in fetchall(
+                self.engine_adapter,
+                self._environments_query(
+                    where=where,
+                    required_fields=sorted(EnvironmentSummary.all_fields()),
+                ),
+            )
+        ]
+
 
 def _environment_to_df(environment: Environment) -> pd.DataFrame:
+    import pandas as pd
+
     return pd.DataFrame(
         [
             {
@@ -327,6 +363,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                     else None
                 ),
                 "normalize_name": environment.normalize_name,
+                "gateway_managed": environment.gateway_managed,
                 "requirements": json.dumps(environment.requirements),
             }
         ]
@@ -336,6 +373,8 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
 def _environment_statements_to_df(
     environment_name: str, plan_id: str, environment_statements: t.List[EnvironmentStatements]
 ) -> pd.DataFrame:
+    import pandas as pd
+
     return pd.DataFrame(
         [
             {

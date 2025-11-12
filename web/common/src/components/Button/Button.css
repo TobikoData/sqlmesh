@@ -1,0 +1,31 @@
+:where(:root) {
+  --color-button-primary-background: var(--color-action);
+  --color-button-primary-foreground: var(--color-light);
+  --color-button-primary-hover: var(--color-action-hover);
+  --color-button-primary-active: var(--color-action-active);
+
+  --color-button-secondary-background: var(--color-neutral-10);
+  --color-button-secondary-foreground: var(--color-prose);
+  --color-button-secondary-hover: var(--color-neutral-125);
+  --color-button-secondary-active: var(--color-neutral-150);
+
+  --color-button-alternative-background: var(--color-light);
+  --color-button-alternative-foreground: var(--color-prose);
+  --color-button-alternative-hover: var(--color-neutral-125);
+  --color-button-alternative-active: var(--color-neutral-150);
+
+  --color-button-destructive-background: var(--color-neutral-10);
+  --color-button-destructive-foreground: var(--color-destructive-foreground);
+  --color-button-destructive-hover: var(--color-neutral-125);
+  --color-button-destructive-active: var(--color-neutral-150);
+
+  --color-button-danger-background: var(--color-destructive);
+  --color-button-danger-foreground: var(--color-light);
+  --color-button-danger-hover: var(--color-destructive-hover);
+  --color-button-danger-active: var(--color-destructive-active);
+
+  --color-button-transparent-background: transparent;
+  --color-button-transparent-foreground: var(--color-prose);
+  --color-button-transparent-hover: var(--color-neutral-125);
+  --color-button-transparent-active: var(--color-neutral-150);
+}

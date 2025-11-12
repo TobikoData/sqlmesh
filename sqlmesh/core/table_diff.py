@@ -4,22 +4,27 @@ import math
 import typing as t
 from functools import cached_property
 
-import pandas as pd
-
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
+from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlglot.optimizer.scope import find_all_in_scope
 
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.errors import SQLMeshError
+
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
 
 SQLMESH_JOIN_KEY_COL = "__sqlmesh_join_key"
+SQLMESH_SAMPLE_TYPE_COL = "__sqlmesh_sample_type"
 
 
 class SchemaDiff(PydanticModel, frozen=True):
@@ -32,28 +37,77 @@ class SchemaDiff(PydanticModel, frozen=True):
     source_alias: t.Optional[str] = None
     target_alias: t.Optional[str] = None
     model_name: t.Optional[str] = None
+    ignore_case: bool = False
+
+    @property
+    def _comparable_source_schema(self) -> t.Dict[str, exp.DataType]:
+        return (
+            self._lowercase_schema_names(self.source_schema)
+            if self.ignore_case
+            else self.source_schema
+        )
+
+    @property
+    def _comparable_target_schema(self) -> t.Dict[str, exp.DataType]:
+        return (
+            self._lowercase_schema_names(self.target_schema)
+            if self.ignore_case
+            else self.target_schema
+        )
+
+    def _lowercase_schema_names(
+        self, schema: t.Dict[str, exp.DataType]
+    ) -> t.Dict[str, exp.DataType]:
+        return {c.lower(): t for c, t in schema.items()}
+
+    def _original_column_name(
+        self, maybe_lowercased_column_name: str, schema: t.Dict[str, exp.DataType]
+    ) -> str:
+        if not self.ignore_case:
+            return maybe_lowercased_column_name
+
+        return next(c for c in schema if c.lower() == maybe_lowercased_column_name)
 
     @property
     def added(self) -> t.List[t.Tuple[str, exp.DataType]]:
         """Added columns."""
-        return [(c, t) for c, t in self.target_schema.items() if c not in self.source_schema]
+        return [
+            (self._original_column_name(c, self.target_schema), t)
+            for c, t in self._comparable_target_schema.items()
+            if c not in self._comparable_source_schema
+        ]
 
     @property
     def removed(self) -> t.List[t.Tuple[str, exp.DataType]]:
         """Removed columns."""
-        return [(c, t) for c, t in self.source_schema.items() if c not in self.target_schema]
+        return [
+            (self._original_column_name(c, self.source_schema), t)
+            for c, t in self._comparable_source_schema.items()
+            if c not in self._comparable_target_schema
+        ]
 
     @property
     def modified(self) -> t.Dict[str, t.Tuple[exp.DataType, exp.DataType]]:
         """Columns with modified types."""
         modified = {}
-        for column in self.source_schema.keys() & self.target_schema.keys():
-            source_type = self.source_schema[column]
-            target_type = self.target_schema[column]
+        for column in self._comparable_source_schema.keys() & self._comparable_target_schema.keys():
+            source_type = self._comparable_source_schema[column]
+            target_type = self._comparable_target_schema[column]
 
             if source_type != target_type:
                 modified[column] = (source_type, target_type)
+
+        if self.ignore_case:
+            modified = {
+                self._original_column_name(c, self.source_schema): dt for c, dt in modified.items()
+            }
+
         return modified
+
+    @property
+    def has_changes(self) -> bool:
+        """Does the schema contain any changes at all between source and target"""
+        return bool(self.added or self.removed or self.modified)
 
 
 class RowDiff(PydanticModel, frozen=True):
@@ -72,6 +126,21 @@ class RowDiff(PydanticModel, frozen=True):
     model_name: t.Optional[str] = None
     decimals: int = 3
 
+    _types_resolved: t.ClassVar[bool] = False
+
+    def __new__(cls, *args: t.Any, **kwargs: t.Any) -> RowDiff:
+        if not cls._types_resolved:
+            cls._resolve_types()
+        return super().__new__(cls)
+
+    @classmethod
+    def _resolve_types(cls) -> None:
+        # Pandas is imported by type checking so we need to resolve the types with the real import before instantiating
+        import pandas as pd  # noqa
+
+        cls.model_rebuild()
+        cls._types_resolved = True
+
     @property
     def source_count(self) -> int:
         """Count of the source."""
@@ -81,6 +150,15 @@ class RowDiff(PydanticModel, frozen=True):
     def target_count(self) -> int:
         """Count of the target."""
         return int(self.stats["t_count"])
+
+    @property
+    def empty(self) -> bool:
+        return (
+            self.source_count == 0
+            and self.target_count == 0
+            and self.s_only_count == 0
+            and self.t_only_count == 0
+        )
 
     @property
     def count_pct_change(self) -> float:
@@ -155,6 +233,7 @@ class TableDiff:
         model_name: t.Optional[str] = None,
         model_dialect: t.Optional[str] = None,
         decimals: int = 3,
+        schema_diff_ignore_case: bool = False,
     ):
         if not isinstance(adapter, RowDiffMixin):
             raise ValueError(f"Engine {adapter} doesnt support RowDiff")
@@ -170,6 +249,7 @@ class TableDiff:
         self.model_name = model_name
         self.model_dialect = model_dialect
         self.decimals = decimals
+        self.schema_diff_ignore_case = schema_diff_ignore_case
 
         # Support environment aliases for diff output improvement in certain cases
         self.source_alias = source_alias
@@ -254,6 +334,7 @@ class TableDiff:
             source_alias=self.source_alias,
             target_alias=self.target_alias,
             model_name=self.model_name,
+            ignore_case=self.schema_diff_ignore_case,
         )
 
     def row_diff(
@@ -286,8 +367,8 @@ class TableDiff:
                 column_type = matched_columns[name]
                 qualified_column = exp.column(name, table)
 
-                if column_type.is_type(*exp.DataType.FLOAT_TYPES):
-                    return exp.func("ROUND", qualified_column, exp.Literal.number(self.decimals))
+                if column_type.is_type(*exp.DataType.REAL_TYPES):
+                    return self.adapter._normalize_decimal_value(qualified_column, self.decimals)
                 if column_type.is_type(*exp.DataType.NESTED_TYPES):
                     return self.adapter._normalize_nested_value(qualified_column)
 
@@ -309,15 +390,12 @@ class TableDiff:
                 for c, t in matched_columns.items()
             ]
 
-            def name(e: exp.Expression) -> str:
-                return e.args["alias"].sql(identify=True)
-
             source_query = (
                 exp.select(
                     *(exp.column(c) for c in source_schema),
                     self.source_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
-                .from_(self.source_table)
+                .from_(self.source_table.as_("s"))
                 .where(self.where)
             )
             target_query = (
@@ -325,9 +403,15 @@ class TableDiff:
                     *(exp.column(c) for c in target_schema),
                     self.target_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
-                .from_(self.target_table)
+                .from_(self.target_table.as_("t"))
                 .where(self.where)
             )
+
+            # Ensure every column is qualified with the alias in the source and target queries
+            for col in find_all_in_scope(source_query, exp.Column):
+                col.set("table", exp.to_identifier("s"))
+            for col in find_all_in_scope(target_query, exp.Column):
+                col.set("table", exp.to_identifier("t"))
 
             source_table = exp.table_("__source")
             target_table = exp.table_("__target")
@@ -337,21 +421,16 @@ class TableDiff:
                 exp.select(
                     *s_selects.values(),
                     *t_selects.values(),
-                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in s_index)), 1, 0).as_(
-                        "s_exists"
-                    ),
-                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in t_index)), 1, 0).as_(
-                        "t_exists"
-                    ),
+                    exp.func(
+                        "IF", exp.column(SQLMESH_JOIN_KEY_COL, "s").is_(exp.Null()).not_(), 1, 0
+                    ).as_("s_exists"),
+                    exp.func(
+                        "IF", exp.column(SQLMESH_JOIN_KEY_COL, "t").is_(exp.Null()).not_(), 1, 0
+                    ).as_("t_exists"),
                     exp.func(
                         "IF",
-                        exp.and_(
-                            exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
-                                exp.column(SQLMESH_JOIN_KEY_COL, "t")
-                            ),
-                            exp.and_(
-                                *(c.is_(exp.Null()).not_() for c in s_index + t_index),
-                            ),
+                        exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
+                            exp.column(SQLMESH_JOIN_KEY_COL, "t")
                         ),
                         1,
                         0,
@@ -415,7 +494,26 @@ class TableDiff:
             schema = to_schema(temp_schema, dialect=self.dialect)
             temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
-            with self.adapter.temp_table(query, name=temp_table) as table:
+            temp_table_kwargs: t.Dict[str, t.Any] = {}
+            if isinstance(self.adapter, AthenaEngineAdapter):
+                # Athena has two table formats: Hive (the default) and Iceberg. TableDiff requires that
+                # the formats be the same for the source, target, and temp tables.
+                source_table_type = self.adapter._query_table_type(self.source_table)
+                target_table_type = self.adapter._query_table_type(self.target_table)
+
+                if source_table_type == "iceberg" and target_table_type == "iceberg":
+                    temp_table_kwargs["table_format"] = "iceberg"
+                # Sets the temp table's format to Iceberg.
+                # If neither source nor target table is Iceberg, it defaults to Hive (Athena's default).
+                elif source_table_type == "iceberg" or target_table_type == "iceberg":
+                    raise SQLMeshError(
+                        f"Source table '{self.source}' format '{source_table_type}' and target table '{self.target}' format '{target_table_type}' "
+                        f"do not match for Athena. Diffing between different table formats is not supported."
+                    )
+
+            with self.adapter.temp_table(
+                query, name=temp_table, target_columns_to_types=None, **temp_table_kwargs
+            ) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
@@ -439,7 +537,7 @@ class TableDiff:
 
                 summary_query = exp.select(*summary_sums).from_(table)
 
-                stats_df = self.adapter.fetchdf(summary_query, quote_identifiers=True)
+                stats_df = self.adapter.fetchdf(summary_query, quote_identifiers=True).fillna(0)
                 stats_df["s_only_count"] = stats_df["s_count"] - stats_df["join_count"]
                 stats_df["t_only_count"] = stats_df["t_count"] - stats_df["join_count"]
                 stats = stats_df.iloc[0].to_dict()
@@ -476,30 +574,19 @@ class TableDiff:
                     .drop(index=index_cols, errors="ignore")
                 )
 
-                sample_filter_cols = ["s_exists", "t_exists", "row_joined", "row_full_match"]
-                sample_query = (
-                    exp.select(
-                        *(sample_filter_cols),
-                        *(name(c) for c in s_selects.values()),
-                        *(name(c) for c in t_selects.values()),
-                    )
-                    .from_(table)
-                    .where(exp.or_(*(exp.column(c.alias).eq(0) for c in comparisons)))
-                    .order_by(
-                        *(name(s_selects[c.name]) for c in s_index),
-                        *(name(t_selects[c.name]) for c in t_index),
-                    )
-                    .limit(self.limit)
+                sample = self._fetch_sample(
+                    table, s_selects, s_index, t_selects, t_index, self.limit
                 )
-                sample = self.adapter.fetchdf(sample_query, quote_identifiers=True)
 
                 joined_sample_cols = [f"s__{c}" for c in s_index_names]
                 comparison_cols = [
                     (f"s__{c}", f"t__{c}")
                     for c in column_stats[column_stats["pct_match"] < 100].index
                 ]
+
                 for cols in comparison_cols:
                     joined_sample_cols.extend(cols)
+
                 joined_renamed_cols = {
                     c: c.split("__")[1] if c.split("__")[1] in index_cols else c
                     for c in joined_sample_cols
@@ -533,13 +620,16 @@ class TableDiff:
                         )
                         for c, n in joined_renamed_cols.items()
                     }
-                joined_sample = sample[sample["row_joined"] == 1][joined_sample_cols]
+
+                joined_sample = sample[sample[SQLMESH_SAMPLE_TYPE_COL] == "common_rows"][
+                    joined_sample_cols
+                ]
                 joined_sample.rename(
                     columns=joined_renamed_cols,
                     inplace=True,
                 )
 
-                s_sample = sample[(sample["s_exists"] == 1) & (sample["row_joined"] == 0)][
+                s_sample = sample[sample[SQLMESH_SAMPLE_TYPE_COL] == "source_only"][
                     [
                         *[f"s__{c}" for c in s_index_names],
                         *[f"s__{c}" for c in source_schema if c not in s_index_names],
@@ -549,7 +639,7 @@ class TableDiff:
                     columns={c: c.replace("s__", "") for c in s_sample.columns}, inplace=True
                 )
 
-                t_sample = sample[(sample["t_exists"] == 1) & (sample["row_joined"] == 0)][
+                t_sample = sample[sample[SQLMESH_SAMPLE_TYPE_COL] == "target_only"][
                     [
                         *[f"t__{c}" for c in t_index_names],
                         *[f"t__{c}" for c in target_schema if c not in t_index_names],
@@ -560,8 +650,11 @@ class TableDiff:
                 )
 
                 sample.drop(
-                    columns=sample_filter_cols
-                    + [f"s__{SQLMESH_JOIN_KEY_COL}", f"t__{SQLMESH_JOIN_KEY_COL}"],
+                    columns=[
+                        f"s__{SQLMESH_JOIN_KEY_COL}",
+                        f"t__{SQLMESH_JOIN_KEY_COL}",
+                        SQLMESH_SAMPLE_TYPE_COL,
+                    ],
                     inplace=True,
                 )
 
@@ -579,4 +672,75 @@ class TableDiff:
                     model_name=self.model_name,
                     decimals=self.decimals,
                 )
+
         return self._row_diff
+
+    def _fetch_sample(
+        self,
+        sample_table: exp.Table,
+        s_selects: t.Dict[str, exp.Alias],
+        s_index: t.List[exp.Column],
+        t_selects: t.Dict[str, exp.Alias],
+        t_index: t.List[exp.Column],
+        limit: int,
+    ) -> pd.DataFrame:
+        rendered_data_column_names = [
+            name(s) for s in list(s_selects.values()) + list(t_selects.values())
+        ]
+        sample_type = exp.to_identifier(SQLMESH_SAMPLE_TYPE_COL)
+
+        source_only_sample = (
+            exp.select(
+                exp.Literal.string("source_only").as_(sample_type), *rendered_data_column_names
+            )
+            .from_(sample_table)
+            .where(exp.and_(exp.column("s_exists").eq(1), exp.column("row_joined").eq(0)))
+            .order_by(*(name(s_selects[c.name]) for c in s_index))
+            .limit(limit)
+        )
+
+        target_only_sample = (
+            exp.select(
+                exp.Literal.string("target_only").as_(sample_type), *rendered_data_column_names
+            )
+            .from_(sample_table)
+            .where(exp.and_(exp.column("t_exists").eq(1), exp.column("row_joined").eq(0)))
+            .order_by(*(name(t_selects[c.name]) for c in t_index))
+            .limit(limit)
+        )
+
+        common_rows_sample = (
+            exp.select(
+                exp.Literal.string("common_rows").as_(sample_type), *rendered_data_column_names
+            )
+            .from_(sample_table)
+            .where(exp.and_(exp.column("row_joined").eq(1), exp.column("row_full_match").eq(0)))
+            .order_by(
+                *(name(s_selects[c.name]) for c in s_index),
+                *(name(t_selects[c.name]) for c in t_index),
+            )
+            .limit(limit)
+        )
+
+        query = (
+            exp.Select()
+            .with_("source_only", source_only_sample)
+            .with_("target_only", target_only_sample)
+            .with_("common_rows", common_rows_sample)
+            .select(sample_type, *rendered_data_column_names)
+            .from_("source_only")
+            .union(
+                exp.select(sample_type, *rendered_data_column_names).from_("target_only"),
+                distinct=False,
+            )
+            .union(
+                exp.select(sample_type, *rendered_data_column_names).from_("common_rows"),
+                distinct=False,
+            )
+        )
+
+        return self.adapter.fetchdf(query, quote_identifiers=True)
+
+
+def name(e: exp.Expression) -> str:
+    return e.args["alias"].sql(identify=True)

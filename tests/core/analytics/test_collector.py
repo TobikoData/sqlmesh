@@ -145,7 +145,7 @@ def test_on_cicd_command(collector: AnalyticsCollector, mocker: MockerFixture):
                 {
                     "seq_num": 1,
                     "event_type": "CICD_COMMAND",
-                    "event": '{"command_name": "test_cicd", "command_args": ["arg_1", "arg_2"], "parent_command_names": ["parent_a", "parent_b"], "cicd_bot_config": {"invalidate_environment_after_deploy": true, "enable_deploy_command": false, "auto_categorize_changes": {"external": "off", "python": "off", "sql": "off", "seed": "off"}, "skip_pr_backfill": true, "run_on_deploy_to_prod": false}}',
+                    "event": '{"command_name": "test_cicd", "command_args": ["arg_1", "arg_2"], "parent_command_names": ["parent_a", "parent_b"], "cicd_bot_config": {"invalidate_environment_after_deploy": true, "enable_deploy_command": false, "run_on_deploy_to_prod": false}}',
                     **common_fields,
                 }
             ),
@@ -183,7 +183,7 @@ def test_on_plan_apply(
                 {
                     "seq_num": 0,
                     "event_type": "PLAN_APPLY_START",
-                    "event": f'{{"plan_id": "{plan_id}", "engine_type": "bigquery", "state_sync_type": "mysql", "scheduler_type": "builtin", "is_dev": false, "skip_backfill": false, "no_gaps": false, "forward_only": false, "ensure_finalized_snapshots": false, "has_restatements": false, "directly_modified_count": 19, "indirectly_modified_count": 0, "environment_name_hash": "d6e4a9b6646c62fc48baa6dd6150d1f7"}}',
+                    "event": f'{{"plan_id": "{plan_id}", "engine_type": "bigquery", "state_sync_type": "mysql", "scheduler_type": "builtin", "is_dev": false, "skip_backfill": false, "no_gaps": false, "forward_only": false, "ensure_finalized_snapshots": false, "has_restatements": false, "directly_modified_count": 21, "indirectly_modified_count": 0, "environment_name_hash": "d6e4a9b6646c62fc48baa6dd6150d1f7"}}',
                     **common_fields,
                 }
             ),
@@ -218,7 +218,7 @@ def test_on_snapshots_created(
         context.get_snapshot("sushi.waiter_revenue_by_day"),
         context.get_snapshot("sushi.top_waiters"),
     ]
-    new_snapshots[0].categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshots[0].categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshots[0].effective_from = "2024-01-01"
     new_snapshots[0].version = "test_version"
 
@@ -239,7 +239,7 @@ def test_on_snapshots_created(
             "node_type": "model",
             "model_kind": "incremental_by_time_range",
             "is_sql": False,
-            "change_category": "forward_only",
+            "change_category": "breaking",
             "dialect": "duckdb",
             "audits_count": 0,
             "effective_from_set": True,

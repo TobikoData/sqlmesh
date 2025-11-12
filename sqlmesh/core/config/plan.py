@@ -20,6 +20,7 @@ class PlanConfig(BaseConfig):
         auto_apply: Whether to automatically apply the new plan after creation.
         use_finalized_state: Whether to compare against the latest finalized environment state, or to use
             whatever state the target environment is currently in.
+        always_recreate_environment: Whether to always recreate the target environment from the `create_from` environment.
     """
 
     forward_only: bool = False
@@ -30,3 +31,4 @@ class PlanConfig(BaseConfig):
     no_prompts: bool = True
     auto_apply: bool = False
     use_finalized_state: bool = False
+    always_recreate_environment: bool = False

@@ -157,7 +157,7 @@ class AnalyticsCollector:
             plan: The plan that is being applied.
             engine_type: The type of the target engine.
             state_sync_type: The type of the engine used to store the SQLMesh state.
-            scheduler_type: The type of the scheduler being used. Eg. "builtin" or "airflow".
+            scheduler_type: The type of the scheduler being used. Eg. "builtin".
         """
         self._add_event(
             "PLAN_APPLY_START",

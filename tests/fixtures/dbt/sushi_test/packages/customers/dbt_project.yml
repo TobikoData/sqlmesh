@@ -30,3 +30,11 @@ vars:
   some_other_var: 5
   yet_another_var: 5
   'customers:customer_id': "bla"
+
+
+on-run-start:
+  - 'CREATE TABLE IF NOT EXISTS to_be_executed_first (col VARCHAR);'
+  - 'CREATE TABLE IF NOT EXISTS analytic_stats_packaged_project (physical_table VARCHAR, evaluation_time VARCHAR);'
+on-run-end:
+  - 'DROP TABLE to_be_executed_first'
+  - '{{ packaged_tables(schemas) }}'

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from io import StringIO
+
 import functools
 import logging
 import typing as t
 from argparse import Namespace, SUPPRESS
 from collections import defaultdict
 from copy import deepcopy
+from pathlib import Path
 
 from hyperscript import h
 
@@ -24,16 +27,16 @@ from IPython.core.magic import (
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
-from sqlmesh.core import constants as c
 from sqlmesh.core.config import load_configs
+from sqlmesh.core.config.connection import INIT_DISPLAY_INFO_TO_TYPE
 from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
-from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
-from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity
+from sqlmesh.core.test import ModelTestMetadata
+from sqlmesh.utils import yaml, Verbosity, optional_import
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -92,6 +95,43 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
     return wrapper
 
 
+def format_arguments(func: t.Callable) -> t.Callable:
+    """Decorator to add common format arguments to magic commands."""
+    func = argument(
+        "--normalize",
+        action="store_true",
+        help="Whether or not to normalize identifiers to lowercase.",
+        default=None,
+    )(func)
+    func = argument(
+        "--pad",
+        type=int,
+        help="Determines the pad size in a formatted string.",
+    )(func)
+    func = argument(
+        "--indent",
+        type=int,
+        help="Determines the indentation size in a formatted string.",
+    )(func)
+    func = argument(
+        "--normalize-functions",
+        type=str,
+        help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
+    )(func)
+    func = argument(
+        "--leading-comma",
+        action="store_true",
+        help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
+        default=None,
+    )(func)
+    func = argument(
+        "--max-text-width",
+        type=int,
+        help="The max number of characters in a segment before creating new lines in pretty mode.",
+    )(func)
+    return func
+
+
 @magics_class
 class SQLMeshMagics(Magics):
     @property
@@ -127,16 +167,32 @@ class SQLMeshMagics(Magics):
     @argument("--ignore-warnings", action="store_true", help="Ignore warnings.")
     @argument("--debug", action="store_true", help="Enable debug mode.")
     @argument("--log-file-dir", type=str, help="The directory to write the log file to.")
+    @argument(
+        "--dotenv", type=str, help="Path to a custom .env file to load environment variables from."
+    )
     @line_magic
     def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
-        from sqlmesh import configure_logging
+        from sqlmesh import configure_logging, remove_excess_logs
 
         args = parse_argstring(self.context, line)
-        configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
-        log_limit = list(configs.values())[0].log_limit
-        configure_logging(args.debug, log_limit=log_limit, log_file_dir=args.log_file_dir)
+        log_file_dir = args.log_file_dir
+
+        configure_logging(
+            args.debug,
+            log_file_dir=log_file_dir,
+            ignore_warnings=args.ignore_warnings,
+        )
         configure_console(ignore_warnings=args.ignore_warnings)
+
+        dotenv_path = Path(args.dotenv) if args.dotenv else None
+        configs = load_configs(
+            args.config, Context.CONFIG_TYPE, args.paths, dotenv_path=dotenv_path
+        )
+        log_limit = list(configs.values())[0].log_limit
+
+        remove_excess_logs(log_file_dir, log_limit)
+
         try:
             context = Context(paths=args.paths, config=configs, gateway=args.gateway)
             self._shell.user_ns["context"] = context
@@ -144,20 +200,21 @@ class SQLMeshMagics(Magics):
             if args.debug:
                 logger.exception("Failed to initialize SQLMesh context")
             raise
+
         context.console.log_success(f"SQLMesh project context set to: {', '.join(args.paths)}")
 
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
     @argument(
-        "sql_dialect",
+        "engine",
         type=str,
-        help=f"Default model SQL dialect. Supported values: {sqlglot_dialects()}.",
+        help=f"Project SQL engine. Supported values: '{', '.join([info[1] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])])}'.",  # type: ignore
     )
     @argument(
         "--template",
         "-t",
         type=str,
-        help="Project template. Supported values: airflow, dbt, default, empty.",
+        help="Project template. Supported values: dbt, default, empty.",
     )
     @argument(
         "--dlt-pipeline",
@@ -180,7 +237,12 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(
-            args.path, args.sql_dialect, project_template, args.dlt_pipeline, args.dlt_path
+            path=args.path,
+            engine_type=args.engine,
+            dialect=None,
+            template=project_template,
+            pipeline=args.dlt_pipeline,
+            dlt_path=args.dlt_path,
         )
         html = str(
             h(
@@ -225,8 +287,9 @@ class SQLMeshMagics(Magics):
             if loaded.name == args.model:
                 model = loaded
         else:
-            with open(model._path, "r", encoding="utf-8") as file:
-                expressions = parse(file.read(), default_dialect=config.dialect)
+            if model._path:
+                with open(model._path, "r", encoding="utf-8") as file:
+                    expressions = parse(file.read(), default_dialect=config.dialect)
 
         formatted = format_model_expressions(
             expressions,
@@ -245,8 +308,9 @@ class SQLMeshMagics(Magics):
             replace=True,
         )
 
-        with open(model._path, "w", encoding="utf-8") as file:
-            file.write(formatted)
+        if model._path:
+            with open(model._path, "w", encoding="utf-8") as file:
+                file.write(formatted)
 
         if sql:
             context.console.log_success(f"Model `{args.model}` updated")
@@ -273,15 +337,7 @@ class SQLMeshMagics(Magics):
         if not args.test_name and not args.ls:
             raise MagicError("Must provide either test name or `--ls` to list tests")
 
-        test_meta = []
-
-        for path, config in context.configs.items():
-            test_meta.extend(
-                get_all_model_tests(
-                    path / c.TESTS,
-                    ignore_patterns=config.ignore_patterns,
-                )
-            )
+        test_meta = context.load_model_tests()
 
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in test_meta:
@@ -431,6 +487,12 @@ class SQLMeshMagics(Magics):
         help="Run latest intervals as part of the plan application (prod environment only).",
     )
     @argument(
+        "--ignore-cron",
+        action="store_true",
+        help="Run for all missing intervals, ignoring individual cron schedules. Only applies if --run is set.",
+        default=None,
+    )
+    @argument(
         "--enable-preview",
         action="store_true",
         help="Enable preview for forward-only models when targeting a development environment.",
@@ -477,6 +539,7 @@ class SQLMeshMagics(Magics):
             select_models=args.select_model,
             no_diff=args.no_diff,
             run=args.run,
+            ignore_cron=args.run,
             enable_preview=args.enable_preview,
             diff_rendered=args.diff_rendered,
         )
@@ -546,6 +609,8 @@ class SQLMeshMagics(Magics):
     def evaluate(self, context: Context, line: str) -> None:
         """Evaluate a model query and fetches a dataframe."""
         context.refresh()
+
+        snowpark = optional_import("snowflake.snowpark")
         args = parse_argstring(self.evaluate, line)
 
         df = context.evaluate(
@@ -555,6 +620,10 @@ class SQLMeshMagics(Magics):
             execution_time=args.execution_time,
             limit=args.limit,
         )
+
+        if snowpark and isinstance(df, snowpark.DataFrame):
+            df = df.limit(args.limit or 100).to_pandas()
+
         self.display(df)
 
     @magic_arguments()
@@ -569,23 +638,41 @@ class SQLMeshMagics(Magics):
     )
     @argument("--dialect", type=str, help="SQL dialect to render.")
     @argument("--no-format", action="store_true", help="Disable fancy formatting of the query.")
+    @format_arguments
     @line_magic
     @pass_sqlmesh_context
     def render(self, context: Context, line: str) -> None:
         """Renders a model's query, optionally expanding referenced models."""
         context.refresh()
-        args = parse_argstring(self.render, line)
+        render_opts = vars(parse_argstring(self.render, line))
+        model = render_opts.pop("model")
+        dialect = render_opts.pop("dialect", None)
+
+        model = context.get_model(model, raise_if_missing=True)
 
         query = context.render(
-            args.model,
-            start=args.start,
-            end=args.end,
-            execution_time=args.execution_time,
-            expand=args.expand,
+            model,
+            start=render_opts.pop("start", None),
+            end=render_opts.pop("end", None),
+            execution_time=render_opts.pop("execution_time", None),
+            expand=render_opts.pop("expand", False),
         )
 
-        sql = query.sql(pretty=True, dialect=args.dialect or context.config.dialect)
-        if args.no_format:
+        no_format = render_opts.pop("no_format", False)
+
+        format_config = context.config_for_node(model).format
+        format_options = {
+            **format_config.generator_options,
+            **{k: v for k, v in render_opts.items() if v is not None},
+        }
+
+        sql = query.sql(
+            pretty=True,
+            dialect=context.config.dialect if dialect is None else dialect,
+            **format_options,
+        )
+
+        if no_format:
             context.console.log_status_update(sql)
         else:
             context.console.show_sql(sql)
@@ -696,9 +783,25 @@ class SQLMeshMagics(Magics):
         help="The number of decimal places to keep when comparing floating point columns. Default: 3",
     )
     @argument(
+        "--select-model",
+        type=str,
+        nargs="*",
+        help="Specify one or more models to data diff. Use wildcards to diff multiple models. Ex: '*' (all models with applied plan diffs), 'demo.model+' (this and downstream models), 'git:feature_branch' (models with direct modifications in this branch only)",
+    )
+    @argument(
         "--skip-grain-check",
         action="store_true",
         help="Disable the check for a primary key (grain) that is missing or is not unique.",
+    )
+    @argument(
+        "--warn-grain-check",
+        action="store_true",
+        help="Warn if any selected model is missing a grain, and compute diffs for the remaining models.",
+    )
+    @argument(
+        "--schema-diff-ignore-case",
+        action="store_true",
+        help="If set, when performing a schema diff the case of column names is ignored when matching between the two schemas. For example, 'col_a' in the source schema and 'COL_A' in the target schema will be treated as the same column.",
     )
     @line_magic
     @pass_sqlmesh_context
@@ -709,17 +812,20 @@ class SQLMeshMagics(Magics):
         """
         args = parse_argstring(self.table_diff, line)
         source, target = args.source_to_target.split(":")
+        select_models = {args.model} if args.model else args.select_model or None
         context.table_diff(
             source=source,
             target=target,
             on=args.on,
             skip_columns=args.skip_columns,
-            model_or_snapshot=args.model,
+            select_models=select_models,
             where=args.where,
             limit=args.limit,
             show_sample=args.show_sample,
             decimals=args.decimals,
             skip_grain_check=args.skip_grain_check,
+            warn_grain_check=args.warn_grain_check,
+            schema_diff_ignore_case=args.schema_diff_ignore_case,
         )
 
     @magic_arguments()
@@ -730,16 +836,23 @@ class SQLMeshMagics(Magics):
         help="The name of the model to get the table name for.",
     )
     @argument(
-        "--dev",
+        "--environment",
+        type=str,
+        help="The environment to source the model version from.",
+    )
+    @argument(
+        "--prod",
         action="store_true",
-        help="Print the name of the snapshot table used for previews in development environments.",
+        help="If set, return the name of the physical table that will be used in production for the model version promoted in the target environment.",
     )
     @line_magic
     @pass_sqlmesh_context
     def table_name(self, context: Context, line: str) -> None:
         """Prints the name of the physical table for the given model."""
         args = parse_argstring(self.table_name, line)
-        context.console.log_status_update(context.table_name(args.model_name, args.dev))
+        context.console.log_status_update(
+            context.table_name(args.model_name, args.environment, args.prod)
+        )
 
     @magic_arguments()
     @argument(
@@ -817,55 +930,24 @@ class SQLMeshMagics(Magics):
         help="Transpile project models to the specified dialect.",
     )
     @argument(
-        "--append-newline",
-        action="store_true",
-        help="Whether or not to append a newline to the end of the file.",
-        default=None,
-    )
-    @argument(
-        "--no-rewrite-casts",
-        action="store_true",
-        help="Whether or not to preserve the existing casts, without rewriting them to use the :: syntax.",
-        default=None,
-    )
-    @argument(
-        "--normalize",
-        action="store_true",
-        help="Whether or not to normalize identifiers to lowercase.",
-        default=None,
-    )
-    @argument(
-        "--pad",
-        type=int,
-        help="Determines the pad size in a formatted string.",
-    )
-    @argument(
-        "--indent",
-        type=int,
-        help="Determines the indentation size in a formatted string.",
-    )
-    @argument(
-        "--normalize-functions",
-        type=str,
-        help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
-    )
-    @argument(
-        "--leading-comma",
-        action="store_true",
-        help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-        default=None,
-    )
-    @argument(
-        "--max-text-width",
-        type=int,
-        help="The max number of characters in a segment before creating new lines in pretty mode.",
-    )
-    @argument(
         "--check",
         action="store_true",
         help="Whether or not to check formatting (but not actually format anything).",
         default=None,
     )
+    @argument(
+        "--append-newline",
+        action="store_true",
+        help="Include a newline at the end of the output.",
+        default=None,
+    )
+    @argument(
+        "--no-rewrite-casts",
+        action="store_true",
+        help="Preserve the existing casts, without rewriting them to use the :: syntax.",
+        default=None,
+    )
+    @format_arguments
     @line_magic
     @pass_sqlmesh_context
     def format(self, context: Context, line: str) -> bool:
@@ -998,6 +1080,7 @@ class SQLMeshMagics(Magics):
             tests=args.tests,
             verbosity=Verbosity(args.verbose),
             preserve_fixtures=args.preserve_fixtures,
+            stream=StringIO(),  # consume the output instead of redirecting to stdout
         )
 
     @magic_arguments()
@@ -1009,11 +1092,43 @@ class SQLMeshMagics(Magics):
     @argument("--execution-time", type=str, help="Execution time.")
     @line_magic
     @pass_sqlmesh_context
-    def audit(self, context: Context, line: str) -> None:
+    def audit(self, context: Context, line: str) -> bool:
         """Run audit(s)"""
         args = parse_argstring(self.audit, line)
-        context.audit(
+        return context.audit(
             models=args.models, start=args.start, end=args.end, execution_time=args.execution_time
+        )
+
+    @magic_arguments()
+    @argument("environment", nargs="?", type=str, help="The environment to check intervals for.")
+    @argument(
+        "--no-signals",
+        action="store_true",
+        help="Disable signal checks and only show missing intervals.",
+        default=False,
+    )
+    @argument(
+        "--select-model",
+        type=str,
+        nargs="*",
+        help="Select specific model changes that should be included in the plan.",
+    )
+    @argument("--start", "-s", type=str, help="Start date of intervals to check for.")
+    @argument("--end", "-e", type=str, help="End date of intervals to check for.")
+    @line_magic
+    @pass_sqlmesh_context
+    def check_intervals(self, context: Context, line: str) -> None:
+        """Show missing intervals in an environment, respecting signals."""
+        args = parse_argstring(self.check_intervals, line)
+
+        context.console.show_intervals(
+            context.check_intervals(
+                environment=args.environment,
+                no_signals=args.no_signals,
+                select_models=args.select_model,
+                start=args.start,
+                end=args.end,
+            )
         )
 
     @magic_arguments()
@@ -1073,6 +1188,13 @@ class SQLMeshMagics(Magics):
         """Run linter for target model(s)"""
         args = parse_argstring(self.lint, line)
         context.lint_models(args.models)
+
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def destroy(self, context: Context, line: str) -> None:
+        """Removes all project resources, engine-managed objects, state tables and clears the SQLMesh cache."""
+        context.destroy()
 
 
 def register_magics() -> None:

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import abc
 import logging
 import typing as t
-from enum import Enum, auto
+from dataclasses import dataclass
 from collections import defaultdict
+from enum import Enum
+
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
 
 from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -17,25 +21,141 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class TableAlterOperationType(Enum):
-    ADD = auto()
-    DROP = auto()
-    ALTER_TYPE = auto()
+@dataclass(frozen=True)
+class TableAlterOperation(abc.ABC):
+    target_table: exp.Table
 
     @property
-    def is_add(self) -> bool:
-        return self == TableAlterOperationType.ADD
+    @abc.abstractmethod
+    def is_destructive(self) -> bool:
+        pass
 
     @property
-    def is_drop(self) -> bool:
-        return self == TableAlterOperationType.DROP
+    @abc.abstractmethod
+    def is_additive(self) -> bool:
+        pass
 
     @property
-    def is_alter_type(self) -> bool:
-        return self == TableAlterOperationType.ALTER_TYPE
+    @abc.abstractmethod
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        pass
+
+    @property
+    def expression(self) -> exp.Alter:
+        return exp.Alter(
+            this=self.target_table,
+            kind="TABLE",
+            actions=self._alter_actions,
+        )
 
 
-class TableAlterColumn(PydanticModel):
+@dataclass(frozen=True)
+class TableAlterColumnOperation(TableAlterOperation, abc.ABC):
+    column_parts: t.List[TableAlterColumn]
+    expected_table_struct: exp.DataType
+    array_element_selector: str
+
+    @property
+    def column_identifiers(self) -> t.List[exp.Identifier]:
+        results = []
+        for column in self.column_parts:
+            results.append(column.identifier)
+            if (
+                column.is_array_of_struct
+                and len(self.column_parts) > 1
+                and self.array_element_selector
+            ):
+                results.append(exp.to_identifier(self.array_element_selector))
+        return results
+
+    @property
+    def column(self) -> t.Union[exp.Dot, exp.Identifier]:
+        columns = self.column_identifiers
+        if len(columns) == 1:
+            return columns[0]
+        return exp.Dot.build(columns)
+
+
+@dataclass(frozen=True)
+class TableAlterTypedColumnOperation(TableAlterColumnOperation, abc.ABC):
+    column_type: exp.DataType
+
+    @property
+    def column_def(self) -> exp.ColumnDef:
+        if not self.column_type:
+            raise SQLMeshError("Tried to access column type when it shouldn't be needed")
+        return exp.ColumnDef(
+            this=self.column,
+            kind=self.column_type,
+        )
+
+
+@dataclass(frozen=True)
+class TableAlterAddColumnOperation(TableAlterTypedColumnOperation):
+    position: t.Optional[TableAlterColumnPosition] = None
+    is_part_of_destructive_change: bool = False
+
+    @property
+    def is_additive(self) -> bool:
+        return not self.is_part_of_destructive_change
+
+    @property
+    def is_destructive(self) -> bool:
+        return self.is_part_of_destructive_change
+
+    @property
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        column_def = exp.ColumnDef(
+            this=self.column,
+            kind=self.column_type,
+        )
+        if self.position:
+            column_def.set("position", self.position.column_position_node)
+        return [column_def]
+
+
+@dataclass(frozen=True)
+class TableAlterDropColumnOperation(TableAlterColumnOperation):
+    cascade: bool = False
+
+    @property
+    def is_additive(self) -> bool:
+        return False
+
+    @property
+    def is_destructive(self) -> bool:
+        return True
+
+    @property
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        return [exp.Drop(this=self.column, kind="COLUMN", cascade=self.cascade)]
+
+
+@dataclass(frozen=True)
+class TableAlterChangeColumnTypeOperation(TableAlterTypedColumnOperation):
+    current_type: exp.DataType
+    is_part_of_destructive_change: bool = False
+
+    @property
+    def is_additive(self) -> bool:
+        return not self.is_part_of_destructive_change
+
+    @property
+    def is_destructive(self) -> bool:
+        return self.is_part_of_destructive_change
+
+    @property
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        return [
+            exp.AlterColumn(
+                this=self.column,
+                dtype=self.column_type,
+            )
+        ]
+
+
+@dataclass(frozen=True)
+class TableAlterColumn:
     name: str
     is_struct: bool
     is_array_of_struct: bool
@@ -90,15 +210,13 @@ class TableAlterColumn(PydanticModel):
 
         if kwarg_type.is_type(exp.DataType.Type.STRUCT):
             return cls.struct(name, quoted=quoted)
-        elif kwarg_type.is_type(exp.DataType.Type.ARRAY):
+        if kwarg_type.is_type(exp.DataType.Type.ARRAY):
             if kwarg_type.expressions and kwarg_type.expressions[0].is_type(
                 exp.DataType.Type.STRUCT
             ):
                 return cls.array_of_struct(name, quoted=quoted)
-            else:
-                return cls.array_of_primitive(name, quoted=quoted)
-        else:
-            return cls.primitive(name, quoted=quoted)
+            return cls.array_of_primitive(name, quoted=quoted)
+        return cls.primitive(name, quoted=quoted)
 
     @property
     def is_array(self) -> bool:
@@ -117,7 +235,8 @@ class TableAlterColumn(PydanticModel):
         return exp.to_identifier(self.name, quoted=self.quoted)
 
 
-class TableAlterColumnPosition(PydanticModel):
+@dataclass(frozen=True)
+class TableAlterColumnPosition:
     is_first: bool
     is_last: bool
     after: t.Optional[exp.Identifier] = None
@@ -162,128 +281,31 @@ class TableAlterColumnPosition(PydanticModel):
         return exp.ColumnPosition(this=column, position=position)
 
 
-class TableAlterOperation(PydanticModel):
-    op: TableAlterOperationType
-    columns: t.List[TableAlterColumn]
-    column_type: exp.DataType
-    expected_table_struct: exp.DataType
-    add_position: t.Optional[TableAlterColumnPosition] = None
-    current_type: t.Optional[exp.DataType] = None
-    cascade: bool = False
-
-    @classmethod
-    def add(
-        cls,
-        columns: t.Union[TableAlterColumn, t.List[TableAlterColumn]],
-        column_type: t.Union[str, exp.DataType],
-        expected_table_struct: t.Union[str, exp.DataType],
-        position: t.Optional[TableAlterColumnPosition] = None,
-    ) -> TableAlterOperation:
-        return cls(
-            op=TableAlterOperationType.ADD,
-            columns=ensure_list(columns),
-            column_type=exp.DataType.build(column_type),
-            add_position=position,
-            expected_table_struct=exp.DataType.build(expected_table_struct),
-        )
-
-    @classmethod
-    def drop(
-        cls,
-        columns: t.Union[TableAlterColumn, t.List[TableAlterColumn]],
-        expected_table_struct: t.Union[str, exp.DataType],
-        column_type: t.Optional[t.Union[str, exp.DataType]] = None,
-        cascade: bool = False,
-    ) -> TableAlterOperation:
-        column_type = exp.DataType.build(column_type) if column_type else exp.DataType.build("INT")
-        return cls(
-            op=TableAlterOperationType.DROP,
-            columns=ensure_list(columns),
-            column_type=column_type,
-            expected_table_struct=exp.DataType.build(expected_table_struct),
-            cascade=cascade,
-        )
-
-    @classmethod
-    def alter_type(
-        cls,
-        columns: t.Union[TableAlterColumn, t.List[TableAlterColumn]],
-        column_type: t.Union[str, exp.DataType],
-        current_type: t.Union[str, exp.DataType],
-        expected_table_struct: t.Union[str, exp.DataType],
-        position: t.Optional[TableAlterColumnPosition] = None,
-    ) -> TableAlterOperation:
-        return cls(
-            op=TableAlterOperationType.ALTER_TYPE,
-            columns=ensure_list(columns),
-            column_type=exp.DataType.build(column_type),
-            add_position=position,
-            current_type=exp.DataType.build(current_type),
-            expected_table_struct=exp.DataType.build(expected_table_struct),
-        )
+class NestedSupport(str, Enum):
+    # Supports all nested data type operations
+    ALL = "ALL"
+    # Does not support any nested data type operations
+    NONE = "NONE"
+    # Supports nested data type operations except for those that require dropping a nested field
+    ALL_BUT_DROP = "ALL_BUT_DROP"
+    # Ignores all nested data type operations
+    IGNORE = "IGNORE"
 
     @property
-    def is_add(self) -> bool:
-        return self.op.is_add
+    def is_all(self) -> bool:
+        return self == NestedSupport.ALL
 
     @property
-    def is_drop(self) -> bool:
-        return self.op.is_drop
+    def is_none(self) -> bool:
+        return self == NestedSupport.NONE
 
     @property
-    def is_alter_type(self) -> bool:
-        return self.op.is_alter_type
+    def is_all_but_drop(self) -> bool:
+        return self == NestedSupport.ALL_BUT_DROP
 
-    def column_identifiers(self, array_element_selector: str) -> t.List[exp.Identifier]:
-        results = []
-        for column in self.columns:
-            results.append(column.identifier)
-            if column.is_array_of_struct and len(self.columns) > 1 and array_element_selector:
-                results.append(exp.to_identifier(array_element_selector))
-        return results
-
-    def column(self, array_element_selector: str) -> t.Union[exp.Dot, exp.Identifier]:
-        columns = self.column_identifiers(array_element_selector)
-        if len(columns) == 1:
-            return columns[0]
-        return exp.Dot.build(columns)
-
-    def column_def(self, array_element_selector: str) -> exp.ColumnDef:
-        return exp.ColumnDef(
-            this=self.column(array_element_selector),
-            kind=self.column_type,
-        )
-
-    def expression(
-        self, table_name: t.Union[str, exp.Table], array_element_selector: str
-    ) -> exp.Alter:
-        if self.is_alter_type:
-            return exp.Alter(
-                this=exp.to_table(table_name),
-                kind="TABLE",
-                actions=[
-                    exp.AlterColumn(
-                        this=self.column(array_element_selector),
-                        dtype=self.column_type,
-                    )
-                ],
-            )
-        elif self.is_add:
-            alter_table = exp.Alter(this=exp.to_table(table_name), kind="TABLE")
-            column = self.column_def(array_element_selector)
-            alter_table.set("actions", [column])
-            if self.add_position:
-                column.set("position", self.add_position.column_position_node)
-            return alter_table
-        elif self.is_drop:
-            alter_table = exp.Alter(this=exp.to_table(table_name), kind="TABLE")
-            drop_column = exp.Drop(
-                this=self.column(array_element_selector), kind="COLUMN", cascade=self.cascade
-            )
-            alter_table.set("actions", [drop_column])
-            return alter_table
-        else:
-            raise ValueError(f"Unknown operation {self.op}")
+    @property
+    def is_ignore(self) -> bool:
+        return self == NestedSupport.IGNORE
 
 
 class SchemaDiffer(PydanticModel):
@@ -305,10 +327,7 @@ class SchemaDiffer(PydanticModel):
     Args:
         support_positional_add: Whether the engine for which the diff is being computed supports adding columns in a
             specific position in the set of existing columns.
-        support_nested_operations: Whether the engine for which the diff is being computed supports modifications to
-            nested data types like STRUCTs and ARRAYs.
-        support_nested_drop: Whether the engine for which the diff is being computed supports removing individual
-            columns of nested STRUCTs.
+        nested_support: How the engine for which the diff is being computed supports nested types.
         compatible_types: Types that are compatible and automatically coerced in actions like UNION ALL. Dict key is data
             type, and value is the set of types that are compatible with it.
         coerceable_types: The mapping from a current type to all types that can be safely coerced to the current one without
@@ -331,11 +350,14 @@ class SchemaDiffer(PydanticModel):
         max_parameter_length: Numeric parameter values corresponding to "max". Example: `VARCHAR(max)` -> `VARCHAR(65535)`.
         types_with_unlimited_length: Data types that accept values of any length up to system limits. Any explicitly
             parameterized type can ALTER to its unlimited length version, along with different types in some engines.
+        treat_alter_data_type_as_destructive: The SchemaDiffer will only output change data type operations if it
+            concludes the change is compatible and won't result in data loss. If this flag is set to True, it will
+            flag these data type changes as destructive. This was added for dbt adapter support and likely shouldn't
+            be set outside of that context.
     """
 
     support_positional_add: bool = False
-    support_nested_operations: bool = False
-    support_nested_drop: bool = False
+    nested_support: NestedSupport = NestedSupport.NONE
     array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
     coerceable_types_: t.Dict[exp.DataType, t.Set[exp.DataType]] = Field(
@@ -349,6 +371,7 @@ class SchemaDiffer(PydanticModel):
     ] = {}
     max_parameter_length: t.Dict[exp.DataType.Type, t.Union[int, float]] = {}
     types_with_unlimited_length: t.Dict[exp.DataType.Type, t.Set[exp.DataType.Type]] = {}
+    treat_alter_data_type_as_destructive: bool = False
 
     _coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
@@ -470,16 +493,24 @@ class SchemaDiffer(PydanticModel):
         struct: exp.DataType,
         pos: int,
         root_struct: exp.DataType,
-    ) -> t.List[TableAlterOperation]:
+        table_name: TableName,
+    ) -> t.List[TableAlterColumnOperation]:
         columns = ensure_list(columns)
-        operations = []
+        operations: t.List[TableAlterColumnOperation] = []
         column_pos, column_kwarg = self._get_matching_kwarg(columns[-1].name, struct, pos)
-        assert column_pos is not None
-        assert column_kwarg
+        if column_pos is None or not column_kwarg:
+            raise SQLMeshError(
+                f"Cannot drop column '{columns[-1].name}' from table '{table_name}' - column not found. "
+                f"This may indicate a mismatch between the expected and actual table schemas."
+            )
         struct.expressions.pop(column_pos)
         operations.append(
-            TableAlterOperation.drop(
-                columns, root_struct.copy(), column_kwarg.args["kind"], cascade=self.drop_cascade
+            TableAlterDropColumnOperation(
+                target_table=exp.to_table(table_name),
+                column_parts=columns,
+                expected_table_struct=root_struct.copy(),
+                cascade=self.drop_cascade,
+                array_element_selector=self.array_element_selector,
             )
         )
         return operations
@@ -499,14 +530,17 @@ class SchemaDiffer(PydanticModel):
         current_struct: exp.DataType,
         new_struct: exp.DataType,
         root_struct: exp.DataType,
-    ) -> t.List[TableAlterOperation]:
+        table_name: TableName,
+    ) -> t.List[TableAlterColumnOperation]:
         operations = []
         for current_pos, current_kwarg in enumerate(current_struct.expressions.copy()):
             new_pos, _ = self._get_matching_kwarg(current_kwarg, new_struct, current_pos)
             columns = parent_columns + [TableAlterColumn.from_struct_kwarg(current_kwarg)]
             if new_pos is None:
                 operations.extend(
-                    self._drop_operation(columns, current_struct, current_pos, root_struct)
+                    self._drop_operation(
+                        columns, current_struct, current_pos, root_struct, table_name
+                    )
                 )
         return operations
 
@@ -517,7 +551,9 @@ class SchemaDiffer(PydanticModel):
         new_kwarg: exp.ColumnDef,
         current_struct: exp.DataType,
         root_struct: exp.DataType,
-    ) -> t.List[TableAlterOperation]:
+        table_name: TableName,
+        is_part_of_destructive_change: bool = False,
+    ) -> t.List[TableAlterColumnOperation]:
         if self.support_positional_add:
             col_pos = TableAlterColumnPosition.create(new_pos, current_struct.expressions)
             current_struct.expressions.insert(new_pos, new_kwarg)
@@ -525,11 +561,14 @@ class SchemaDiffer(PydanticModel):
             col_pos = None
             current_struct.expressions.append(new_kwarg)
         return [
-            TableAlterOperation.add(
-                columns,
-                new_kwarg.args["kind"],
-                root_struct.copy(),
-                col_pos,
+            TableAlterAddColumnOperation(
+                target_table=exp.to_table(table_name),
+                column_parts=columns,
+                column_type=new_kwarg.args["kind"],
+                expected_table_struct=root_struct.copy(),
+                position=col_pos,
+                is_part_of_destructive_change=is_part_of_destructive_change,
+                array_element_selector=self.array_element_selector,
             )
         ]
 
@@ -539,14 +578,17 @@ class SchemaDiffer(PydanticModel):
         current_struct: exp.DataType,
         new_struct: exp.DataType,
         root_struct: exp.DataType,
-    ) -> t.List[TableAlterOperation]:
+        table_name: TableName,
+    ) -> t.List[TableAlterColumnOperation]:
         operations = []
         for new_pos, new_kwarg in enumerate(new_struct.expressions):
             possible_current_pos, _ = self._get_matching_kwarg(new_kwarg, current_struct, new_pos)
             if possible_current_pos is None:
                 columns = parent_columns + [TableAlterColumn.from_struct_kwarg(new_kwarg)]
                 operations.extend(
-                    self._add_operation(columns, new_pos, new_kwarg, current_struct, root_struct)
+                    self._add_operation(
+                        columns, new_pos, new_kwarg, current_struct, root_struct, table_name
+                    )
                 )
         return operations
 
@@ -559,13 +601,19 @@ class SchemaDiffer(PydanticModel):
         current_type: t.Union[str, exp.DataType],
         root_struct: exp.DataType,
         new_kwarg: exp.ColumnDef,
-    ) -> t.List[TableAlterOperation]:
+        table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterColumnOperation]:
         # We don't copy on purpose here because current_type may need to be mutated inside
         # _get_operations (struct.expressions.pop and struct.expressions.insert)
         current_type = exp.DataType.build(current_type, copy=False)
-        if self.support_nested_operations:
+        if not self.nested_support.is_none:
             if new_type.this == current_type.this == exp.DataType.Type.STRUCT:
-                if self.support_nested_drop or not self._requires_drop_alteration(
+                if self.nested_support.is_ignore:
+                    return []
+                if self.nested_support.is_all or not self._requires_drop_alteration(
                     current_type, new_type
                 ):
                     return self._get_operations(
@@ -573,6 +621,9 @@ class SchemaDiffer(PydanticModel):
                         current_type,
                         new_type,
                         root_struct,
+                        table_name,
+                        ignore_destructive=ignore_destructive,
+                        ignore_additive=ignore_additive,
                     )
 
             if new_type.this == current_type.this == exp.DataType.Type.ARRAY:
@@ -582,7 +633,9 @@ class SchemaDiffer(PydanticModel):
                 new_array_type = new_type.expressions[0]
                 current_array_type = current_type.expressions[0]
                 if new_array_type.this == current_array_type.this == exp.DataType.Type.STRUCT:
-                    if self.support_nested_drop or not self._requires_drop_alteration(
+                    if self.nested_support.is_ignore:
+                        return []
+                    if self.nested_support.is_all or not self._requires_drop_alteration(
                         current_array_type, new_array_type
                     ):
                         return self._get_operations(
@@ -590,30 +643,45 @@ class SchemaDiffer(PydanticModel):
                             current_array_type,
                             new_array_type,
                             root_struct,
+                            table_name,
+                            ignore_destructive=ignore_destructive,
+                            ignore_additive=ignore_additive,
                         )
         if self._is_coerceable_type(current_type, new_type):
             return []
-        elif self._is_compatible_type(current_type, new_type):
+        if self._is_compatible_type(current_type, new_type):
+            if ignore_additive:
+                return []
             struct.expressions.pop(pos)
             struct.expressions.insert(pos, new_kwarg)
-            col_pos = (
-                TableAlterColumnPosition.create(pos, struct.expressions, replacing_col=True)
-                if self.support_positional_add
-                else None
-            )
             return [
-                TableAlterOperation.alter_type(
-                    columns,
-                    new_type,
-                    current_type,
-                    root_struct.copy(),
-                    col_pos,
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table(table_name),
+                    column_parts=columns,
+                    column_type=new_type,
+                    current_type=current_type,
+                    expected_table_struct=root_struct.copy(),
+                    array_element_selector=self.array_element_selector,
+                    is_part_of_destructive_change=self.treat_alter_data_type_as_destructive,
                 )
             ]
-        else:
-            return self._drop_operation(
-                columns, root_struct, pos, root_struct
-            ) + self._add_operation(columns, pos, new_kwarg, struct, root_struct)
+        if ignore_destructive:
+            return []
+        return self._drop_operation(
+            columns,
+            root_struct,
+            pos,
+            root_struct,
+            table_name,
+        ) + self._add_operation(
+            columns,
+            pos,
+            new_kwarg,
+            struct,
+            root_struct,
+            table_name,
+            is_part_of_destructive_change=True,
+        )
 
     def _resolve_alter_operations(
         self,
@@ -621,11 +689,18 @@ class SchemaDiffer(PydanticModel):
         current_struct: exp.DataType,
         new_struct: exp.DataType,
         root_struct: exp.DataType,
-    ) -> t.List[TableAlterOperation]:
+        table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterColumnOperation]:
         operations = []
         for current_pos, current_kwarg in enumerate(current_struct.expressions.copy()):
             _, new_kwarg = self._get_matching_kwarg(current_kwarg, new_struct, current_pos)
-            assert new_kwarg
+            if new_kwarg is None:
+                if ignore_destructive:
+                    continue
+                raise ValueError("Cannot alter a column that is being dropped")
             _, new_type = _get_name_and_type(new_kwarg)
             _, current_type = _get_name_and_type(current_kwarg)
             columns = parent_columns + [TableAlterColumn.from_struct_kwarg(current_kwarg)]
@@ -640,6 +715,9 @@ class SchemaDiffer(PydanticModel):
                     current_type,
                     root_struct,
                     new_kwarg,
+                    table_name,
+                    ignore_destructive=ignore_destructive,
+                    ignore_additive=ignore_additive,
                 )
             )
         return operations
@@ -650,81 +728,151 @@ class SchemaDiffer(PydanticModel):
         current_struct: exp.DataType,
         new_struct: exp.DataType,
         root_struct: exp.DataType,
-    ) -> t.List[TableAlterOperation]:
+        table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterColumnOperation]:
         root_struct = root_struct or current_struct
         parent_columns = parent_columns or []
         operations = []
+        if not ignore_destructive:
+            operations.extend(
+                self._resolve_drop_operation(
+                    parent_columns, current_struct, new_struct, root_struct, table_name
+                )
+            )
+        if not ignore_additive:
+            operations.extend(
+                self._resolve_add_operations(
+                    parent_columns, current_struct, new_struct, root_struct, table_name
+                )
+            )
         operations.extend(
-            self._resolve_drop_operation(parent_columns, current_struct, new_struct, root_struct)
-        )
-        operations.extend(
-            self._resolve_add_operations(parent_columns, current_struct, new_struct, root_struct)
-        )
-        operations.extend(
-            self._resolve_alter_operations(parent_columns, current_struct, new_struct, root_struct)
+            self._resolve_alter_operations(
+                parent_columns,
+                current_struct,
+                new_struct,
+                root_struct,
+                ignore_destructive=ignore_destructive,
+                ignore_additive=ignore_additive,
+                table_name=table_name,
+            )
         )
         return operations
 
     def _from_structs(
-        self, current_struct: exp.DataType, new_struct: exp.DataType
-    ) -> t.List[TableAlterOperation]:
-        return self._get_operations([], current_struct, new_struct, current_struct)
+        self,
+        current_struct: exp.DataType,
+        new_struct: exp.DataType,
+        table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterColumnOperation]:
+        return self._get_operations(
+            [],
+            current_struct,
+            new_struct,
+            current_struct,
+            table_name=table_name,
+            ignore_destructive=ignore_destructive,
+            ignore_additive=ignore_additive,
+        )
 
-    def compare_structs(
-        self, table_name: t.Union[str, exp.Table], current: exp.DataType, new: exp.DataType
-    ) -> t.List[exp.Alter]:
-        """
-        Compares two schemas represented as structs.
-
-        Args:
-            current: The current schema.
-            new: The new schema.
-
-        Returns:
-            The list of table alter operations.
-        """
-        return [
-            op.expression(table_name, self.array_element_selector)
-            for op in self._from_structs(current, new)
-        ]
+    def _compare_structs(
+        self,
+        table_name: t.Union[str, exp.Table],
+        current: exp.DataType,
+        new: exp.DataType,
+        *,
+        ignore_destructive: bool = False,
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterColumnOperation]:
+        return self._from_structs(
+            current,
+            new,
+            table_name=table_name,
+            ignore_destructive=ignore_destructive,
+            ignore_additive=ignore_additive,
+        )
 
     def compare_columns(
         self,
         table_name: TableName,
         current: t.Dict[str, exp.DataType],
         new: t.Dict[str, exp.DataType],
-    ) -> t.List[exp.Alter]:
-        """
-        Compares two schemas represented as dictionaries of column names and types.
-
-        Args:
-            current: The current schema.
-            new: The new schema.
-
-        Returns:
-            The list of schema deltas.
-        """
-        return self.compare_structs(
-            table_name, columns_to_types_to_struct(current), columns_to_types_to_struct(new)
+        *,
+        ignore_destructive: bool = False,
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterColumnOperation]:
+        return self._compare_structs(
+            table_name,
+            columns_to_types_to_struct(current),
+            columns_to_types_to_struct(new),
+            ignore_destructive=ignore_destructive,
+            ignore_additive=ignore_additive,
         )
 
 
-def has_drop_alteration(alter_expressions: t.List[exp.Alter]) -> bool:
-    return any(
-        isinstance(action, exp.Drop)
-        for actions in alter_expressions
-        for action in actions.args.get("actions", [])
+def has_drop_alteration(alter_operations: t.List[TableAlterOperation]) -> bool:
+    return any(op.is_destructive for op in alter_operations)
+
+
+def has_additive_alteration(alter_operations: t.List[TableAlterOperation]) -> bool:
+    return any(op.is_additive for op in alter_operations)
+
+
+def get_additive_changes(
+    alter_operations: t.List[TableAlterOperation],
+) -> t.List[TableAlterOperation]:
+    return [x for x in alter_operations if x.is_additive]
+
+
+def get_dropped_column_names(alter_expressions: t.List[TableAlterOperation]) -> t.List[str]:
+    return [
+        op.column.alias_or_name
+        for op in alter_expressions
+        if isinstance(op, TableAlterDropColumnOperation)
+    ]
+
+
+def get_additive_column_names(alter_expressions: t.List[TableAlterOperation]) -> t.List[str]:
+    return [
+        op.column.alias_or_name
+        for op in alter_expressions
+        if op.is_additive and isinstance(op, TableAlterColumnOperation)
+    ]
+
+
+def get_schema_differ(
+    dialect: str, overrides: t.Optional[t.Dict[str, t.Any]] = None
+) -> SchemaDiffer:
+    """
+    Returns the appropriate SchemaDiffer for a given dialect without initializing the engine adapter.
+
+    Args:
+        dialect: The dialect for which to get the schema differ.
+        overrides: Optional dictionary of overrides to apply to the SchemaDiffer instance.
+
+    Returns:
+        The SchemaDiffer instance configured for the given dialect.
+    """
+    from sqlmesh.core.engine_adapter import (
+        DIALECT_TO_ENGINE_ADAPTER,
+        DIALECT_ALIASES,
+        EngineAdapter,
     )
 
-
-def get_dropped_column_names(alter_expressions: t.List[exp.Alter]) -> t.List[str]:
-    dropped_columns = []
-    for actions in alter_expressions:
-        for action in actions.args.get("actions", []):
-            if isinstance(action, exp.Drop):
-                if action.kind == "COLUMN":
-                    dropped_columns.append(action.alias_or_name)
-    return dropped_columns
+    dialect = dialect.lower()
+    dialect = DIALECT_ALIASES.get(dialect, dialect)
+    engine_adapter_class = DIALECT_TO_ENGINE_ADAPTER.get(dialect, EngineAdapter)
+    return SchemaDiffer(
+        **{
+            **getattr(engine_adapter_class, "SCHEMA_DIFFER_KWARGS"),
+            **(overrides or {}),
+        }
+    )
 
 
 def _get_name_and_type(struct: exp.ColumnDef) -> t.Tuple[exp.Identifier, exp.DataType]:

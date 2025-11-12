@@ -4,49 +4,50 @@ import logging
 import typing as t
 from functools import partial
 
-import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.mixins import GrantsFromInfoSchemaMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
+    DataObjectType,
     InsertOverwriteStrategy,
-    set_catalog,
     SourceQuery,
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.core.schema_diff import NestedSupport
 from sqlmesh.engines.spark.db_api.spark_session import connection, SparkSessionConnection
 from sqlmesh.utils.errors import SQLMeshError, MissingDefaultCatalogError
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, TableName, SessionProperties
     from sqlmesh.core.engine_adapter._typing import DF, PySparkSession, Query
 
 logger = logging.getLogger(__name__)
 
 
-@set_catalog(
-    {
-        "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
-    }
-)
-class DatabricksEngineAdapter(SparkEngineAdapter):
+class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
-    SCHEMA_DIFFER = SchemaDiffer(
-        support_positional_add=True,
-        support_nested_operations=True,
-        support_nested_drop=True,
-        array_element_selector="element",
-        parameterized_type_defaults={
+    SUPPORTS_GRANTS = True
+    USE_CATALOG_IN_GRANTS = True
+    # Spark has this set to false for compatibility when mixing with Trino but that isn't a concern with Databricks
+    QUOTE_IDENTIFIERS_IN_VIEWS = True
+    SCHEMA_DIFFER_KWARGS = {
+        "support_positional_add": True,
+        "nested_support": NestedSupport.ALL,
+        "array_element_selector": "element",
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(10, 0), (0,)],
         },
-    )
+    }
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
@@ -121,6 +122,12 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         self._spark_engine_adapter = SparkEngineAdapter(
             partial(connection, spark=spark, catalog=catalog),
             default_catalog=catalog,
+            execute_log_level=self._execute_log_level,
+            multithreaded=self._multithreaded,
+            sql_gen_kwargs=self._sql_gen_kwargs,
+            register_comments=self._register_comments,
+            pre_ping=self._pre_ping,
+            pretty_sql=self._pretty_sql,
         )
 
     @property
@@ -148,6 +155,28 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
 
+    @staticmethod
+    def _grant_object_kind(table_type: DataObjectType) -> str:
+        if table_type == DataObjectType.VIEW:
+            return "VIEW"
+        if table_type == DataObjectType.MATERIALIZED_VIEW:
+            return "MATERIALIZED VIEW"
+        return "TABLE"
+
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        # We only care about explicitly granted privileges and not inherited ones
+        # if this is removed you would see grants inherited from the catalog get returned
+        expression = super()._get_grant_expression(table)
+        expression.args["where"].set(
+            "this",
+            exp.and_(
+                expression.args["where"].this,
+                exp.column("inherited_from").eq(exp.Literal.string("NONE")),
+                wrap=False,
+            ),
+        )
+        return expression
+
     def _begin_session(self, properties: SessionProperties) -> t.Any:
         """Begin a new session."""
         # Align the different possible connectors to a single catalog
@@ -159,25 +188,26 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         if not self._use_spark_session:
             return super(SparkEngineAdapter, self)._df_to_source_queries(
-                df, columns_to_types, batch_size, target_table
+                df, target_columns_to_types, batch_size, target_table, source_columns=source_columns
             )
-        df = self._ensure_pyspark_df(df, columns_to_types)
+        pyspark_df = self._ensure_pyspark_df(
+            df, target_columns_to_types, source_columns=source_columns
+        )
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
+            pyspark_df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
             self._connection_pool.set_attribute("use_spark_engine_adapter", True)
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
+            return exp.select(*self._select_columns(target_columns_to_types)).from_(temp_table)
 
-        if self._use_spark_session:
-            return [SourceQuery(query_factory=query_factory)]
-        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        return [SourceQuery(query_factory=query_factory)]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -198,6 +228,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         """
         Returns a Pandas DataFrame from a query or expression.
         """
+        import pandas as pd
+
         df = self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         if not isinstance(df, pd.DataFrame):
             return df.toPandas()
@@ -250,13 +282,52 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:
-        return super()._get_data_objects(schema_name, object_names=object_names)
+        """
+        Returns all the data objects that exist in the given schema and catalog.
+        """
+        schema = to_schema(schema_name)
+        catalog_name = schema.catalog or self.get_current_catalog()
+        query = (
+            exp.select(
+                exp.column("table_name").as_("name"),
+                exp.column("table_schema").as_("schema"),
+                exp.column("table_catalog").as_("catalog"),
+                exp.case(exp.column("table_type"))
+                .when(exp.Literal.string("VIEW"), exp.Literal.string("view"))
+                .when(
+                    exp.Literal.string("MATERIALIZED_VIEW"), exp.Literal.string("materialized_view")
+                )
+                .else_(exp.Literal.string("table"))
+                .as_("type"),
+            )
+            .from_(
+                # always query `system` information_schema
+                exp.table_("tables", "information_schema", "system")
+            )
+            .where(exp.column("table_catalog").eq(catalog_name))
+            .where(exp.column("table_schema").eq(schema.db))
+        )
+
+        if object_names:
+            query = query.where(exp.column("table_name").isin(*object_names))
+
+        df = self.fetchdf(query)
+        return [
+            DataObject(
+                catalog=row.catalog,  # type: ignore
+                schema=row.schema,  # type: ignore
+                name=row.name,  # type: ignore
+                type=DataObjectType.from_str(row.type),  # type: ignore
+            )
+            for row in df.itertuples()
+        ]
 
     def clone_table(
         self,
         target_table_name: TableName,
         source_table_name: TableName,
         replace: bool = False,
+        exists: bool = True,
         clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ) -> None:
@@ -297,7 +368,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -310,7 +381,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             partition_interval_unit=partition_interval_unit,
             clustered_by=clustered_by,
             table_properties=table_properties,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             table_kind=table_kind,
         )

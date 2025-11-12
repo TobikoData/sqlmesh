@@ -34,27 +34,36 @@ pip install "sqlmesh[redshift]"
 | `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
 | `enable_merge`         | Whether the incremental_by_unique_key model kind will use the native Redshift MERGE operation or SQLMesh's logical merge. (Default: `False`)           |  bool  |    N     |
 
+## Performance Considerations
 
-## Airflow Scheduler
-**Engine Name:** `redshift`
+### Timestamp Macro Variables and Sort Keys
 
-In order to share a common implementation across local and Airflow, SQLMesh's Redshift engine implements its own hook and operator.
+When working with Redshift tables that have a `TIMESTAMP` sort key, using the standard `@start_dt` and `@end_dt` macro variables may lead to performance issues. These macros render as `TIMESTAMP WITH TIME ZONE` values in SQL queries, which prevents Redshift from performing efficient pruning when filtering against `TIMESTAMP` (without timezone) sort keys.
 
-To enable support for this operator, the Airflow Redshift provider package should be installed on the target Airflow cluster along with SQLMesh with the Redshift extra:
-```
-pip install "apache-airflow-providers-amazon"
-pip install "sqlmesh[redshift]"
-```
+This can result in full table scans instead, causing significant performance degradation.
 
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Redshift account. Refer to [AmazonRedshiftConnection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/stable/connections/redshift.html#authenticating-to-amazon-redshift) for details on how to define a connection string.
+**Solution**: Use the `_dtntz` (datetime no timezone) variants of macro variables:
 
-By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "redshift",
-    default_catalog="<database name>",
-    engine_operator_args={
-        "redshift_conn_id": "<Connection ID>"
-    },
-)
+- `@start_dtntz` instead of `@start_dt`
+- `@end_dtntz` instead of `@end_dt`
+
+These variants render as `TIMESTAMP WITHOUT TIME ZONE`, allowing Redshift to properly utilize sort key optimizations.
+
+**Example**:
+
+```sql linenums="1"
+-- Inefficient: May cause full table scan
+SELECT * FROM my_table
+WHERE timestamp_column >= @start_dt
+  AND timestamp_column < @end_dt
+
+-- Efficient: Uses sort key optimization
+SELECT * FROM my_table
+WHERE timestamp_column >= @start_dtntz
+  AND timestamp_column < @end_dtntz
+
+-- Alternative: Cast to timestamp
+SELECT * FROM my_table
+WHERE timestamp_column >= @start_ts::timestamp
+  AND timestamp_column < @end_ts::timestamp
 ```

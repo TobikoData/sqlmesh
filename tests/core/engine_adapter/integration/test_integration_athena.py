@@ -1,25 +1,38 @@
 import typing as t
 import pytest
-import pandas as pd
+from pytest import FixtureRequest
+import pandas as pd  # noqa: TID253
 import datetime
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.utils.aws import parse_s3_uri
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.date import to_ds, to_ts, TimeLike
-from tests.core.engine_adapter.integration import TestContext
+import dataclasses
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    generate_pytest_params,
+    ENGINES_BY_NAME,
+    IntegrationTestEngine,
+)
 from sqlglot import exp
 
-pytestmark = [pytest.mark.remote, pytest.mark.engine, pytest.mark.athena]
+# The tests in this file dont need to be called twice, so we create a single instance of Athena
+ENGINE_ATHENA = dataclasses.replace(ENGINES_BY_NAME["athena"], catalog_types=None)
+assert isinstance(ENGINE_ATHENA, IntegrationTestEngine)
+
+
+@pytest.fixture(params=list(generate_pytest_params(ENGINE_ATHENA)))
+def ctx(
+    request: FixtureRequest,
+    create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],
+) -> t.Iterable[TestContext]:
+    yield from create_test_context(*request.param)
 
 
 @pytest.fixture
-def mark_gateway() -> t.Tuple[str, str]:
-    return "athena", "inttest_athena"
-
-
-@pytest.fixture
-def test_type() -> str:
-    return "query"
+def engine_adapter(ctx: TestContext) -> AthenaEngineAdapter:
+    assert isinstance(ctx.engine_adapter, AthenaEngineAdapter)
+    return ctx.engine_adapter
 
 
 @pytest.fixture
@@ -271,10 +284,10 @@ def test_hive_drop_table_removes_data(ctx: TestContext, engine_adapter: AthenaEn
     columns_to_types = columns_to_types_from_df(data)
 
     engine_adapter.create_table(
-        table_name=seed_table, columns_to_types=columns_to_types, exists=False
+        table_name=seed_table, target_columns_to_types=columns_to_types, exists=False
     )
     engine_adapter.insert_append(
-        table_name=seed_table, query_or_df=data, columns_to_types=columns_to_types
+        table_name=seed_table, query_or_df=data, target_columns_to_types=columns_to_types
     )
     assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 1  # type: ignore
 
@@ -282,7 +295,7 @@ def test_hive_drop_table_removes_data(ctx: TestContext, engine_adapter: AthenaEn
     # This ensures that our drop table logic to delete the data from S3 is working
     engine_adapter.drop_table(seed_table, exists=False)
     engine_adapter.create_table(
-        table_name=seed_table, columns_to_types=columns_to_types, exists=False
+        table_name=seed_table, target_columns_to_types=columns_to_types, exists=False
     )
     assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 0  # type: ignore
 
@@ -369,12 +382,14 @@ def test_insert_overwrite_by_time_partition_date_type(
         return exp.cast(exp.Literal.string(to_ds(time)), "date")
 
     engine_adapter.create_table(
-        table_name=table, columns_to_types=columns_to_types, partitioned_by=[exp.to_column("date")]
+        table_name=table,
+        target_columns_to_types=columns_to_types,
+        partitioned_by=[exp.to_column("date")],
     )
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("date"),
         start="2023-01-01",
         end="2023-01-03",
@@ -393,7 +408,7 @@ def test_insert_overwrite_by_time_partition_date_type(
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=new_data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("date"),
         start="2023-01-03",
         end="2023-01-04",
@@ -429,12 +444,14 @@ def test_insert_overwrite_by_time_partition_datetime_type(
         return exp.cast(exp.Literal.string(to_ts(time)), "datetime")
 
     engine_adapter.create_table(
-        table_name=table, columns_to_types=columns_to_types, partitioned_by=[exp.to_column("ts")]
+        table_name=table,
+        target_columns_to_types=columns_to_types,
+        partitioned_by=[exp.to_column("ts")],
     )
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("ts"),
         start="2023-01-01 00:00:00",
         end="2023-01-01 04:00:00",
@@ -456,7 +473,7 @@ def test_insert_overwrite_by_time_partition_datetime_type(
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=new_data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("ts"),
         start="2023-01-01 03:00:00",
         end="2023-01-01 05:00:00",

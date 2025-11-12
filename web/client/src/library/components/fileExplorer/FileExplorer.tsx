@@ -270,10 +270,10 @@ function FileExplorerArtifactContainer({
         isTopGroupInActiveRange(artifact)
           ? 'rounded-t-md'
           : isBottomGroupInActiveRange(artifact)
-          ? 'rounded-b-md'
-          : isMiddleGroupInActiveRange(artifact)
-          ? ''
-          : inActiveRange(artifact) && 'rounded-md',
+            ? 'rounded-b-md'
+            : isMiddleGroupInActiveRange(artifact)
+              ? ''
+              : inActiveRange(artifact) && 'rounded-md',
         inActiveRange(artifact) &&
           activeRange.length > 1 &&
           activeRange.indexOf(artifact) < activeRange.length - 1

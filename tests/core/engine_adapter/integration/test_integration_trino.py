@@ -1,56 +1,30 @@
 import typing as t
 import pytest
+from pytest import FixtureRequest
 from pathlib import Path
 from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from tests.core.engine_adapter.integration import TestContext
 from sqlglot import parse_one, exp
-
-pytestmark = [pytest.mark.docker, pytest.mark.engine, pytest.mark.trino]
-
-
-@pytest.fixture(
-    params=[
-        pytest.param(
-            "trino",
-            marks=[
-                pytest.mark.docker,
-                pytest.mark.engine,
-                pytest.mark.trino,
-            ],
-        ),
-        pytest.param(
-            "trino_iceberg",
-            marks=[
-                pytest.mark.docker,
-                pytest.mark.engine,
-                pytest.mark.trino_iceberg,
-            ],
-        ),
-        pytest.param(
-            "trino_delta",
-            marks=[
-                pytest.mark.docker,
-                pytest.mark.engine,
-                pytest.mark.trino_delta,
-            ],
-        ),
-        pytest.param(
-            "trino_nessie",
-            marks=[
-                pytest.mark.docker,
-                pytest.mark.engine,
-                pytest.mark.trino_nessie,
-            ],
-        ),
-    ]
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    generate_pytest_params,
+    ENGINES_BY_NAME,
+    IntegrationTestEngine,
 )
-def mark_gateway(request) -> t.Tuple[str, str]:
-    return request.param, f"inttest_{request.param}"
+
+
+@pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["trino"])))
+def ctx(
+    request: FixtureRequest,
+    create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],
+) -> t.Iterable[TestContext]:
+    yield from create_test_context(*request.param)
 
 
 @pytest.fixture
-def test_type() -> str:
-    return "query"
+def engine_adapter(ctx: TestContext) -> TrinoEngineAdapter:
+    assert isinstance(ctx.engine_adapter, TrinoEngineAdapter)
+    return ctx.engine_adapter
 
 
 def test_macros_in_physical_properties(

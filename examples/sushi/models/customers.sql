@@ -17,7 +17,7 @@ CREATE VIEW raw.demographics AS (
   SELECT 1 AS customer_id, '00000' AS zip
 );
 
-WITH current_marketing AS (
+WITH current_marketing_outer AS (
   SELECT
     customer_id,
     status
@@ -29,7 +29,17 @@ SELECT DISTINCT
   m.status,
   d.zip
   FROM sushi.orders AS o
-LEFT JOIN current_marketing AS m
+LEFT JOIN (
+  WITH current_marketing AS (
+    SELECT
+      customer_id,
+      status,
+      @ADD_ONE(1) AS another_column,
+    FROM current_marketing_outer
+  )
+  SELECT current_marketing.* FROM current_marketing WHERE current_marketing.customer_id != 100
+) AS m
   ON o.customer_id = m.customer_id
 LEFT JOIN raw.demographics AS d
   ON o.customer_id = d.customer_id
+WHERE sushi.orders.customer_id > 0

@@ -2,7 +2,7 @@ import random
 import typing as t
 from datetime import datetime, timedelta
 
-import numpy as np
+import numpy as np  # noqa: TID253
 
 
 def set_seed(dt: datetime) -> None:

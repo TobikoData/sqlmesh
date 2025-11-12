@@ -1,5 +1,5 @@
 import { useStoreContext } from '@context/context'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { isNil, toDate, toDateFormat } from '@utils/index'
 import { useEffect } from 'react'
 import Table from '@components/table/Table'

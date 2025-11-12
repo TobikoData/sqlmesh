@@ -2,7 +2,10 @@ from sqlmesh.core.config.categorizer import (
     AutoCategorizationMode as AutoCategorizationMode,
     CategorizerConfig as CategorizerConfig,
 )
-from sqlmesh.core.config.common import EnvironmentSuffixTarget as EnvironmentSuffixTarget
+from sqlmesh.core.config.common import (
+    EnvironmentSuffixTarget as EnvironmentSuffixTarget,
+    TableNamingConvention as TableNamingConvention,
+)
 from sqlmesh.core.config.connection import (
     AthenaConnectionConfig as AthenaConnectionConfig,
     BaseDuckDBConnectionConfig as BaseDuckDBConnectionConfig,
@@ -10,6 +13,7 @@ from sqlmesh.core.config.connection import (
     ConnectionConfig as ConnectionConfig,
     DatabricksConnectionConfig as DatabricksConnectionConfig,
     DuckDBConnectionConfig as DuckDBConnectionConfig,
+    FabricConnectionConfig as FabricConnectionConfig,
     GCPPostgresConnectionConfig as GCPPostgresConnectionConfig,
     MotherDuckConnectionConfig as MotherDuckConnectionConfig,
     MSSQLConnectionConfig as MSSQLConnectionConfig,
@@ -32,12 +36,6 @@ from sqlmesh.core.config.model import ModelDefaultsConfig as ModelDefaultsConfig
 from sqlmesh.core.config.naming import NameInferenceConfig as NameInferenceConfig
 from sqlmesh.core.config.linter import LinterConfig as LinterConfig
 from sqlmesh.core.config.plan import PlanConfig as PlanConfig
-from sqlmesh.core.config.root import Config as Config
+from sqlmesh.core.config.root import Config as Config, DbtConfig as DbtConfig
 from sqlmesh.core.config.run import RunConfig as RunConfig
-from sqlmesh.core.config.scheduler import (
-    AirflowSchedulerConfig as AirflowSchedulerConfig,
-    BuiltInSchedulerConfig as BuiltInSchedulerConfig,
-    CloudComposerSchedulerConfig as CloudComposerSchedulerConfig,
-    MWAASchedulerConfig as MWAASchedulerConfig,
-    YCAirflowSchedulerConfig as YCAirflowSchedulerConfig,
-)
+from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig as BuiltInSchedulerConfig
