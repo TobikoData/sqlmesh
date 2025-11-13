@@ -291,6 +291,7 @@ class GithubController:
         event: t.Optional[GithubEvent] = None,
         client: t.Optional[Github] = None,
         context: t.Optional[Context] = None,
+        select_models: t.Optional[t.Collection[str]] = None,
     ) -> None:
         from github import Github
 
@@ -301,6 +302,7 @@ class GithubController:
         self._token = token
         self._event = event or GithubEvent.from_env()
         logger.debug(f"Github event: {json.dumps(self._event.payload)}")
+        self._select_models = select_models
         self._pr_plan_builder: t.Optional[PlanBuilder] = None
         self._prod_plan_builder: t.Optional[PlanBuilder] = None
         self._prod_plan_with_gaps_builder: t.Optional[PlanBuilder] = None
@@ -407,6 +409,7 @@ class GithubController:
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
                 forward_only=self.forward_only_plan,
+                select_models=self._select_models,
             )
         assert self._pr_plan_builder
         return self._pr_plan_builder.build()
@@ -437,6 +440,7 @@ class GithubController:
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
                 forward_only=self.forward_only_plan,
+                select_models=self._select_models,
             )
         assert self._prod_plan_builder
         return self._prod_plan_builder.build()
@@ -454,6 +458,7 @@ class GithubController:
                 skip_linter=True,
                 run=self.bot_config.run_on_deploy_to_prod,
                 forward_only=self.forward_only_plan,
+                select_models=self._select_models,
             )
         assert self._prod_plan_with_gaps_builder
         return self._prod_plan_with_gaps_builder.build()
