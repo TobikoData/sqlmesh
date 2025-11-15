@@ -639,6 +639,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements.clear()
         self._linters.clear()
         self._environment_statements = []
+        self._models_with_tests.clear()
+        self._model_test_metadata.clear()
 
         for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)

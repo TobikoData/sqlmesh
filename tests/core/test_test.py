@@ -2469,13 +2469,12 @@ test_example_full_model:
         "SELECT 1 AS col_1, 2 AS col_2, 3 AS col_3, 4 AS col_4, 5 AS col_5, 6 AS col_6, 7 AS col_7"
     )
 
-    context.upsert_model(
-        _create_model(
-            meta="MODEL(name test.test_wide_model)",
-            query=wide_model_query,
-            default_catalog=context.default_catalog,
-        )
+    wide_model = _create_model(
+        meta="MODEL(name test.test_wide_model)",
+        query=wide_model_query,
+        default_catalog=context.default_catalog,
     )
+    context.upsert_model(wide_model)
 
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir()
@@ -2498,6 +2497,9 @@ test_example_full_model:
     """
 
     wide_test_file.write_text(wide_test_file_content)
+
+    context.load()
+    context.upsert_model(wide_model)
 
     with capture_output() as captured_output:
         context.test()
