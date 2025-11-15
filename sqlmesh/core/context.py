@@ -2809,15 +2809,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             for test in tests:
                 if "::" in test:
                     filename, test_name = test.split("::", maxsplit=1)
+                    test_path = Path(filename)
                     filtered_tests.extend(
-                        [
-                            t
-                            for t in test_meta
-                            if str(t.path) == filename and t.test_name == test_name
-                        ]
+                        [t for t in test_meta if t.path == test_path and t.test_name == test_name]
                     )
                 else:
-                    filtered_tests.extend([t for t in test_meta if str(t.path) == test])
+                    test_path = Path(test)
+                    filtered_tests.extend([t for t in test_meta if t.path == test_path])
             test_meta = filtered_tests
 
         if patterns:
