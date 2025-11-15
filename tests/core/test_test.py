@@ -1539,6 +1539,9 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
     with open(test_path, "w", encoding="utf-8") as file:
         dump_yaml(test_dict, file)
 
+    # Re-initialize context to pick up the modified test file
+    context = Context(paths=path, config=config)
+
     spy_execute = mocker.spy(EngineAdapter, "_execute")
     mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
 
@@ -2448,6 +2451,9 @@ test_example_full_model:
         copy_test_file(original_test_file, tmp_path / "tests" / f"test_success_{i}.yaml", i)
         copy_test_file(new_test_file, tmp_path / "tests" / f"test_failure_{i}.yaml", i)
 
+    # Re-initialize context to pick up the new test files
+    context = Context(paths=tmp_path, config=config)
+
     with capture_output() as captured_output:
         context.test()
 
@@ -2548,6 +2554,9 @@ test_null_third_row:
         num_orders: null
         """
     )
+
+    # Re-initialize context to pick up the modified test file
+    context = Context(paths=tmp_path, config=config)
 
     with capture_output() as captured_output:
         context.test()
@@ -3472,6 +3481,9 @@ test_foo:
     """
     )
 
+    # Re-initialize context to pick up the new test file
+    context = Context(paths=tmp_path, config=config)
+
     with capture_output() as captured_output:
         context.test()
 
@@ -3497,6 +3509,9 @@ test_foo:
       - id: 2
     """
     )
+
+    # Re-initialize context to pick up the modified test file
+    context = Context(paths=tmp_path, config=config)
 
     with capture_output() as captured_output:
         context.test()
