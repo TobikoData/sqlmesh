@@ -115,6 +115,7 @@ from sqlmesh.core.test import (
     ModelTestMetadata,
     generate_test,
     run_tests,
+    filter_tests_by_patterns,
 )
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
@@ -146,8 +147,8 @@ if t.TYPE_CHECKING:
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import (
-        BigframeSession,
         DF,
+        BigframeSession,
         PySparkDataFrame,
         PySparkSession,
         SnowparkSession,
@@ -398,6 +399,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict(
             "standaloneaudits"
         )
+        self._models_with_tests: t.Set[str] = set()
+        self._model_test_metadata: t.List[ModelTestMetadata] = []
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
@@ -636,6 +639,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements.clear()
         self._linters.clear()
         self._environment_statements = []
+        self._models_with_tests.clear()
+        self._model_test_metadata.clear()
 
         for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
@@ -647,6 +652,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
             self._environment_statements.extend(project.environment_statements)
+            self._models_with_tests.update(project.models_with_tests)
+            self._model_test_metadata.extend(project.model_test_metadata)
 
             config = loader.config
             self._linters[config.project] = Linter.from_rules(
@@ -1048,6 +1055,11 @@ class GenericContext(BaseContext, t.Generic[C]):
     def standalone_audits(self) -> MappingProxyType[str, StandaloneAudit]:
         """Returns all registered standalone audits in this context."""
         return MappingProxyType(self._standalone_audits)
+
+    @property
+    def models_with_tests(self) -> t.Set[str]:
+        """Returns all models with tests in this context."""
+        return self._models_with_tests
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
@@ -2220,7 +2232,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             pd.set_option("display.max_columns", None)
 
-        test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
+        test_meta = self._filter_preloaded_tests(
+            test_meta=self._model_test_metadata, tests=tests, patterns=match_patterns
+        )
 
         result = run_tests(
             model_test_metadata=test_meta,
@@ -2781,6 +2795,33 @@ class GenericContext(BaseContext, t.Generic[C]):
                 return adapter
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.engine_adapter
+
+    def _filter_preloaded_tests(
+        self,
+        test_meta: t.List[ModelTestMetadata],
+        tests: t.Optional[t.List[str]] = None,
+        patterns: t.Optional[t.List[str]] = None,
+    ) -> t.List[ModelTestMetadata]:
+        """Filter pre-loaded test metadata based on tests and patterns."""
+
+        if tests:
+            filtered_tests = []
+            for test in tests:
+                if "::" in test:
+                    filename, test_name = test.split("::", maxsplit=1)
+                    test_path = Path(filename)
+                    filtered_tests.extend(
+                        [t for t in test_meta if t.path == test_path and t.test_name == test_name]
+                    )
+                else:
+                    test_path = Path(test)
+                    filtered_tests.extend([t for t in test_meta if t.path == test_path])
+            test_meta = filtered_tests
+
+        if patterns:
+            test_meta = filter_tests_by_patterns(test_meta, patterns)
+
+        return test_meta
 
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
