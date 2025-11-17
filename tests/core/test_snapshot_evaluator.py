@@ -24,6 +24,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
     InsertOverwriteStrategy,
+    CommentCreationView,
 )
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import RuntimeStage, macro, MacroEvaluator, MacroFunc
@@ -1517,6 +1518,41 @@ def test_migrate_view(
             ),
         ]
     )
+
+
+def test_migrate_view_recreation_not_needed(
+    mocker: MockerFixture,
+    make_snapshot,
+    make_mocked_engine_adapter,
+):
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=ViewKind(),
+        description="my_description",
+        query=parse_one("SELECT c, a FROM tbl"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.METADATA
+    snapshot.forward_only = False
+
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+    adapter.with_settings = lambda **kwargs: adapter
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.get_data_objects",
+        return_value=[
+            DataObject(
+                schema="sqlmesh__test_schema",
+                name=f"test_schema__test_model__{snapshot.version}",
+                type="view",
+            )
+        ],
+    )
+
+    evaluator = SnapshotEvaluator(adapter)
+    evaluator.migrate([snapshot], {}, directly_or_indirectly_modified_snapshots_ids=set())
+
+    adapter.cursor.execute.assert_not_called()
 
 
 def test_migrate_snapshot_data_object_type_mismatch(
