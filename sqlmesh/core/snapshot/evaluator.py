@@ -477,7 +477,7 @@ class SnapshotEvaluator:
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
         allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
-        directly_or_indirectly_modified_snapshots_ids: t.Set[SnapshotId] = None,
+        directly_or_indirectly_modified_snapshots_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
