@@ -34,8 +34,14 @@ sources:
     schema: raw
     tables:
       - name: items
+        config:
+          meta:
       - name: orders
+        config:
+          meta:
       - name: order_items
+        config:
+          meta:
     freshness:
       warn_after: {count: 10, period: hour}
       error_after: {count: 11, period: hour}
