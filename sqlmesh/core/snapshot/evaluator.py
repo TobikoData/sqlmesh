@@ -1198,7 +1198,7 @@ class SnapshotEvaluator:
         allow_destructive_snapshots: t.Set[str],
         allow_additive_snapshots: t.Set[str],
         run_pre_post_statements: bool = False,
-        only_metadata_changes: bool = None,
+        only_metadata_changes: bool = False,
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
