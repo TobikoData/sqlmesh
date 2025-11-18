@@ -282,7 +282,7 @@ Configuration options for [`SCD_TYPE_2` models](../concepts/models/model_kinds.m
 | `unique_key`              | The model column(s) containing each row's unique key                                                                                                                                        | array[str] |    Y     |
 | `valid_from_name`         | The model column containing each row's valid from date. (Default: `valid_from`)                                                                                                             |    str     |    N     |
 | `valid_to_name`           | The model column containing each row's valid to date. (Default: `valid_to`)                                                                                                                 |    str     |    N     |
-| `invalidate_hard_deletes` | If set to true, when a record is missing from the source table it will be marked as invalid - see [here](../concepts/models/model_kinds.md#deletes) for more information. (Default: `True`) |    bool    |    N     |
+| `invalidate_hard_deletes` | If set to true, when a record is missing from the source table it will be marked as invalid - see [here](../concepts/models/model_kinds.md#deletes) for more information. (Default: `False`) |    bool    |    N     |
 
 ##### SCD Type 2 By Time
 
