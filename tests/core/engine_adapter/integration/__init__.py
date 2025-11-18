@@ -77,6 +77,7 @@ ENGINES = [
     IntegrationTestEngine("spark", native_dataframe_type="pyspark"),
     IntegrationTestEngine("clickhouse", catalog_types=["standalone", "cluster"]),
     IntegrationTestEngine("risingwave"),
+    IntegrationTestEngine("doris"),
     # Cloud engines that need paid accounts / special credentials
     IntegrationTestEngine("clickhouse_cloud", cloud=True),
     IntegrationTestEngine("redshift", cloud=True),
@@ -265,6 +266,7 @@ class TestContext:
             for k, v in self.columns_to_types.items()
             if v.sql().lower().startswith("timestamp")
             or (v.sql().lower() == "datetime" and self.dialect == "bigquery")
+            or (v.sql().lower() == "datetime" and self.dialect == "doris")
         ]
 
     @property
@@ -448,7 +450,7 @@ class TestContext:
                     AND pgc.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
-        elif self.dialect in ["mysql", "snowflake"]:
+        elif self.dialect in ["mysql", "snowflake", "doris"]:
             # Snowflake treats all identifiers as uppercase unless they are lowercase and quoted.
             # They are lowercase and quoted in sushi but not in the inline tests.
             if self.dialect == "snowflake" and snowflake_capitalize_ids:
@@ -458,6 +460,7 @@ class TestContext:
             comment_field_name = {
                 "mysql": "table_comment",
                 "snowflake": "comment",
+                "doris": "table_comment",
             }
 
             query = f"""
@@ -563,7 +566,7 @@ class TestContext:
                     AND pgc.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
-        elif self.dialect in ["mysql", "snowflake", "trino"]:
+        elif self.dialect in ["mysql", "snowflake", "trino", "doris"]:
             # Snowflake treats all identifiers as uppercase unless they are lowercase and quoted.
             # They are lowercase and quoted in sushi but not in the inline tests.
             if self.dialect == "snowflake" and snowflake_capitalize_ids:
@@ -574,6 +577,7 @@ class TestContext:
                 "mysql": "column_comment",
                 "snowflake": "comment",
                 "trino": "comment",
+                "doris": "column_comment",
             }
 
             query = f"""
