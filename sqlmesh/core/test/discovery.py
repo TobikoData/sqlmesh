@@ -22,7 +22,7 @@ class ModelTestMetadata(PydanticModel):
 
     @property
     def model_name(self) -> str:
-        return self.body["model"]
+        return self.body.get("model", "")
 
     def __hash__(self) -> int:
         return self.fully_qualified_test_name.__hash__()

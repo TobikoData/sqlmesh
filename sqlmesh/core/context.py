@@ -399,8 +399,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict(
             "standaloneaudits"
         )
-        self._models_with_tests: t.Set[str] = set()
         self._model_test_metadata: t.List[ModelTestMetadata] = []
+        self._model_test_metadata_path_index: t.Dict[Path, t.List[ModelTestMetadata]] = {}
+        self._model_test_metadata_fully_qualified_name_index: t.Dict[str, ModelTestMetadata] = {}
+        self._models_with_tests: t.Set[str] = set()
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
@@ -639,8 +641,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements.clear()
         self._linters.clear()
         self._environment_statements = []
-        self._models_with_tests.clear()
         self._model_test_metadata.clear()
+        self._model_test_metadata_path_index.clear()
+        self._model_test_metadata_fully_qualified_name_index.clear()
+        self._models_with_tests.clear()
 
         for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
@@ -652,8 +656,15 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
             self._environment_statements.extend(project.environment_statements)
-            self._models_with_tests.update(project.models_with_tests)
             self._model_test_metadata.extend(project.model_test_metadata)
+            for metadata in project.model_test_metadata:
+                if metadata.path not in self._model_test_metadata_path_index:
+                    self._model_test_metadata_path_index[metadata.path] = []
+                self._model_test_metadata_path_index[metadata.path].append(metadata)
+                self._model_test_metadata_fully_qualified_name_index[
+                    metadata.fully_qualified_test_name
+                ] = metadata
+                self._models_with_tests.add(metadata.model_name)
 
             config = loader.config
             self._linters[config.project] = Linter.from_rules(
@@ -2232,7 +2243,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             pd.set_option("display.max_columns", None)
 
-        test_meta = self._filter_preloaded_tests(
+        test_meta = self._select_tests(
             test_meta=self._model_test_metadata, tests=tests, patterns=match_patterns
         )
 
@@ -2796,7 +2807,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.engine_adapter
 
-    def _filter_preloaded_tests(
+    def _select_tests(
         self,
         test_meta: t.List[ModelTestMetadata],
         tests: t.Optional[t.List[str]] = None,
@@ -2808,14 +2819,14 @@ class GenericContext(BaseContext, t.Generic[C]):
             filtered_tests = []
             for test in tests:
                 if "::" in test:
-                    filename, test_name = test.split("::", maxsplit=1)
-                    test_path = Path(filename)
-                    filtered_tests.extend(
-                        [t for t in test_meta if t.path == test_path and t.test_name == test_name]
-                    )
+                    if test in self._model_test_metadata_fully_qualified_name_index:
+                        filtered_tests.append(
+                            self._model_test_metadata_fully_qualified_name_index[test]
+                        )
                 else:
                     test_path = Path(test)
-                    filtered_tests.extend([t for t in test_meta if t.path == test_path])
+                    if test_path in self._model_test_metadata_path_index:
+                        filtered_tests.extend(self._model_test_metadata_path_index[test_path])
             test_meta = filtered_tests
 
         if patterns:

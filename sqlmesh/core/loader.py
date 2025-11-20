@@ -65,7 +65,6 @@ class LoadedProject:
     environment_statements: t.List[EnvironmentStatements]
     user_rules: RuleSet
     model_test_metadata: t.List[ModelTestMetadata]
-    models_with_tests: t.Set[str]
 
 
 class CacheBase(abc.ABC):
@@ -247,10 +246,6 @@ class Loader(abc.ABC):
 
             model_test_metadata = self.load_model_tests()
 
-            models_with_tests = {
-                model_test_metadata.model_name for model_test_metadata in model_test_metadata
-            }
-
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -263,7 +258,6 @@ class Loader(abc.ABC):
                 environment_statements=environment_statements,
                 user_rules=user_rules,
                 model_test_metadata=model_test_metadata,
-                models_with_tests=models_with_tests,
             )
             return project
 
