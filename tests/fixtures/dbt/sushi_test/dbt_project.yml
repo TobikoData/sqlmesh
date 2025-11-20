@@ -79,3 +79,8 @@ on-run-end:
   - '{{ create_tables(schemas) }}'
   - 'DROP TABLE to_be_executed_last;'
   - '{{ graph_usage() }}'
+
+
+dispatch:
+  - macro_namespace: customers
+    search_order: ["my_helpers", "customers"]
