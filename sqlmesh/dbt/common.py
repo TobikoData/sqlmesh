@@ -46,7 +46,9 @@ def load_yaml(source: str | Path) -> t.Dict:
         raise ConfigError(f"{source}: {ex}" if isinstance(source, Path) else f"{ex}")
 
 
-def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+def parse_meta(v: t.Optional[t.Dict[str, t.Any]]) -> t.Dict[str, t.Any]:
+    if v is None:
+        return {}
     for key, value in v.items():
         if isinstance(value, str):
             v[key] = try_str_to_bool(value)
@@ -115,7 +117,7 @@ class GeneralConfig(DbtConfig):
 
     @field_validator("meta", mode="before")
     @classmethod
-    def _validate_meta(cls, v: t.Dict[str, t.Union[str, t.Any]]) -> t.Dict[str, t.Any]:
+    def _validate_meta(cls, v: t.Optional[t.Dict[str, t.Union[str, t.Any]]]) -> t.Dict[str, t.Any]:
         return parse_meta(v)
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {

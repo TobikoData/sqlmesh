@@ -7,7 +7,6 @@ import time
 from functools import cached_property
 from sqlglot import exp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
-from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     InsertOverwriteStrategy,
@@ -19,7 +18,7 @@ from sqlmesh.utils.connection_pool import ConnectionPool
 logger = logging.getLogger(__name__)
 
 
-class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
+class FabricEngineAdapter(MSSQLEngineAdapter):
     """
     Adapter for Microsoft Fabric.
     """
