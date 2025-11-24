@@ -196,7 +196,14 @@ class BaseExpressionRenderer:
             **kwargs,
         }
 
+        if this_model:
+            render_kwargs["this_model"] = this_model
+
+        macro_evaluator.locals.update(render_kwargs)
+
         variables = kwargs.pop("variables", {})
+        if variables:
+            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
 
         expressions = [self._expression]
         if isinstance(self._expression, d.Jinja):
@@ -267,14 +274,6 @@ class BaseExpressionRenderer:
                         raise ConfigError(
                             f"Could not parse the rendered jinja at '{self._path}'.\n{ex}"
                         ) from ex
-
-        if this_model:
-            render_kwargs["this_model"] = this_model
-
-        macro_evaluator.locals.update(render_kwargs)
-
-        if variables:
-            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
 
         for definition in self._macro_definitions:
             try:
