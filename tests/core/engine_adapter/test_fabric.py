@@ -144,6 +144,8 @@ def test_alter_table_direct_alteration(adapter: FabricEngineAdapter, mocker: Moc
     ]
 
     assert to_sql_calls(adapter) == expected_calls
+
+
 def test_merge_pandas(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
