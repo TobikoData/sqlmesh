@@ -15,7 +15,6 @@ Refer to `sqlmesh.core.plan`.
 """
 
 import abc
-import itertools
 import logging
 import typing as t
 from sqlmesh.core import analytics
@@ -380,12 +379,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 allow_destructive_snapshots=plan.allow_destructive_models,
                 allow_additive_snapshots=plan.allow_additive_models,
                 deployability_index=stage.deployability_index,
-                directly_or_indirectly_modified_snapshots_ids=set(
-                    itertools.chain(
-                        *plan.indirectly_modified_snapshots.values(),
-                        plan.directly_modified_snapshots,
-                    )
-                ),
             )
         except NodeExecutionFailedError as ex:
             raise PlanError(str(ex.__cause__) if ex.__cause__ else str(ex))

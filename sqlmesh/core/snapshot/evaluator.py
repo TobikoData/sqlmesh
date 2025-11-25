@@ -477,7 +477,6 @@ class SnapshotEvaluator:
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
         allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
-        directly_or_indirectly_modified_snapshots_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
@@ -487,7 +486,6 @@ class SnapshotEvaluator:
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
             allow_additive_snapshots: Set of snapshots that are allowed to have additive schema changes.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-            directly_or_indirectly_modified_snapshots_ids: Set of SnapshotIds with direct or indirect changes.
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         target_data_objects = self._get_physical_data_objects(target_snapshots, deployability_index)
@@ -512,10 +510,6 @@ class SnapshotEvaluator:
                     allow_additive_snapshots,
                     self.get_adapter(s.model_gateway),
                     deployability_index,
-                    only_metadata_changes=s.snapshot_id
-                    not in directly_or_indirectly_modified_snapshots_ids
-                    if directly_or_indirectly_modified_snapshots_ids is not None
-                    else False,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -1117,7 +1111,6 @@ class SnapshotEvaluator:
         allow_additive_snapshots: t.Set[str],
         adapter: EngineAdapter,
         deployability_index: DeployabilityIndex,
-        only_metadata_changes: bool,
     ) -> None:
         if not snapshot.is_model or snapshot.is_symbolic:
             return
@@ -1161,7 +1154,6 @@ class SnapshotEvaluator:
                     allow_destructive_snapshots=allow_destructive_snapshots,
                     allow_additive_snapshots=allow_additive_snapshots,
                     run_pre_post_statements=True,
-                    only_metadata_changes=only_metadata_changes,
                 )
             else:
                 self._execute_create(
@@ -1198,7 +1190,6 @@ class SnapshotEvaluator:
         allow_destructive_snapshots: t.Set[str],
         allow_additive_snapshots: t.Set[str],
         run_pre_post_statements: bool = False,
-        only_metadata_changes: bool = False,
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
@@ -1235,7 +1226,6 @@ class SnapshotEvaluator:
                 ignore_destructive=snapshot.model.on_destructive_change.is_ignore,
                 ignore_additive=snapshot.model.on_additive_change.is_ignore,
                 deployability_index=deployability_index,
-                only_metadata_changes=only_metadata_changes,
             )
         finally:
             if snapshot.is_materialized:
@@ -2770,8 +2760,12 @@ class ViewStrategy(PromotableStrategy):
         **kwargs: t.Any,
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
-        if not (
-            kwargs["only_metadata_changes"] and self.adapter.COMMENT_CREATION_VIEW.is_unsupported
+        # Optimization: avoid unnecessary recreation when possible
+        if (
+            snapshot.model.forward_only
+            or bool(snapshot.model.physical_version)
+            or not snapshot.virtual_environment_mode.is_full
+            or not self.adapter.COMMENT_CREATION_VIEW.is_unsupported
         ):
             model = snapshot.model
             render_kwargs = dict(

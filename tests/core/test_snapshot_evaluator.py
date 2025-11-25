@@ -1520,10 +1520,20 @@ def test_migrate_view(
     )
 
 
+@pytest.mark.parametrize(
+    "change_category",
+    [
+        SnapshotChangeCategory.BREAKING,
+        SnapshotChangeCategory.NON_BREAKING,
+        SnapshotChangeCategory.METADATA,
+    ],
+)
+@pytest.mark.tz
 def test_migrate_view_recreation_not_needed(
     mocker: MockerFixture,
     make_snapshot,
     make_mocked_engine_adapter,
+    change_category: SnapshotChangeCategory,
 ):
     model = SqlModel(
         name="test_schema.test_model",
@@ -1532,7 +1542,7 @@ def test_migrate_view_recreation_not_needed(
         query=parse_one("SELECT c, a FROM tbl"),
     )
     snapshot = make_snapshot(model, version="1")
-    snapshot.change_category = SnapshotChangeCategory.METADATA
+    snapshot.change_category = change_category
     snapshot.forward_only = False
 
     adapter = make_mocked_engine_adapter(EngineAdapter)
@@ -1550,7 +1560,7 @@ def test_migrate_view_recreation_not_needed(
     )
 
     evaluator = SnapshotEvaluator(adapter)
-    evaluator.migrate([snapshot], {}, directly_or_indirectly_modified_snapshots_ids=set())
+    evaluator.migrate([snapshot], {})
 
     adapter.cursor.execute.assert_not_called()
 
