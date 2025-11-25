@@ -1528,7 +1528,6 @@ def test_migrate_view(
         SnapshotChangeCategory.METADATA,
     ],
 )
-@pytest.mark.tz
 def test_migrate_view_recreation_not_needed(
     mocker: MockerFixture,
     make_snapshot,
