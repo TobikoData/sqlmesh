@@ -66,6 +66,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdBatch,
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
+    SnapshotChangeCategory,
 )
 from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import random_id, CorrelationId, AttributeDict
@@ -2762,9 +2763,10 @@ class ViewStrategy(PromotableStrategy):
         logger.info("Migrating view '%s'", target_table_name)
         # Optimization: avoid unnecessary recreation when possible
         if (
-            snapshot.model.forward_only
+            snapshot.is_forward_only
             or bool(snapshot.model.physical_version)
             or not snapshot.virtual_environment_mode.is_full
+            or snapshot.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
             or not self.adapter.COMMENT_CREATION_VIEW.is_unsupported
         ):
             model = snapshot.model
