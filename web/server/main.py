@@ -85,6 +85,11 @@ def create_app() -> FastAPI:
         StaticFiles(directory=WEB_DIRECTORY / "client/dist/favicons", check_dir=False),
         name="favicons",
     )
+    app.mount(
+        "/fonts",
+        StaticFiles(directory=WEB_DIRECTORY / "client/dist/fonts", check_dir=False),
+        name="fonts",
+    )
 
     @app.get("/{full_path:path}")
     async def index(full_path: str = "") -> HTMLResponse:

@@ -10,7 +10,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
@@ -151,7 +151,6 @@ dmypy.json
 **/.DS_Store
 **/node_modules
 /web/client/src/api/client.ts
-web/client/dist
 .local/
 
 # Version file
