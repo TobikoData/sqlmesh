@@ -91,6 +91,61 @@ def test_replace_query(adapter: FabricEngineAdapter, mocker: MockerFixture):
     ]
 
 
+def test_alter_table_column_type_workaround(adapter: FabricEngineAdapter, mocker: MockerFixture):
+    """
+    Tests the alter_table method's workaround for changing a column's data type.
+    """
+    # Mock set_current_catalog to avoid connection pool side effects
+    set_catalog_mock = mocker.patch.object(adapter, "set_current_catalog")
+    # Mock random_id to have a predictable temporary column name
+    mocker.patch("sqlmesh.core.engine_adapter.fabric.random_id", return_value="abcdef")
+
+    alter_expression = exp.Alter(
+        this=exp.to_table("my_db.my_schema.my_table"),
+        actions=[
+            exp.AlterColumn(
+                this=exp.to_column("col_a"),
+                dtype=exp.DataType.build("BIGINT"),
+            )
+        ],
+    )
+
+    adapter.alter_table([alter_expression])
+
+    set_catalog_mock.assert_called_once_with("my_db")
+
+    expected_calls = [
+        "ALTER TABLE [my_schema].[my_table] ADD [col_a__abcdef] BIGINT;",
+        "UPDATE [my_schema].[my_table] SET [col_a__abcdef] = CAST([col_a] AS BIGINT);",
+        "ALTER TABLE [my_schema].[my_table] DROP COLUMN [col_a];",
+        "EXEC sp_rename 'my_schema.my_table.col_a__abcdef', 'col_a', 'COLUMN'",
+    ]
+
+    assert to_sql_calls(adapter) == expected_calls
+
+
+def test_alter_table_direct_alteration(adapter: FabricEngineAdapter, mocker: MockerFixture):
+    """
+    Tests the alter_table method for direct alterations like adding a column.
+    """
+    set_catalog_mock = mocker.patch.object(adapter, "set_current_catalog")
+
+    alter_expression = exp.Alter(
+        this=exp.to_table("my_db.my_schema.my_table"),
+        actions=[exp.ColumnDef(this=exp.to_column("new_col"), kind=exp.DataType.build("INT"))],
+    )
+
+    adapter.alter_table([alter_expression])
+
+    set_catalog_mock.assert_called_once_with("my_db")
+
+    expected_calls = [
+        "ALTER TABLE [my_schema].[my_table] ADD [new_col] INT;",
+    ]
+
+    assert to_sql_calls(adapter) == expected_calls
+
+
 def test_merge_pandas(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
