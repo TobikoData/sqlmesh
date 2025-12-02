@@ -2832,7 +2832,7 @@ class EngineAdapter:
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
         table.set(
-            "this", exp.to_identifier(f"__temp_{table.name}_{random_id(short=True)}", quoted=quoted)
+            "this", exp.to_identifier(f"_{table.name}_{random_id(short=True)}", quoted=quoted)
         )
 
         if table_only:

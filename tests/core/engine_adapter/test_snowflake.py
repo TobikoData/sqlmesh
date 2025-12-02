@@ -38,7 +38,7 @@ def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Cal
         normalize_model_name("catalog.db.test_table", default_catalog=None, dialect=adapter.dialect)
     )
 
-    assert value.sql(dialect=adapter.dialect) == '"CATALOG"."DB"."__temp_TEST_TABLE_abcdefgh"'
+    assert value.sql(dialect=adapter.dialect) == '"CATALOG"."DB"."_TEST_TABLE_abcdefgh"'
 
 
 def test_get_data_objects_lowercases_columns(

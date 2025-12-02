@@ -3486,7 +3486,7 @@ def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Cal
         normalize_model_name("catalog.db.test_table", default_catalog=None, dialect=None)
     )
 
-    assert value.sql() == '"catalog"."db"."__temp_test_table_abcdefgh"'
+    assert value.sql() == '"catalog"."db"."_test_table_abcdefgh"'
 
 
 def test_get_data_objects_batching(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
