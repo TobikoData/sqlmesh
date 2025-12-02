@@ -238,6 +238,7 @@ class DuckDBAttachOptions(BaseConfig):
     data_path: t.Optional[str] = None
     encrypted: bool = False
     data_inlining_row_limit: t.Optional[int] = None
+    metadata_schema: t.Optional[str] = None
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -259,6 +260,8 @@ class DuckDBAttachOptions(BaseConfig):
                 options.append("ENCRYPTED")
             if self.data_inlining_row_limit is not None:
                 options.append(f"DATA_INLINING_ROW_LIMIT {self.data_inlining_row_limit}")
+            if self.metadata_schema is not None:
+                options.append(f"METADATA_SCHEMA '{self.metadata_schema}'")
 
         options_sql = f" ({', '.join(options)})" if options else ""
         alias_sql = ""
