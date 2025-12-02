@@ -24,6 +24,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.utils import Verbosity
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
+from sqlmesh.cli.daemon_connector import get_daemon_connector
 
 logger = logging.getLogger(__name__)
 
@@ -640,7 +641,16 @@ def janitor(ctx: click.Context, ignore_ttl: bool, **kwargs: t.Any) -> None:
 
     The janitor cleans up old environments and expired snapshots.
     """
-    ctx.obj.run_janitor(ignore_ttl, **kwargs)
+    project_path = Path.cwd()
+    daemon = get_daemon_connector(project_path)
+    if daemon:
+        print("Connecting to SQLMesh daemon...")
+        success = daemon.call_janitor(ignore_ttl)
+        print("Janitor completed, with success:", success)
+    else:
+        # No daemon available, run directly
+        # ctx.obj.run_janitor(ignore_ttl, **kwargs)
+        raise click.ClickException("no socket found")
 
 
 @cli.command("destroy")
