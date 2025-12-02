@@ -130,7 +130,7 @@ class NoMissingAudits(Rule):
 
 
 class NoMissingUnitTest(Rule):
-    """All models must have a unit test found in the test/ directory yaml files"""
+    """All models must have a unit test found in the tests/ directory yaml files"""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         #  External models cannot have unit tests

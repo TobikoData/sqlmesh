@@ -147,8 +147,8 @@ if t.TYPE_CHECKING:
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import (
-        DF,
         BigframeSession,
+        DF,
         PySparkDataFrame,
         PySparkSession,
         SnowparkSession,
@@ -403,6 +403,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._model_test_metadata_path_index: t.Dict[Path, t.List[ModelTestMetadata]] = {}
         self._model_test_metadata_fully_qualified_name_index: t.Dict[str, ModelTestMetadata] = {}
         self._models_with_tests: t.Set[str] = set()
+
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
@@ -656,6 +657,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
             self._environment_statements.extend(project.environment_statements)
+
             self._model_test_metadata.extend(project.model_test_metadata)
             for metadata in project.model_test_metadata:
                 if metadata.path not in self._model_test_metadata_path_index:
@@ -2243,9 +2245,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             pd.set_option("display.max_columns", None)
 
-        test_meta = self._select_tests(
-            test_meta=self._model_test_metadata, tests=tests, patterns=match_patterns
-        )
+        test_meta = self.select_tests(tests=tests, patterns=match_patterns)
 
         result = run_tests(
             model_test_metadata=test_meta,
@@ -2807,33 +2807,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.engine_adapter
 
-    def _select_tests(
-        self,
-        test_meta: t.List[ModelTestMetadata],
-        tests: t.Optional[t.List[str]] = None,
-        patterns: t.Optional[t.List[str]] = None,
-    ) -> t.List[ModelTestMetadata]:
-        """Filter pre-loaded test metadata based on tests and patterns."""
-
-        if tests:
-            filtered_tests = []
-            for test in tests:
-                if "::" in test:
-                    if test in self._model_test_metadata_fully_qualified_name_index:
-                        filtered_tests.append(
-                            self._model_test_metadata_fully_qualified_name_index[test]
-                        )
-                else:
-                    test_path = Path(test)
-                    if test_path in self._model_test_metadata_path_index:
-                        filtered_tests.extend(self._model_test_metadata_path_index[test_path])
-            test_meta = filtered_tests
-
-        if patterns:
-            test_meta = filter_tests_by_patterns(test_meta, patterns)
-
-        return test_meta
-
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
     ) -> t.Dict[str, Snapshot]:
@@ -3245,18 +3218,34 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return all_violations
 
-    def load_model_tests(
-        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
+    def select_tests(
+        self,
+        tests: t.Optional[t.List[str]] = None,
+        patterns: t.Optional[t.List[str]] = None,
     ) -> t.List[ModelTestMetadata]:
-        # If a set of specific test path(s) are provided, we can use a single loader
-        # since it's not required to walk every tests/ folder in each repo
-        loaders = [self._loaders[0]] if tests else self._loaders
+        """Filter pre-loaded test metadata based on tests and patterns."""
 
-        model_tests = []
-        for loader in loaders:
-            model_tests.extend(loader.load_model_tests(tests=tests, patterns=patterns))
+        test_meta = self._model_test_metadata
 
-        return model_tests
+        if tests:
+            filtered_tests = []
+            for test in tests:
+                if "::" in test:
+                    if test in self._model_test_metadata_fully_qualified_name_index:
+                        filtered_tests.append(
+                            self._model_test_metadata_fully_qualified_name_index[test]
+                        )
+                else:
+                    test_path = Path(test)
+                    if test_path in self._model_test_metadata_path_index:
+                        filtered_tests.extend(self._model_test_metadata_path_index[test_path])
+
+            test_meta = filtered_tests
+
+        if patterns:
+            test_meta = filter_tests_by_patterns(test_meta, patterns)
+
+        return test_meta
 
 
 class Context(GenericContext[Config]):
