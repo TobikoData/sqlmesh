@@ -394,3 +394,17 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
             expressions.append(clustered_by_exp)
             properties = exp.Properties(expressions=expressions)
         return properties
+
+    def _build_column_defs(
+        self,
+        target_columns_to_types: t.Dict[str, exp.DataType],
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        is_view: bool = False,
+    ) -> t.List[exp.ColumnDef]:
+        # Databricks requires column types to be specified when adding column comments
+        # in CREATE MATERIALIZED VIEW statements. Override is_view to False to force
+        # column types to be included when comments are present.
+        if is_view and column_descriptions:
+            is_view = False
+
+        return super()._build_column_defs(target_columns_to_types, column_descriptions, is_view)
