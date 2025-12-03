@@ -811,7 +811,7 @@ class EngineAdapter:
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         expressions: t.Optional[t.List[exp.PrimaryKey]] = None,
         is_view: bool = False,
-        is_materialized_view: bool = False,
+        materialized: bool = False,
     ) -> exp.Schema:
         """
         Build a schema expression for a table, columns, column comments, and additional schema properties.
@@ -824,7 +824,7 @@ class EngineAdapter:
                 target_columns_to_types=target_columns_to_types,
                 column_descriptions=column_descriptions,
                 is_view=is_view,
-                is_materialized_view=is_materialized_view,
+                materialized=materialized,
             )
             + expressions,
         )
@@ -834,7 +834,7 @@ class EngineAdapter:
         target_columns_to_types: t.Dict[str, exp.DataType],
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         is_view: bool = False,
-        is_materialized_view: bool = False,
+        materialized: bool = False,
     ) -> t.List[exp.ColumnDef]:
         engine_supports_schema_comments = (
             self.COMMENT_CREATION_VIEW.supports_schema_def
@@ -1267,7 +1267,7 @@ class EngineAdapter:
                 target_columns_to_types,
                 column_descriptions,
                 is_view=True,
-                is_materialized_view=materialized,
+                materialized=materialized,
             )
 
         properties = create_kwargs.pop("properties", None)
