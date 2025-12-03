@@ -284,6 +284,7 @@ class TrinoEngineAdapter(
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         expressions: t.Optional[t.List[exp.PrimaryKey]] = None,
         is_view: bool = False,
+        is_materialized_view: bool = False,
     ) -> exp.Schema:
         if "delta_lake" in self.get_catalog_type_from_table(table):
             target_columns_to_types = self._to_delta_ts(target_columns_to_types)
