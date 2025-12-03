@@ -470,7 +470,7 @@ def test_deploy_to_prod_blocked_pr(github_client, make_controller):
     )
     with pytest.raises(
         Exception,
-        match=r"^Merge commit cannot be cleanly created. Likely missing CODEOWNERS approval.*",
+        match=r"^Branch protection or ruleset requirement is likely not satisfied, e.g. missing CODEOWNERS approval.*",
     ):
         controller.deploy_to_prod()
 
