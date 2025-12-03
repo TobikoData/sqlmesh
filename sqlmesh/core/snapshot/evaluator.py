@@ -66,6 +66,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdBatch,
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
+    SnapshotChangeCategory,
 )
 from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import random_id, CorrelationId, AttributeDict
@@ -2760,20 +2761,28 @@ class ViewStrategy(PromotableStrategy):
         **kwargs: t.Any,
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
-        model = snapshot.model
-        render_kwargs = dict(
-            execution_time=now(), snapshots=kwargs["snapshots"], engine_adapter=self.adapter
-        )
+        # Optimization: avoid unnecessary recreation when possible
+        if (
+            snapshot.is_forward_only
+            or bool(snapshot.model.physical_version)
+            or not snapshot.virtual_environment_mode.is_full
+            or snapshot.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+            or not self.adapter.COMMENT_CREATION_VIEW.is_unsupported
+        ):
+            model = snapshot.model
+            render_kwargs = dict(
+                execution_time=now(), snapshots=kwargs["snapshots"], engine_adapter=self.adapter
+            )
 
-        self.adapter.create_view(
-            target_table_name,
-            model.render_query_or_raise(**render_kwargs),
-            model.columns_to_types,
-            materialized=self._is_materialized_view(model),
-            view_properties=model.render_physical_properties(**render_kwargs),
-            table_description=model.description,
-            column_descriptions=model.column_descriptions,
-        )
+            self.adapter.create_view(
+                target_table_name,
+                model.render_query_or_raise(**render_kwargs),
+                model.columns_to_types,
+                materialized=self._is_materialized_view(model),
+                view_properties=model.render_physical_properties(**render_kwargs),
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+            )
 
         # Apply grants after view migration
         deployability_index = kwargs.get("deployability_index")
