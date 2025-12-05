@@ -773,6 +773,11 @@ class GithubController:
                 "PR is already merged and this event was triggered prior to the merge."
             )
         merge_status = self._get_merge_state_status()
+        if merge_status.is_blocked:
+            raise CICDBotError(
+                "Branch protection or ruleset requirement is likely not satisfied, e.g. missing CODEOWNERS approval. "
+                "Please check PR and resolve any issues."
+            )
         if merge_status.is_dirty:
             raise CICDBotError(
                 "Merge commit cannot be cleanly created. Likely from a merge conflict. "
