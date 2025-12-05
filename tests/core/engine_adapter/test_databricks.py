@@ -406,6 +406,36 @@ def test_materialized_view_with_column_comments(
     ]
 
 
+def test_regular_view_with_column_comments(
+    mocker: MockFixture, make_mocked_engine_adapter: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="test_catalog")
+
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM source_table"),
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("STRING"),
+        },
+        materialized=False,
+        column_descriptions={
+            "a": "column a description",
+            "b": "column b description",
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # Regular views should NOT include column types even when column comments are present
+    assert sql_calls == [
+        "CREATE OR REPLACE VIEW `test_view` (`a` COMMENT 'column a description', `b` COMMENT 'column b description') AS SELECT `a`, `b` FROM `source_table`",
+    ]
+
+
 def test_create_table_clustered_by(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
     mocker.patch(
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
