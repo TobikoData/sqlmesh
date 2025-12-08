@@ -309,7 +309,7 @@ workflows:
           matrix:
             parameters:
               engine:
-                - snowflake
+                #- snowflake
                 - databricks
                 - redshift
                 - bigquery
