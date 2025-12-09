@@ -448,10 +448,9 @@ class GithubController:
                 c.PROD,
                 # this is required to highlight any data gaps between this PR environment and prod (since PR environments may only contain a subset of data)
                 no_gaps=False,
-                # this works because the snapshots were already categorized when applying self.pr_plan so there are no uncategorized local snapshots to trigger a plan error
-                no_auto_categorization=True,
                 skip_tests=True,
                 skip_linter=True,
+                categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
                 forward_only=self.forward_only_plan,
             )
