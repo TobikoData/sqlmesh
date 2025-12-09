@@ -339,7 +339,8 @@ def test_prod_plan_with_gaps(github_client, make_controller):
 
     assert controller.prod_plan_with_gaps.environment.name == c.PROD
     assert not controller.prod_plan_with_gaps.skip_backfill
-    assert not controller._prod_plan_with_gaps_builder._auto_categorization_enabled
+    # auto_categorization should now be enabled to prevent uncategorized snapshot errors
+    assert controller._prod_plan_with_gaps_builder._auto_categorization_enabled
     assert not controller.prod_plan_with_gaps.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
