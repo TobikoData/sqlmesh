@@ -242,8 +242,9 @@ Models:
 #### Select with git changes
 
 The git-based selector allows you to select models whose files have changed compared to a target branch (default: main). This includes:
+
 - Untracked files (new files not in git)
-- Uncommitted changes in working directory
+- Uncommitted changes in working directory (both staged and unstaged)
 - Committed changes different from the target branch
 
 For example:
