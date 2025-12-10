@@ -639,7 +639,7 @@ def test_expand_git_selection(
 def test_expand_git_selection_integration(tmp_path: Path, mocker: MockerFixture):
     repo_path = tmp_path / "test_repo"
     repo_path.mkdir()
-    subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo_path, check=True, capture_output=True)
 
     models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
     model_a_path = repo_path / "model_a.sql"
@@ -662,32 +662,23 @@ def test_expand_git_selection_integration(tmp_path: Path, mocker: MockerFixture)
         capture_output=True,
     )
 
-    result = subprocess.run(
-        ["git", "branch", "--show-current"],
-        cwd=repo_path,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    default_branch = result.stdout.strip()
-
     # no changes should select nothing
     git_client = GitClient(repo_path)
     selector = NativeSelector(mocker.Mock(), models)
     selector._git_client = git_client
-    assert selector.expand_model_selections([f"git:{default_branch}"]) == set()
+    assert selector.expand_model_selections([f"git:main"]) == set()
 
     # modify A but dont stage it, should be only selected
     model_a_path.write_text("SELECT 10 AS a")
-    assert selector.expand_model_selections([f"git:{default_branch}"]) == {'"test_model_a"'}
+    assert selector.expand_model_selections([f"git:main"]) == {'"test_model_a"'}
 
-    # stage model A, should still select it (this is the bug fix)
+    # stage model A, should still select it
     subprocess.run(["git", "add", "model_a.sql"], cwd=repo_path, check=True, capture_output=True)
-    assert selector.expand_model_selections([f"git:{default_branch}"]) == {'"test_model_a"'}
+    assert selector.expand_model_selections([f"git:main"]) == {'"test_model_a"'}
 
     # now add unstaged change to B and both should be selected
     model_b_path.write_text("SELECT 20 AS b")
-    assert selector.expand_model_selections([f"git:{default_branch}"]) == {
+    assert selector.expand_model_selections([f"git:main"]) == {
         '"test_model_a"',
         '"test_model_b"',
     }
@@ -707,7 +698,7 @@ def test_expand_git_selection_integration(tmp_path: Path, mocker: MockerFixture)
     )
 
     # now A is committed in the dev branch and B unstaged but should both be selected
-    assert selector.expand_model_selections([f"git:{default_branch}"]) == {
+    assert selector.expand_model_selections([f"git:main"]) == {
         '"test_model_a"',
         '"test_model_b"',
     }

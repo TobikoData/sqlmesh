@@ -8,7 +8,7 @@ from sqlmesh.utils.git import GitClient
 def git_repo(tmp_path: Path) -> Path:
     repo_path = tmp_path / "test_repo"
     repo_path.mkdir()
-    subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo_path, check=True, capture_output=True)
     return repo_path
 
 
@@ -19,7 +19,7 @@ def test_git_uncommitted_changes(git_repo: Path):
     test_file.write_text("SELECT 1 AS a")
     subprocess.run(["git", "add", "model.sql"], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "onitial commit"],
+        ["git", "commit", "-m", "Initial commit"],
         cwd=git_repo,
         check=True,
         capture_output=True,
@@ -48,7 +48,7 @@ def test_git_both_staged_and_unstaged_changes(git_repo: Path):
     file2.write_text("SELECT 2")
     subprocess.run(["git", "add", "."], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "onitial commit"],
+        ["git", "commit", "-m", "Initial commit"],
         cwd=git_repo,
         check=True,
         capture_output=True,
@@ -58,7 +58,7 @@ def test_git_both_staged_and_unstaged_changes(git_repo: Path):
     file1.write_text("SELECT 10")
     subprocess.run(["git", "add", "model1.sql"], cwd=git_repo, check=True, capture_output=True)
 
-    # mdify file2 but don't stage it!
+    # modify file2 but don't stage it!
     file2.write_text("SELECT 20")
 
     # both should be detected
@@ -99,20 +99,11 @@ def test_git_committed_changes(git_repo: Path):
     test_file.write_text("SELECT 1")
     subprocess.run(["git", "add", "model.sql"], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "onitial commit"],
+        ["git", "commit", "-m", "Initial commit"],
         cwd=git_repo,
         check=True,
         capture_output=True,
     )
-
-    result = subprocess.run(
-        ["git", "branch", "--show-current"],
-        cwd=git_repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    default_branch = result.stdout.strip()
 
     subprocess.run(
         ["git", "checkout", "-b", "feature"],
@@ -130,7 +121,7 @@ def test_git_committed_changes(git_repo: Path):
         capture_output=True,
     )
 
-    committed = git_client.list_committed_changed_files(target_branch=default_branch)
+    committed = git_client.list_committed_changed_files(target_branch="main")
     assert len(committed) == 1
     assert committed[0].name == "model.sql"
 
