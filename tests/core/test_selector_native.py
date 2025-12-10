@@ -656,7 +656,16 @@ def test_expand_git_selection_integration(tmp_path: Path, mocker: MockerFixture)
 
     subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "Initial commit"],
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
         cwd=repo_path,
         check=True,
         capture_output=True,
@@ -691,7 +700,16 @@ def test_expand_git_selection_integration(tmp_path: Path, mocker: MockerFixture)
     )
 
     subprocess.run(
-        ["git", "commit", "-m", "Update model_a"],
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Update model_a",
+        ],
         cwd=repo_path,
         check=True,
         capture_output=True,

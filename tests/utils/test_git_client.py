@@ -19,7 +19,16 @@ def test_git_uncommitted_changes(git_repo: Path):
     test_file.write_text("SELECT 1 AS a")
     subprocess.run(["git", "add", "model.sql"], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "Initial commit"],
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
         cwd=git_repo,
         check=True,
         capture_output=True,
@@ -48,7 +57,16 @@ def test_git_both_staged_and_unstaged_changes(git_repo: Path):
     file2.write_text("SELECT 2")
     subprocess.run(["git", "add", "."], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "Initial commit"],
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
         cwd=git_repo,
         check=True,
         capture_output=True,
@@ -74,7 +92,16 @@ def test_git_untracked_files(git_repo: Path):
     initial_file.write_text("SELECT 0")
     subprocess.run(["git", "add", "initial.sql"], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "onitial commit"],
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
         cwd=git_repo,
         check=True,
         capture_output=True,
@@ -99,7 +126,16 @@ def test_git_committed_changes(git_repo: Path):
     test_file.write_text("SELECT 1")
     subprocess.run(["git", "add", "model.sql"], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "Initial commit"],
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
         cwd=git_repo,
         check=True,
         capture_output=True,
@@ -115,7 +151,16 @@ def test_git_committed_changes(git_repo: Path):
     test_file.write_text("SELECT 2")
     subprocess.run(["git", "add", "model.sql"], cwd=git_repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "an update on feature bramch"],
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Update on feature branch",
+        ],
         cwd=git_repo,
         check=True,
         capture_output=True,
