@@ -624,10 +624,16 @@ class PostgresEngineAdapter(
                 self.rename_table(target_table, old_table)
                 self.rename_table(temp_table, target_table)
 
-                if dependent_views:
-                    self._recreate_dependent_views(dependent_views)
+            try:
+                with self.transaction():
+                    if dependent_views:
+                        self._recreate_dependent_views(dependent_views)
+                    self.drop_table(old_table)
 
-                self.drop_table(old_table)
+            except Exception:
+                self.rename_table(old_table, target_table)
+                raise
+
         except Exception:
             # Transaction rolled back, temp_table still exists
             self.drop_table(temp_table, exists=True)
