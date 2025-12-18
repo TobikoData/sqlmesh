@@ -34,6 +34,7 @@ from sqlmesh.core.model.common import (
 )
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.kind import (
+    ExternalKind,
     ModelKindName,
     SeedKind,
     ModelKind,
@@ -1969,6 +1970,7 @@ class PythonModel(_Model):
 class ExternalModel(_Model):
     """The model definition which represents an external source/table."""
 
+    kind: ModelKind = ExternalKind()
     source_type: t.Literal["external"] = "external"
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
