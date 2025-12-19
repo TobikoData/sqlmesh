@@ -17,6 +17,7 @@ from pydantic_core import from_json
 from packaging import version
 from sqlglot import exp
 from sqlglot.helper import subclasses
+from sqlglot.errors import ParseError
 
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
@@ -1890,6 +1891,7 @@ class TrinoConnectionConfig(ConnectionConfig):
 
     # SQLMesh options
     schema_location_mapping: t.Optional[dict[re.Pattern, str]] = None
+    timestamp_mapping: t.Optional[dict[exp.DataType, exp.DataType]] = None
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: t.Literal[False] = False
@@ -1913,6 +1915,34 @@ class TrinoConnectionConfig(ConnectionConfig):
                     "schema_location_mapping needs to include the '@{schema_name}' placeholder in the value so SQLMesh knows where to substitute the schema name"
                 )
         return compiled
+
+    @field_validator("timestamp_mapping", mode="before")
+    @classmethod
+    def _validate_timestamp_mapping(
+        cls, value: t.Optional[dict[str, str]]
+    ) -> t.Optional[dict[exp.DataType, exp.DataType]]:
+        if value is None:
+            return value
+
+        result: dict[exp.DataType, exp.DataType] = {}
+        for source_type, target_type in value.items():
+            try:
+                source_datatype = exp.DataType.build(source_type)
+            except ParseError:
+                raise ConfigError(
+                    f"Invalid SQL type string in timestamp_mapping: "
+                    f"'{source_type}' is not a valid SQL data type."
+                )
+            try:
+                target_datatype = exp.DataType.build(target_type)
+            except ParseError:
+                raise ConfigError(
+                    f"Invalid SQL type string in timestamp_mapping: "
+                    f"'{target_type}' is not a valid SQL data type."
+                )
+            result[source_datatype] = target_datatype
+
+        return result
 
     @model_validator(mode="after")
     def _root_validator(self) -> Self:
@@ -2016,7 +2046,10 @@ class TrinoConnectionConfig(ConnectionConfig):
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
-        return {"schema_location_mapping": self.schema_location_mapping}
+        return {
+            "schema_location_mapping": self.schema_location_mapping,
+            "timestamp_mapping": self.timestamp_mapping,
+        }
 
 
 class ClickhouseConnectionConfig(ConnectionConfig):

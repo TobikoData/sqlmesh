@@ -4,6 +4,7 @@ import typing as t
 
 import pytest
 from _pytest.fixtures import FixtureRequest
+from sqlglot import exp
 from unittest.mock import patch, MagicMock
 
 from sqlmesh.core.config.connection import (
@@ -442,6 +443,63 @@ def test_trino_catalog_type_override(make_config):
     assert len(config.catalog_type_overrides) == 1
 
     assert config.catalog_type_overrides == {"my_catalog": "iceberg"}
+
+
+def test_trino_timestamp_mapping(make_config):
+    required_kwargs = dict(
+        type="trino",
+        user="user",
+        host="host",
+        catalog="catalog",
+    )
+
+    # Test config without timestamp_mapping
+    config = make_config(**required_kwargs)
+    assert config.timestamp_mapping is None
+
+    # Test config with timestamp_mapping
+    config = make_config(
+        **required_kwargs,
+        timestamp_mapping={
+            "TIMESTAMP": "TIMESTAMP(6)",
+            "TIMESTAMP(3)": "TIMESTAMP WITH TIME ZONE",
+        },
+    )
+
+    assert config.timestamp_mapping is not None
+    assert config.timestamp_mapping[exp.DataType.build("TIMESTAMP")] == exp.DataType.build(
+        "TIMESTAMP(6)"
+    )
+
+    # Test with invalid source type
+    with pytest.raises(ConfigError) as exc_info:
+        make_config(
+            **required_kwargs,
+            timestamp_mapping={
+                "INVALID_TYPE": "TIMESTAMP",
+            },
+        )
+    assert "Invalid SQL type string" in str(exc_info.value)
+    assert "INVALID_TYPE" in str(exc_info.value)
+
+    # Test with invalid target type (not a valid SQL type)
+    with pytest.raises(ConfigError) as exc_info:
+        make_config(
+            **required_kwargs,
+            timestamp_mapping={
+                "TIMESTAMP": "INVALID_TARGET_TYPE",
+            },
+        )
+    assert "Invalid SQL type string" in str(exc_info.value)
+    assert "INVALID_TARGET_TYPE" in str(exc_info.value)
+
+    # Test with empty mapping
+    config = make_config(
+        **required_kwargs,
+        timestamp_mapping={},
+    )
+    assert config.timestamp_mapping is not None
+    assert config.timestamp_mapping == {}
 
 
 def test_duckdb(make_config):
