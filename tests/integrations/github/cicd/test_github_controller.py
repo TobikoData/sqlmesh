@@ -339,7 +339,8 @@ def test_prod_plan_with_gaps(github_client, make_controller):
 
     assert controller.prod_plan_with_gaps.environment.name == c.PROD
     assert not controller.prod_plan_with_gaps.skip_backfill
-    assert not controller._prod_plan_with_gaps_builder._auto_categorization_enabled
+    # auto_categorization should now be enabled to prevent uncategorized snapshot errors
+    assert controller._prod_plan_with_gaps_builder._auto_categorization_enabled
     assert not controller.prod_plan_with_gaps.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
@@ -460,6 +461,21 @@ def test_deploy_to_prod_merge_error(github_client, make_controller):
         controller.deploy_to_prod()
 
 
+def test_deploy_to_prod_blocked_pr(github_client, make_controller):
+    mock_pull_request = github_client.get_repo().get_pull()
+    mock_pull_request.merged = False
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        merge_state_status=MergeStateStatus.BLOCKED,
+    )
+    with pytest.raises(
+        Exception,
+        match=r"^Branch protection or ruleset requirement is likely not satisfied, e.g. missing CODEOWNERS approval.*",
+    ):
+        controller.deploy_to_prod()
+
+
 def test_deploy_to_prod_dirty_pr(github_client, make_controller):
     mock_pull_request = github_client.get_repo().get_pull()
     mock_pull_request.merged = False
@@ -468,7 +484,10 @@ def test_deploy_to_prod_dirty_pr(github_client, make_controller):
         github_client,
         merge_state_status=MergeStateStatus.DIRTY,
     )
-    with pytest.raises(Exception, match=r"^Merge commit cannot be cleanly created.*"):
+    with pytest.raises(
+        Exception,
+        match=r"^Merge commit cannot be cleanly created. Likely from a merge conflict.*",
+    ):
         controller.deploy_to_prod()
 
 

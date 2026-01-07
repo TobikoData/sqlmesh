@@ -12176,3 +12176,19 @@ def test_model_macro_using_locals_called_from_jinja(assert_exp_eq) -> None:
     )
     model = load_sql_based_model(expressions)
     assert_exp_eq(model.render_query(), '''SELECT '1970-01-01' AS "col"''')
+
+
+def test_audits_in_embedded_model():
+    expression = d.parse(
+        """
+        MODEL (
+            name test.embedded_with_audits,
+            kind EMBEDDED,
+            audits (not_null (columns := (id)))
+        );
+
+        SELECT 1 AS id, 'A' as value
+        """
+    )
+    with pytest.raises(ConfigError, match="Audits are not supported for embedded models"):
+        load_sql_based_model(expression).validate_definition()
