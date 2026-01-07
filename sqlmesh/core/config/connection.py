@@ -1062,7 +1062,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     job_retry_deadline_seconds: t.Optional[int] = None
     priority: t.Optional[BigQueryPriority] = None
     maximum_bytes_billed: t.Optional[int] = None
-    reservation_id: t.Optional[str] = None
+    reservation: t.Optional[str] = None
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1172,7 +1172,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
                 "job_retry_deadline_seconds",
                 "priority",
                 "maximum_bytes_billed",
-                "reservation_id",
+                "reservation",
             }
         }
 

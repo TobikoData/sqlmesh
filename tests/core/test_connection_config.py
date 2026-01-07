@@ -1131,24 +1131,24 @@ def test_bigquery(make_config):
     assert config.get_catalog() == "project"
     assert config.is_recommended_for_state_sync is False
 
-    # Test reservation_id
+    # Test reservation
     config_with_reservation = make_config(
         type="bigquery",
         project="project",
-        reservation_id="projects/my-project/locations/us-central1/reservations/my-reservation",
+        reservation="projects/my-project/locations/us-central1/reservations/my-reservation",
         check_import=False,
     )
     assert isinstance(config_with_reservation, BigQueryConnectionConfig)
     assert (
-        config_with_reservation.reservation_id
+        config_with_reservation.reservation
         == "projects/my-project/locations/us-central1/reservations/my-reservation"
     )
 
-    # Test that reservation_id is included in _extra_engine_config
+    # Test that reservation is included in _extra_engine_config
     extra_config = config_with_reservation._extra_engine_config
-    assert "reservation_id" in extra_config
+    assert "reservation" in extra_config
     assert (
-        extra_config["reservation_id"]
+        extra_config["reservation"]
         == "projects/my-project/locations/us-central1/reservations/my-reservation"
     )
 
