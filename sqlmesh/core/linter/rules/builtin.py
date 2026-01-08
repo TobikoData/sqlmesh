@@ -129,6 +129,21 @@ class NoMissingAudits(Rule):
             return self.violation()
 
 
+class NoMissingUnitTest(Rule):
+    """All models must have a unit test found in the tests/ directory yaml files"""
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        #  External models cannot have unit tests
+        if isinstance(model, ExternalModel):
+            return None
+
+        if model.name not in self.context.models_with_tests:
+            return self.violation(
+                violation_msg=f"Model {model.name} is missing unit test(s). Please add in the tests/ directory."
+            )
+        return None
+
+
 class NoMissingExternalModels(Rule):
     """All external models must be registered in the external_models.yaml file"""
 

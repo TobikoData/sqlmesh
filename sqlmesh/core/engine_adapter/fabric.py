@@ -7,19 +7,20 @@ import time
 from functools import cached_property
 from sqlglot import exp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
-from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     InsertOverwriteStrategy,
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.connection_pool import ConnectionPool
+from sqlmesh.core.schema_diff import TableAlterOperation
+from sqlmesh.utils import random_id
 
 
 logger = logging.getLogger(__name__)
 
 
-class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
+class FabricEngineAdapter(MSSQLEngineAdapter):
     """
     Adapter for Microsoft Fabric.
     """
@@ -153,6 +154,113 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             raise SQLMeshError(
                 f"Unable to switch catalog to {catalog_name}, catalog ended up as {catalog_after_switch}"
             )
+
+    def alter_table(
+        self, alter_expressions: t.Union[t.List[exp.Alter], t.List[TableAlterOperation]]
+    ) -> None:
+        """
+        Applies alter expressions to a table. Fabric has limited support for ALTER TABLE,
+        so this method implements a workaround for column type changes.
+        This method is self-contained and sets its own catalog context.
+        """
+        if not alter_expressions:
+            return
+
+        # Get the target table from the first expression to determine the correct catalog.
+        first_op = alter_expressions[0]
+        expression = first_op.expression if isinstance(first_op, TableAlterOperation) else first_op
+        if not isinstance(expression, exp.Alter) or not expression.this.catalog:
+            # Fallback for unexpected scenarios
+            logger.warning(
+                "Could not determine catalog from alter expression, executing with current context."
+            )
+            super().alter_table(alter_expressions)
+            return
+
+        target_catalog = expression.this.catalog
+        self.set_current_catalog(target_catalog)
+
+        with self.transaction():
+            for op in alter_expressions:
+                expression = op.expression if isinstance(op, TableAlterOperation) else op
+
+                if not isinstance(expression, exp.Alter):
+                    self.execute(expression)
+                    continue
+
+                for action in expression.actions:
+                    table_name = expression.this
+
+                    table_name_without_catalog = table_name.copy()
+                    table_name_without_catalog.set("catalog", None)
+
+                    is_type_change = isinstance(action, exp.AlterColumn) and action.args.get(
+                        "dtype"
+                    )
+
+                    if is_type_change:
+                        column_to_alter = action.this
+                        new_type = action.args["dtype"]
+                        temp_column_name_str = f"{column_to_alter.name}__{random_id(short=True)}"
+                        temp_column_name = exp.to_identifier(temp_column_name_str)
+
+                        logger.info(
+                            "Applying workaround for column '%s' on table '%s' to change type to '%s'.",
+                            column_to_alter.sql(),
+                            table_name.sql(),
+                            new_type.sql(),
+                        )
+
+                        # Step 1: Add a temporary column.
+                        add_column_expr = exp.Alter(
+                            this=table_name_without_catalog.copy(),
+                            kind="TABLE",
+                            actions=[
+                                exp.ColumnDef(this=temp_column_name.copy(), kind=new_type.copy())
+                            ],
+                        )
+                        add_sql = self._to_sql(add_column_expr)
+                        self.execute(add_sql)
+
+                        # Step 2: Copy and cast data.
+                        update_sql = self._to_sql(
+                            exp.Update(
+                                this=table_name_without_catalog.copy(),
+                                expressions=[
+                                    exp.EQ(
+                                        this=temp_column_name.copy(),
+                                        expression=exp.Cast(
+                                            this=column_to_alter.copy(), to=new_type.copy()
+                                        ),
+                                    )
+                                ],
+                            )
+                        )
+                        self.execute(update_sql)
+
+                        # Step 3: Drop the original column.
+                        drop_sql = self._to_sql(
+                            exp.Alter(
+                                this=table_name_without_catalog.copy(),
+                                kind="TABLE",
+                                actions=[exp.Drop(this=column_to_alter.copy(), kind="COLUMN")],
+                            )
+                        )
+                        self.execute(drop_sql)
+
+                        # Step 4: Rename the temporary column.
+                        old_name_qualified = f"{table_name_without_catalog.sql(dialect=self.dialect)}.{temp_column_name.sql(dialect=self.dialect)}"
+                        new_name_unquoted = column_to_alter.sql(
+                            dialect=self.dialect, identify=False
+                        )
+                        rename_sql = f"EXEC sp_rename '{old_name_qualified}', '{new_name_unquoted}', 'COLUMN'"
+                        self.execute(rename_sql)
+                    else:
+                        # For other alterations, execute directly.
+                        direct_alter_expr = exp.Alter(
+                            this=table_name_without_catalog.copy(), kind="TABLE", actions=[action]
+                        )
+                        self.execute(direct_alter_expr)
 
 
 class FabricHttpClient:

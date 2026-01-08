@@ -35,7 +35,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.model.common import make_python_env
 from sqlmesh.core.signal import signal
-from sqlmesh.core.test import ModelTestMetadata, filter_tests_by_patterns
+from sqlmesh.core.test import ModelTestMetadata
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
@@ -64,6 +64,7 @@ class LoadedProject:
     excluded_requirements: t.Set[str]
     environment_statements: t.List[EnvironmentStatements]
     user_rules: RuleSet
+    model_test_metadata: t.List[ModelTestMetadata]
 
 
 class CacheBase(abc.ABC):
@@ -243,6 +244,8 @@ class Loader(abc.ABC):
 
             user_rules = self._load_linting_rules()
 
+            model_test_metadata = self.load_model_tests()
+
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -254,6 +257,7 @@ class Loader(abc.ABC):
                 excluded_requirements=excluded_requirements,
                 environment_statements=environment_statements,
                 user_rules=user_rules,
+                model_test_metadata=model_test_metadata,
             )
             return project
 
@@ -423,9 +427,7 @@ class Loader(abc.ABC):
         """Loads user linting rules"""
         return RuleSet()
 
-    def load_model_tests(
-        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
-    ) -> t.List[ModelTestMetadata]:
+    def load_model_tests(self) -> t.List[ModelTestMetadata]:
         """Loads YAML-based model tests"""
         return []
 
@@ -864,38 +866,23 @@ class SqlMeshLoader(Loader):
 
         return model_test_metadata
 
-    def load_model_tests(
-        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
-    ) -> t.List[ModelTestMetadata]:
+    def load_model_tests(self) -> t.List[ModelTestMetadata]:
         """Loads YAML-based model tests"""
         test_meta_list: t.List[ModelTestMetadata] = []
 
-        if tests:
-            for test in tests:
-                filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
+        search_path = Path(self.config_path) / c.TESTS
 
-                test_meta = self._load_model_test_file(Path(filename))
-                if test_name:
-                    test_meta_list.append(test_meta[test_name])
-                else:
-                    test_meta_list.extend(test_meta.values())
-        else:
-            search_path = Path(self.config_path) / c.TESTS
-
-            for yaml_file in itertools.chain(
-                search_path.glob("**/test*.yaml"),
-                search_path.glob("**/test*.yml"),
+        for yaml_file in itertools.chain(
+            search_path.glob("**/test*.yaml"),
+            search_path.glob("**/test*.yml"),
+        ):
+            if any(
+                yaml_file.match(ignore_pattern)
+                for ignore_pattern in self.config.ignore_patterns or []
             ):
-                if any(
-                    yaml_file.match(ignore_pattern)
-                    for ignore_pattern in self.config.ignore_patterns or []
-                ):
-                    continue
+                continue
 
-                test_meta_list.extend(self._load_model_test_file(yaml_file).values())
-
-        if patterns:
-            test_meta_list = filter_tests_by_patterns(test_meta_list, patterns)
+            test_meta_list.extend(self._load_model_test_file(yaml_file).values())
 
         return test_meta_list
 
