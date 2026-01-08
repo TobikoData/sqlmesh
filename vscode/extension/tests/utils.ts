@@ -1,7 +1,7 @@
 import path from 'path'
 import { Page } from '@playwright/test'
-import { exec } from 'child_process'
-import { promisify } from 'util'
+import { execAsync } from '../src/utilities/exec'
+import { CodeServerContext } from './utils_code_server'
 
 // Where your extension lives on disk
 export const EXT_PATH = path.resolve(__dirname, '..')
@@ -13,6 +13,14 @@ export const SUSHI_SOURCE_PATH = path.join(
   '..',
   'examples',
   'sushi',
+)
+export const MULTI_SOURCE_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'examples',
+  'multi',
 )
 export const REPO_ROOT = path.join(__dirname, '..', '..', '..')
 
@@ -34,25 +42,24 @@ export const clickExplorerTab = async (page: Page): Promise<void> => {
   }
 }
 
-const execAsync = promisify(exec)
-
 export interface PythonEnvironment {
   pythonPath: string
   pipPath: string
 }
 
 /**
- * Create a virtual environment in the given directory.
+ * Create a virtual environment in the given directory using uv.
  * @param venvDir The directory to create the virtual environment in.
  */
 export const createVirtualEnvironment = async (
   venvDir: string,
 ): Promise<PythonEnvironment> => {
-  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3'
-  const { stderr } = await execAsync(`${pythonCmd} -m venv "${venvDir}"`)
-  if (stderr && !stderr.includes('WARNING')) {
-    throw new Error(`Failed to create venv: ${stderr}`)
+  // Try to use uv first, fallback to python -m venv
+  const { exitCode, stderr } = await execAsync(`uv venv "${venvDir}"`)
+  if (exitCode !== 0) {
+    throw new Error(`Failed to create venv with uv: ${stderr}`)
   }
+
   // Get paths
   const isWindows = process.platform === 'win32'
   const binDir = path.join(venvDir, isWindows ? 'Scripts' : 'bin')
@@ -66,7 +73,7 @@ export const createVirtualEnvironment = async (
 }
 
 /**
- * Install packages in the given virtual environment.
+ * Install packages in the given virtual environment using uv.
  * @param pythonDetails The Python environment to use.
  * @param packagePaths The paths to the packages to install (string[]).
  */
@@ -74,11 +81,11 @@ export const pipInstall = async (
   pythonDetails: PythonEnvironment,
   packagePaths: string[],
 ): Promise<void> => {
-  const { pipPath } = pythonDetails
-  const execString = `"${pipPath}" install -e "${packagePaths.join('" -e "')}"`
-  const { stderr } = await execAsync(execString)
-  if (stderr && !stderr.includes('WARNING') && !stderr.includes('notice')) {
-    throw new Error(`Failed to install package: ${stderr}`)
+  const packages = packagePaths.map(pkg => `-e "${pkg}"`).join(' ')
+  const execString = `uv pip install --python "${pythonDetails.pythonPath}" ${packages}`
+  const { stderr, exitCode } = await execAsync(execString)
+  if (exitCode !== 0) {
+    throw new Error(`Failed to install package with uv: ${stderr}`)
   }
 }
 
@@ -87,6 +94,12 @@ export const pipInstall = async (
  */
 export const openLineageView = async (page: Page) =>
   await runCommand(page, 'Lineage: Focus On View')
+
+/**
+ * Open the problems/diagnostics view in the given window.
+ */
+export const openProblemsView = async (page: Page) =>
+  await runCommand(page, 'View: Focus Problems')
 
 /**
  * Restart the SQLMesh servers
@@ -165,24 +178,24 @@ export const goToReferences = async (page: Page): Promise<void> =>
 
 /**
  * Open the vscode code file picker and select the given file.
- * @param window The window to run the command in.
- * @param filePath The path to the file to select.
  */
 export const openFile = async (page: Page, file: string): Promise<void> => {
   const maxRetries = 3
   const retryDelay = 3000
+
+  const fileName = path.basename(file)
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       await page.keyboard.press(
         process.platform === 'darwin' ? 'Meta+P' : 'Control+P',
       )
-      await page.waitForSelector('input[aria-label="Search files by name"]', {
-        timeout: 5000,
-      })
+      await page
+        .getByRole('textbox', { name: 'Search files by name' })
+        .waitFor({ state: 'visible', timeout: 5000 })
       await page.keyboard.type(file)
       const commandElement = await page.waitForSelector(
-        `a:has-text("${file}")`,
+        `a:has-text("${fileName}")`,
         { timeout: 5000 },
       )
       await commandElement.click()
@@ -197,4 +210,27 @@ export const openFile = async (page: Page, file: string): Promise<void> => {
       await page.waitForTimeout(retryDelay)
     }
   }
+}
+
+/**
+ * Wait for SQLMesh context to be loaded.
+ */
+export const waitForLoadedSQLMesh = (page: Page) =>
+  page.waitForSelector('text=Loaded SQLMesh Context')
+
+/**
+ * Go to VSCode page
+ */
+export const openServerPage = async (
+  page: Page,
+  targetPath: string,
+  context: CodeServerContext,
+) => {
+  const isWorkspace = targetPath.endsWith('.code-workspace')
+  const param = isWorkspace ? 'workspace' : 'folder'
+  await page.goto(
+    `http://127.0.0.1:${context.codeServerPort}/?${param}=${targetPath}`,
+  )
+  await page.waitForLoadState('networkidle')
+  await page.waitForSelector('[role="application"]', { timeout: 10000 })
 }

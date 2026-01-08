@@ -5,10 +5,18 @@ export default defineConfig({
   timeout: 60_000,
   // TODO: When stable, allow retries in CI
   retries: process.env.CI ? 2 : 0,
-  workers: 4,
+  workers: process.env.CI ? 2 : 4,
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
-  globalSetup: './tests/global-setup.ts',
   projects: [
+    {
+      name: 'setup',
+      testMatch: 'tests/extension.setup.ts',
+      teardown: 'cleanup',
+    },
+    {
+      name: 'cleanup',
+      testMatch: 'tests/extension.teardown.ts',
+    },
     {
       name: 'electron-vscode',
       use: {
@@ -19,7 +27,9 @@ export default defineConfig({
         },
         viewport: { width: 1512, height: 944 },
         video: 'retain-on-failure',
+        trace: 'retain-on-first-failure',
       },
+      dependencies: ['setup'],
     },
   ],
 })

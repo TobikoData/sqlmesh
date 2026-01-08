@@ -1,7 +1,7 @@
 {{
     config(
         materialized='incremental',
-        incremental_strategy='delete+insert',
+        incremental_strategy='incremental_by_time_range',
         cluster_by=['ds'],
         time_column='ds',
         dialect="bigquery"
@@ -13,7 +13,8 @@
 
 {{ test_dependencies() }}
 
-{% set results = run_query('select 1 as constant') %}
+{% set var_name = "dynamic_" + "test_" + "var" %}
+{% set results = run_query('select ' ~ dynamic_var_name_dependency(var_name) ~ ' as constant') %}
 
 SELECT
   o.waiter_id::INT AS waiter_id, /* Waiter id */
@@ -29,11 +30,7 @@ LEFT JOIN {{ source('streaming', 'items') }} AS i
   ON oi.item_id = i.id AND oi.ds = i.ds
 {% if is_incremental() %}
   WHERE
-    o.ds > (select max(ds) from {{ this }})
-{% endif %}
-{% if sqlmesh_incremental is defined %}
-  WHERE
-      o.ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
+    o.ds > (select CAST(max(ds) AS DATE) from {{ this }})
 {% endif %}
 GROUP BY
   o.waiter_id,

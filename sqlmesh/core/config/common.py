@@ -8,6 +8,16 @@ from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
+# Config files that can be present in the project dir
+ALL_CONFIG_FILENAMES = ("config.py", "config.yml", "config.yaml", "sqlmesh.yml", "sqlmesh.yaml")
+
+# For personal paths (~/.sqlmesh/) where python config is not supported
+YAML_CONFIG_FILENAMES = tuple(n for n in ALL_CONFIG_FILENAMES if not n.endswith(".py"))
+
+# Note: is here to prevent having to import from sqlmesh.dbt.loader which introduces a dependency
+# on dbt-core in a native project
+DBT_PROJECT_FILENAME = "dbt_project.yml"
+
 
 class EnvironmentSuffixTarget(str, Enum):
     # Intended to create virtual environments in their own schemas, with names like "<model_schema_name>__<env name>". The view name is untouched.
@@ -41,6 +51,63 @@ class EnvironmentSuffixTarget(str, Enum):
     @classproperty
     def default(cls) -> EnvironmentSuffixTarget:
         return EnvironmentSuffixTarget.SCHEMA
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
+class VirtualEnvironmentMode(str, Enum):
+    """Mode for virtual environment behavior.
+
+    FULL: Use full virtual environment functionality with versioned table names and virtual layer updates.
+    DEV_ONLY: Bypass virtual environments in production, using original unversioned model names.
+    """
+
+    FULL = "full"
+    DEV_ONLY = "dev_only"
+
+    @property
+    def is_full(self) -> bool:
+        return self == VirtualEnvironmentMode.FULL
+
+    @property
+    def is_dev_only(self) -> bool:
+        return self == VirtualEnvironmentMode.DEV_ONLY
+
+    @classproperty
+    def default(cls) -> VirtualEnvironmentMode:
+        return VirtualEnvironmentMode.FULL
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
+class TableNamingConvention(str, Enum):
+    # Causes table names at the physical layer to follow the convention:
+    # <schema-name>__<table-name>__<fingerprint>
+    SCHEMA_AND_TABLE = "schema_and_table"
+
+    # Causes table names at the physical layer to follow the convention:
+    # <table-name>__<fingerprint>
+    TABLE_ONLY = "table_only"
+
+    # Takes the table name that would be returned from SCHEMA_AND_TABLE and wraps it in md5()
+    # to generate a hash and prefixes the has with `sqlmesh_md5__`, for the following reasons:
+    # - at a glance, you can still see it's managed by sqlmesh and that md5 was used to generate the hash
+    # - unquoted identifiers that start with numbers can trip up DB engine parsers, so having a text prefix prevents this
+    # This causes table names at the physical layer to follow the convention:
+    # sqlmesh_md5__3b07384d113edec49eaa6238ad5ff00d
+    HASH_MD5 = "hash_md5"
+
+    @classproperty
+    def default(cls) -> TableNamingConvention:
+        return TableNamingConvention.SCHEMA_AND_TABLE
 
     def __str__(self) -> str:
         return self.name

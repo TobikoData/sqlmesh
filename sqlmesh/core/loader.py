@@ -35,14 +35,10 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.model.common import make_python_env
 from sqlmesh.core.signal import signal
-from sqlmesh.core.test import ModelTestMetadata, filter_tests_by_patterns
+from sqlmesh.core.test import ModelTestMetadata
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import (
-    JinjaMacroRegistry,
-    MacroExtractor,
-    SQLMESH_DBT_COMPATIBILITY_PACKAGE,
-)
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.pydantic import validation_error_message
 from sqlmesh.utils.process import create_process_pool_executor
@@ -68,6 +64,7 @@ class LoadedProject:
     excluded_requirements: t.Set[str]
     environment_statements: t.List[EnvironmentStatements]
     user_rules: RuleSet
+    model_test_metadata: t.List[ModelTestMetadata]
 
 
 class CacheBase(abc.ABC):
@@ -247,6 +244,8 @@ class Loader(abc.ABC):
 
             user_rules = self._load_linting_rules()
 
+            model_test_metadata = self.load_model_tests()
+
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -258,6 +257,7 @@ class Loader(abc.ABC):
                 excluded_requirements=excluded_requirements,
                 environment_statements=environment_statements,
                 user_rules=user_rules,
+                model_test_metadata=model_test_metadata,
             )
             return project
 
@@ -334,6 +334,10 @@ class Loader(abc.ABC):
         def _load(path: Path) -> t.List[Model]:
             try:
                 with open(path, "r", encoding="utf-8") as file:
+                    yaml = YAML().load(file)
+                    # Allow empty YAML files to return an empty list
+                    if yaml is None:
+                        return []
                     return [
                         create_external_model(
                             defaults=self.config.model_defaults.dict(),
@@ -346,10 +350,10 @@ class Loader(abc.ABC):
                                 **row,
                             },
                         )
-                        for row in YAML().load(file.read())
+                        for row in yaml
                     ]
             except Exception as ex:
-                raise ConfigError(self._failed_to_load_model_error(path, ex))
+                raise ConfigError(self._failed_to_load_model_error(path, ex), path)
 
         for path in paths_to_load:
             self._track_file(path)
@@ -363,19 +367,22 @@ class Loader(abc.ABC):
                         raise ConfigError(
                             self._failed_to_load_model_error(
                                 path, f"Duplicate external model name: '{model.name}'."
-                            )
+                            ),
+                            path,
                         )
                     models[model.fqn] = model
 
             # however, if there is a gateway defined, gateway-specific models take precedence
             if gateway:
+                gateway = gateway.lower()
                 for model in external_models:
                     if model.gateway == gateway:
                         if model.fqn in models and models[model.fqn].gateway == gateway:
                             raise ConfigError(
                                 self._failed_to_load_model_error(
                                     path, f"Duplicate external model name: '{model.name}'."
-                                )
+                                ),
+                                path,
                             )
                         models.update({model.fqn: model})
 
@@ -402,13 +409,15 @@ class Loader(abc.ABC):
                     args = [k.strip() for k in line.split("==")]
                     if len(args) != 2:
                         raise ConfigError(
-                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported"
+                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported",
+                            requirements_path,
                         )
                     dep, ver = args
                     other_ver = requirements.get(dep, ver)
                     if ver != other_ver:
                         raise ConfigError(
-                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
+                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file.",
+                            requirements_path,
                         )
                     requirements[dep] = ver
 
@@ -418,9 +427,7 @@ class Loader(abc.ABC):
         """Loads user linting rules"""
         return RuleSet()
 
-    def load_model_tests(
-        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
-    ) -> t.List[ModelTestMetadata]:
+    def load_model_tests(self) -> t.List[ModelTestMetadata]:
         """Loads YAML-based model tests"""
         return []
 
@@ -552,7 +559,6 @@ class SqlMeshLoader(Loader):
         signals: UniqueKeyDict[str, signal],
         cache: CacheBase,
         gateway: t.Optional[str],
-        loading_default_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -585,7 +591,6 @@ class SqlMeshLoader(Loader):
                 macros=macros,
                 jinja_macros=jinja_macros,
                 audit_definitions=audits,
-                default_audits=self.config.model_defaults.audits,
                 module_path=self.config_path,
                 dialect=self.config.model_defaults.dialect,
                 time_column_format=self.config.time_column_format,
@@ -595,7 +600,7 @@ class SqlMeshLoader(Loader):
                 infer_names=self.config.model_naming.infer_names,
                 signal_definitions=signals,
                 default_catalog_per_gateway=self.context.default_catalog_per_gateway,
-                **loading_default_kwargs or {},
+                virtual_environment_mode=self.config.virtual_environment_mode,
             )
 
             with create_process_pool_executor(
@@ -619,13 +624,14 @@ class SqlMeshLoader(Loader):
                                 raise ConfigError(
                                     self._failed_to_load_model_error(
                                         path, f"Duplicate SQL model name: '{model.name}'."
-                                    )
+                                    ),
+                                    path,
                                 )
                             elif model.enabled:
                                 model._path = path
                                 models[model.fqn] = model
                     except Exception as ex:
-                        raise ConfigError(self._failed_to_load_model_error(path, ex))
+                        raise ConfigError(self._failed_to_load_model_error(path, ex), path)
 
         return models
 
@@ -674,11 +680,12 @@ class SqlMeshLoader(Loader):
                             audit_definitions=audits,
                             signal_definitions=signals,
                             default_catalog_per_gateway=self.context.default_catalog_per_gateway,
+                            virtual_environment_mode=self.config.virtual_environment_mode,
                         ):
                             if model.enabled:
                                 models[model.fqn] = model
                 except Exception as ex:
-                    raise ConfigError(self._failed_to_load_model_error(path, ex))
+                    raise ConfigError(self._failed_to_load_model_error(path, ex), path)
 
         finally:
             model_registry._dialect = None
@@ -701,6 +708,8 @@ class SqlMeshLoader(Loader):
     def _load_signals(self) -> UniqueKeyDict[str, signal]:
         """Loads signals for the built-in scheduler."""
 
+        base_signals = signal.get_registry()
+
         signals_max_mtime: t.Optional[float] = None
 
         for path in self._glob_paths(
@@ -720,7 +729,10 @@ class SqlMeshLoader(Loader):
 
         self._signals_max_mtime = signals_max_mtime
 
-        return signal.get_registry()
+        signals = signal.get_registry()
+        signal.set_registry(base_signals)
+
+        return signals
 
     def _load_audits(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
@@ -782,7 +794,9 @@ class SqlMeshLoader(Loader):
                         metric = load_metric_ddl(expression, path=path, dialect=dialect)
                         metrics[metric.name] = metric
                 except SqlglotError as ex:
-                    raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
+                    raise ConfigError(
+                        f"Failed to parse metric definitions at '{path}': {ex}.", path
+                    )
 
         return metrics
 
@@ -808,7 +822,11 @@ class SqlMeshLoader(Loader):
                 path=self.config_path,
             )
 
-            return [EnvironmentStatements(**statements, python_env=python_env)]
+            return [
+                EnvironmentStatements(
+                    **statements, python_env=python_env, project=self.config.project or None
+                )
+            ]
         return []
 
     def _load_linting_rules(self) -> RuleSet:
@@ -848,38 +866,23 @@ class SqlMeshLoader(Loader):
 
         return model_test_metadata
 
-    def load_model_tests(
-        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
-    ) -> t.List[ModelTestMetadata]:
+    def load_model_tests(self) -> t.List[ModelTestMetadata]:
         """Loads YAML-based model tests"""
         test_meta_list: t.List[ModelTestMetadata] = []
 
-        if tests:
-            for test in tests:
-                filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
+        search_path = Path(self.config_path) / c.TESTS
 
-                test_meta = self._load_model_test_file(Path(filename))
-                if test_name:
-                    test_meta_list.append(test_meta[test_name])
-                else:
-                    test_meta_list.extend(test_meta.values())
-        else:
-            search_path = Path(self.config_path) / c.TESTS
-
-            for yaml_file in itertools.chain(
-                search_path.glob("**/test*.yaml"),
-                search_path.glob("**/test*.yml"),
+        for yaml_file in itertools.chain(
+            search_path.glob("**/test*.yaml"),
+            search_path.glob("**/test*.yml"),
+        ):
+            if any(
+                yaml_file.match(ignore_pattern)
+                for ignore_pattern in self.config.ignore_patterns or []
             ):
-                if any(
-                    yaml_file.match(ignore_pattern)
-                    for ignore_pattern in self.config.ignore_patterns or []
-                ):
-                    continue
+                continue
 
-                test_meta_list.extend(self._load_model_test_file(yaml_file).values())
-
-        if patterns:
-            test_meta_list = filter_tests_by_patterns(test_meta_list, patterns)
+            test_meta_list.extend(self._load_model_test_file(yaml_file).values())
 
         return test_meta_list
 
@@ -887,7 +890,7 @@ class SqlMeshLoader(Loader):
         def __init__(self, loader: SqlMeshLoader, config_path: Path):
             self._loader = loader
             self.config_path = config_path
-            self._model_cache = ModelCache(self.config_path / c.CACHE)
+            self._model_cache = ModelCache(self._loader.context.cache_dir)
 
         def get_or_load_models(
             self, target_path: Path, loader: t.Callable[[], t.List[Model]]
@@ -949,104 +952,3 @@ class SqlMeshLoader(Loader):
                     self._loader.context.gateway or self._loader.config.default_gateway_name,
                 ]
             )
-
-
-class MigratedDbtProjectLoader(SqlMeshLoader):
-    @property
-    def migrated_dbt_project_name(self) -> str:
-        return self.config.variables[c.MIGRATED_DBT_PROJECT_NAME]
-
-    def _load_scripts(self) -> t.Tuple[MacroRegistry, JinjaMacroRegistry]:
-        from sqlmesh.dbt.converter.common import infer_dbt_package_from_path
-        from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
-
-        # Store a copy of the macro registry
-        standard_macros = macro.get_registry()
-
-        jinja_macros = JinjaMacroRegistry(
-            create_builtins_module=SQLMESH_DBT_COMPATIBILITY_PACKAGE,
-            top_level_packages=["dbt", self.migrated_dbt_project_name],
-        )
-        extractor = MacroExtractor()
-
-        macros_max_mtime: t.Optional[float] = None
-
-        for path in self._glob_paths(
-            self.config_path / c.MACROS,
-            ignore_patterns=self.config.ignore_patterns,
-            extension=".py",
-        ):
-            if import_python_file(path, self.config_path):
-                self._track_file(path)
-                macro_file_mtime = self._path_mtimes[path]
-                macros_max_mtime = (
-                    max(macros_max_mtime, macro_file_mtime)
-                    if macros_max_mtime
-                    else macro_file_mtime
-                )
-
-        for path in self._glob_paths(
-            self.config_path / c.MACROS,
-            ignore_patterns=self.config.ignore_patterns,
-            extension=".sql",
-        ):
-            self._track_file(path)
-            macro_file_mtime = self._path_mtimes[path]
-            macros_max_mtime = (
-                max(macros_max_mtime, macro_file_mtime) if macros_max_mtime else macro_file_mtime
-            )
-
-            with open(path, "r", encoding="utf-8") as file:
-                try:
-                    package = infer_dbt_package_from_path(path) or self.migrated_dbt_project_name
-
-                    jinja_macros.add_macros(
-                        extractor.extract(file.read(), dialect=self.config.model_defaults.dialect),
-                        package=package,
-                    )
-                except Exception as e:
-                    raise ConfigError(f"Failed to load macro file: {path}", e)
-
-        self._macros_max_mtime = macros_max_mtime
-
-        macros = macro.get_registry()
-        macro.set_registry(standard_macros)
-
-        connection_config = self.context.connection_config
-        # this triggers the DBT create_builtins_module to have a `target` property which is required for a bunch of DBT macros to work
-        if dbt_config_type := TARGET_TYPE_TO_CONFIG_CLASS.get(connection_config.type_):
-            try:
-                jinja_macros.add_globals(
-                    {
-                        "target": dbt_config_type.from_sqlmesh(
-                            connection_config,
-                            name=self.config.default_gateway_name,
-                        ).attribute_dict()
-                    }
-                )
-            except NotImplementedError:
-                raise ConfigError(f"Unsupported dbt target type: {connection_config.type_}")
-
-        return macros, jinja_macros
-
-    def _load_sql_models(
-        self,
-        macros: MacroRegistry,
-        jinja_macros: JinjaMacroRegistry,
-        audits: UniqueKeyDict[str, ModelAudit],
-        signals: UniqueKeyDict[str, signal],
-        cache: CacheBase,
-        gateway: t.Optional[str],
-        loading_default_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
-    ) -> UniqueKeyDict[str, Model]:
-        return super()._load_sql_models(
-            macros=macros,
-            jinja_macros=jinja_macros,
-            audits=audits,
-            signals=signals,
-            cache=cache,
-            gateway=gateway,
-            loading_default_kwargs=dict(
-                migrated_dbt_project_name=self.migrated_dbt_project_name,
-            ),
-        )

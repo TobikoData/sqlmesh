@@ -7,12 +7,16 @@ from sqlglot.helper import seq_get
 from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core.config import Config
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
-from sqlmesh.core.engine_adapter.bigquery import _CLUSTERING_META_KEY
+from sqlmesh.core.engine_adapter.mixins import (
+    TableAlterDropClusterKeyOperation,
+    TableAlterChangeClusterKeyOperation,
+)
 from sqlmesh.core.engine_adapter.shared import DataObject
 import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
-from sqlmesh.core.plan import Plan
+from sqlmesh.core.plan import Plan, BuiltInPlanEvaluator
 from sqlmesh.core.table_diff import TableDiff
+from sqlmesh.utils import CorrelationId
 from tests.core.engine_adapter.integration import TestContext
 from pytest import FixtureRequest
 from tests.core.engine_adapter.integration import (
@@ -67,41 +71,43 @@ def test_get_alter_expressions_includes_clustering(
     assert clustered_differently_table_metadata.clustering_key == "(c1,c2)"
     assert normal_table_metadata.clustering_key is None
 
-    assert len(engine_adapter.get_alter_expressions(normal_table, normal_table)) == 0
-    assert len(engine_adapter.get_alter_expressions(clustered_table, clustered_table)) == 0
+    assert len(engine_adapter.get_alter_operations(normal_table, normal_table)) == 0
+    assert len(engine_adapter.get_alter_operations(clustered_table, clustered_table)) == 0
 
     # alter table drop clustered
-    clustered_to_normal = engine_adapter.get_alter_expressions(clustered_table, normal_table)
+    clustered_to_normal = engine_adapter.get_alter_operations(clustered_table, normal_table)
     assert len(clustered_to_normal) == 1
-    assert clustered_to_normal[0].meta[_CLUSTERING_META_KEY] == (clustered_table, None)
+    assert isinstance(clustered_to_normal[0], TableAlterDropClusterKeyOperation)
+    assert clustered_to_normal[0].target_table == clustered_table
+    assert not hasattr(clustered_to_normal[0], "clustering_key")
 
     # alter table add clustered
-    normal_to_clustered = engine_adapter.get_alter_expressions(normal_table, clustered_table)
+    normal_to_clustered = engine_adapter.get_alter_operations(normal_table, clustered_table)
     assert len(normal_to_clustered) == 1
-    assert normal_to_clustered[0].meta[_CLUSTERING_META_KEY] == (
-        normal_table,
-        [exp.to_column("c1")],
-    )
+    operation = normal_to_clustered[0]
+    assert isinstance(operation, TableAlterChangeClusterKeyOperation)
+    assert operation.target_table == normal_table
+    assert operation.clustering_key == "(c1)"
 
     # alter table change clustering (c1 -> (c1, c2))
-    clustered_to_clustered_differently = engine_adapter.get_alter_expressions(
+    clustered_to_clustered_differently = engine_adapter.get_alter_operations(
         clustered_table, clustered_differently_table
     )
     assert len(clustered_to_clustered_differently) == 1
-    assert clustered_to_clustered_differently[0].meta[_CLUSTERING_META_KEY] == (
-        clustered_table,
-        [exp.to_column("c1"), exp.to_column("c2")],
-    )
+    operation = clustered_to_clustered_differently[0]
+    assert isinstance(operation, TableAlterChangeClusterKeyOperation)
+    assert operation.target_table == clustered_table
+    assert operation.clustering_key == "(c1,c2)"
 
     # alter table change clustering ((c1, c2) -> c1)
-    clustered_differently_to_clustered = engine_adapter.get_alter_expressions(
+    clustered_differently_to_clustered = engine_adapter.get_alter_operations(
         clustered_differently_table, clustered_table
     )
     assert len(clustered_differently_to_clustered) == 1
-    assert clustered_differently_to_clustered[0].meta[_CLUSTERING_META_KEY] == (
-        clustered_differently_table,
-        [exp.to_column("c1")],
-    )
+    operation = clustered_differently_to_clustered[0]
+    assert isinstance(operation, TableAlterChangeClusterKeyOperation)
+    assert operation.target_table == clustered_differently_table
+    assert operation.clustering_key == "(c1)"
 
 
 def test_mutating_clustered_by_forward_only(
@@ -340,6 +346,39 @@ def test_compare_nested_values_in_table_diff(ctx: TestContext):
     ctx.engine_adapter.drop_table(target_table)
 
 
+def test_get_bq_schema(ctx: TestContext, engine_adapter: BigQueryEngineAdapter):
+    from google.cloud.bigquery import SchemaField
+
+    table = ctx.table("test")
+
+    engine_adapter.execute(f"""
+    CREATE TABLE {table.sql(dialect=ctx.dialect)} (
+      id STRING NOT NULL,
+      user_data STRUCT<id STRING NOT NULL, name STRING NOT NULL, address STRING>,
+      tags ARRAY<STRING>,
+      score NUMERIC,
+      created_at DATETIME
+    )
+    """)
+
+    bg_schema = engine_adapter.get_bq_schema(table)
+    assert len(bg_schema) == 5
+    assert bg_schema[0] == SchemaField(name="id", field_type="STRING", mode="REQUIRED")
+    assert bg_schema[1] == SchemaField(
+        name="user_data",
+        field_type="RECORD",
+        mode="NULLABLE",
+        fields=[
+            SchemaField(name="id", field_type="STRING", mode="REQUIRED"),
+            SchemaField(name="name", field_type="STRING", mode="REQUIRED"),
+            SchemaField(name="address", field_type="STRING", mode="NULLABLE"),
+        ],
+    )
+    assert bg_schema[2] == SchemaField(name="tags", field_type="STRING", mode="REPEATED")
+    assert bg_schema[3] == SchemaField(name="score", field_type="NUMERIC", mode="NULLABLE")
+    assert bg_schema[4] == SchemaField(name="created_at", field_type="DATETIME", mode="NULLABLE")
+
+
 def test_column_types(ctx: TestContext):
     model_name = ctx.table("test")
     sqlmesh = ctx.create_context()
@@ -400,3 +439,33 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
 
     assert row_diff.stats["join_count"] == 1
     assert row_diff.full_match_count == 1
+
+
+def test_correlation_id_in_job_labels(ctx: TestContext):
+    model_name = ctx.table("test")
+
+    sqlmesh = ctx.create_context()
+    sqlmesh.upsert_model(
+        load_sql_based_model(d.parse(f"MODEL (name {model_name}, kind FULL); SELECT 1 AS col"))
+    )
+
+    # Create a plan evaluator and a plan to evaluate
+    plan_evaluator = BuiltInPlanEvaluator(
+        sqlmesh.state_sync,
+        sqlmesh.snapshot_evaluator,
+        sqlmesh.create_scheduler,
+        sqlmesh.default_catalog,
+    )
+    plan: Plan = sqlmesh.plan_builder("prod", skip_tests=True).build()
+
+    # Evaluate the plan and retrieve the plan evaluator's adapter
+    plan_evaluator.evaluate(plan.to_evaluatable())
+    adapter = t.cast(BigQueryEngineAdapter, plan_evaluator.snapshot_evaluator.adapter)
+
+    # Case 1: Ensure that the correlation id is set in the underlying adapter
+    assert adapter.correlation_id is not None
+
+    # Case 2: Ensure that the correlation id is set in the job labels
+    labels = adapter._job_params.get("labels")
+    correlation_id = CorrelationId.from_plan_id(plan.plan_id)
+    assert labels == {correlation_id.job_type.value.lower(): correlation_id.job_id}

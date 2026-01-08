@@ -39,7 +39,6 @@ SKIP_LOAD_COMMANDS = (
     "rollback",
     "run",
     "table_name",
-    "dbt",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
@@ -107,6 +106,14 @@ def cli(
     if "--help" in sys.argv:
         return
 
+    configure_logging(
+        debug,
+        log_to_stdout,
+        log_file_dir=log_file_dir,
+        ignore_warnings=ignore_warnings,
+    )
+    configure_console(ignore_warnings=ignore_warnings)
+
     load = True
 
     if len(paths) == 1:
@@ -116,14 +123,6 @@ def cli(
             return
         if ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
             load = False
-
-    configure_logging(
-        debug,
-        log_to_stdout,
-        log_file_dir=log_file_dir,
-        ignore_warnings=ignore_warnings,
-    )
-    configure_console(ignore_warnings=ignore_warnings)
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths, dotenv_path=dotenv)
     log_limit = list(configs.values())[0].log_limit
@@ -279,6 +278,8 @@ def render(
     **format_kwargs: t.Any,
 ) -> None:
     """Render a model's query, optionally expanding referenced models."""
+    model = ctx.obj.get_model(model, raise_if_missing=True)
+
     rendered = ctx.obj.render(
         model,
         start=start,
@@ -449,6 +450,12 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Allow destructive forward-only changes to models whose names match the expression.",
 )
 @click.option(
+    "--allow-additive-model",
+    type=str,
+    multiple=True,
+    help="Allow additive forward-only changes to models whose names match the expression.",
+)
+@click.option(
     "--effective-from",
     type=str,
     required=False,
@@ -520,6 +527,17 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Explain the plan instead of applying it.",
     default=None,
 )
+@click.option(
+    "--ignore-cron",
+    is_flag=True,
+    help="Run all missing intervals, ignoring individual cron schedules. Only applies if --run is set.",
+    default=None,
+)
+@click.option(
+    "--min-intervals",
+    default=0,
+    help="For every model, ensure at least this many intervals are covered by a missing intervals check regardless of the plan start date",
+)
 @opt.verbose
 @click.pass_context
 @error_handler
@@ -535,7 +553,9 @@ def plan(
     restate_models = kwargs.pop("restate_model") or None
     select_models = kwargs.pop("select_model") or None
     allow_destructive_models = kwargs.pop("allow_destructive_model") or None
+    allow_additive_models = kwargs.pop("allow_additive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
+    ignore_cron = kwargs.pop("ignore_cron") or None
     setattr(get_console(), "verbosity", Verbosity(verbose))
 
     context.plan(
@@ -543,7 +563,9 @@ def plan(
         restate_models=restate_models,
         select_models=select_models,
         allow_destructive_models=allow_destructive_models,
+        allow_additive_models=allow_additive_models,
         backfill_models=backfill_models,
+        ignore_cron=ignore_cron,
         **kwargs,
     )
 
@@ -877,6 +899,13 @@ def info(obj: Context, skip_connection: bool, verbose: int) -> None:
 @cli_analytics
 def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
     """Start a browser-based SQLMesh UI."""
+    from sqlmesh.core.console import get_console
+
+    get_console().log_warning(
+        "The UI is deprecated and will be removed in a future version. Please use the SQLMesh VSCode extension instead. "
+        "Learn more at https://sqlmesh.readthedocs.io/en/stable/guides/vscode/"
+    )
+
     try:
         import uvicorn
     except ModuleNotFoundError as e:
@@ -1048,50 +1077,6 @@ def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
     obj.console.show_sql(
         obj.rewrite(sql, dialect=read).sql(pretty=True, dialect=write or obj.config.dialect),
     )
-
-
-@cli.command("prompt")
-@click.argument("prompt")
-@click.option(
-    "-e",
-    "--evaluate",
-    is_flag=True,
-    help="Evaluate the generated SQL query and display the results.",
-)
-@click.option(
-    "-t",
-    "--temperature",
-    type=float,
-    help="Sampling temperature. 0.0 - precise and predictable, 0.5 - balanced, 1.0 - creative. Default: 0.7",
-    default=0.7,
-)
-@opt.verbose
-@click.pass_context
-@error_handler
-@cli_analytics
-def prompt(
-    ctx: click.Context,
-    prompt: str,
-    evaluate: bool,
-    temperature: float,
-    verbose: int,
-) -> None:
-    """Uses LLM to generate a SQL query from a prompt."""
-    from sqlmesh.integrations.llm import LLMIntegration
-
-    context = ctx.obj
-
-    llm_integration = LLMIntegration(
-        context.models.values(),
-        context.engine_adapter.dialect,
-        temperature=temperature,
-        verbosity=Verbosity(verbose),
-    )
-    query = llm_integration.query(prompt)
-
-    context.console.log_status_update(query)
-    if evaluate:
-        context.console.log_success(context.fetchdf(query))
 
 
 @cli.command("clean")
@@ -1277,39 +1262,3 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
     """Import a state export file back into the state database"""
     confirm = not no_confirm
     obj.import_state(input_file=input_file, clear=replace, confirm=confirm)
-
-
-@cli.group(no_args_is_help=True, hidden=True)
-def dbt() -> None:
-    """Commands for doing dbt-specific things"""
-    pass
-
-
-@dbt.command("convert")
-@click.option(
-    "-i",
-    "--input-dir",
-    help="Path to the DBT project",
-    required=True,
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, path_type=Path),
-)
-@click.option(
-    "-o",
-    "--output-dir",
-    required=True,
-    help="Path to write out the converted SQLMesh project",
-    type=click.Path(exists=False, dir_okay=True, file_okay=False, readable=True, path_type=Path),
-)
-@click.option("--no-prompts", is_flag=True, help="Disable interactive prompts", default=False)
-@click.pass_obj
-@error_handler
-@cli_analytics
-def dbt_convert(obj: Context, input_dir: Path, output_dir: Path, no_prompts: bool) -> None:
-    """Convert a DBT project to a SQLMesh project"""
-    from sqlmesh.dbt.converter.convert import convert_project_files
-
-    convert_project_files(
-        input_dir.absolute(),
-        output_dir.absolute(),
-        no_prompts=no_prompts,
-    )

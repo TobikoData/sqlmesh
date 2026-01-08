@@ -2,12 +2,11 @@ import pytest
 from sqlmesh.core.engine_adapter import ClickhouseEngineAdapter
 from sqlmesh.core.model.definition import load_sql_based_model
 from sqlmesh.core.model.kind import ModelKindName
-from sqlmesh.core.engine_adapter.shared import EngineRunMode
+from sqlmesh.core.engine_adapter.shared import EngineRunMode, DataObject
 from tests.core.engine_adapter import to_sql_calls
 from sqlmesh.core.dialect import parse
 from sqlglot import exp, parse_one
 import typing as t
-from sqlmesh.core.schema_diff import SchemaDiffer
 from datetime import datetime
 from pytest_mock.plugin import MockerFixture
 from sqlmesh.core import dialect as d
@@ -152,7 +151,7 @@ def test_alter_table(
     adapter: ClickhouseEngineAdapter,
     mocker,
 ):
-    adapter.SCHEMA_DIFFER = SchemaDiffer()
+    adapter.SCHEMA_DIFFER_KWARGS = {}
     current_table_name = "test_table"
     current_table = {"a": "Int8", "b": "String", "c": "Int8"}
     target_table_name = "target_table"
@@ -172,7 +171,7 @@ def test_alter_table(
     adapter.columns = table_columns  # type: ignore
 
     # ON CLUSTER not added because engine_run_mode.is_cluster=False
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
 
     mocker.patch.object(
         ClickhouseEngineAdapter,
@@ -185,7 +184,7 @@ def test_alter_table(
         new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
     )
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
 
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "c"',
@@ -573,6 +572,12 @@ def test_scd_type_2_by_time(
         make_temp_table_name(table_name, "abcd"),
     ]
 
+    mocker.patch.object(
+        adapter,
+        "get_data_objects",
+        return_value=[DataObject(schema="", name=table_name, type="table")],
+    )
+
     fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
     fetchone_mock.return_value = None
 
@@ -597,7 +602,7 @@ def test_scd_type_2_by_time(
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_UPDATED_at", quoted=True),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -608,7 +613,7 @@ def test_scd_type_2_by_time(
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
 
-    assert to_sql_calls(adapter)[4] == parse_one(
+    assert to_sql_calls(adapter)[3] == parse_one(
         """
 INSERT INTO "__temp_target_abcd" ("id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to")
 WITH "source" AS (
@@ -635,7 +640,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_efgh""
+  FROM "__temp_target_efgh"
   WHERE
     NOT "test_valid_to" IS NULL
 ), "latest" AS (
@@ -647,7 +652,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_efgh""
+  FROM "__temp_target_efgh"
   WHERE
     "test_valid_to" IS NULL
 ), "deleted" AS (
@@ -785,6 +790,12 @@ def test_scd_type_2_by_column(
         make_temp_table_name(table_name, "abcd"),
     ]
 
+    mocker.patch.object(
+        adapter,
+        "get_data_objects",
+        return_value=[DataObject(schema="", name=table_name, type="table")],
+    )
+
     fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
     fetchone_mock.return_value = None
 
@@ -803,7 +814,7 @@ def test_scd_type_2_by_column(
         valid_from_col=exp.column("test_VALID_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=[exp.column("name"), exp.column("price")],
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -813,7 +824,7 @@ def test_scd_type_2_by_column(
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
 
-    assert to_sql_calls(adapter)[4] == parse_one(
+    assert to_sql_calls(adapter)[3] == parse_one(
         """
 INSERT INTO "__temp_target_abcd" ("id", "name", "price", "test_VALID_from", "test_valid_to")
 WITH "source" AS (

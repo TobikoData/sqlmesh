@@ -1,5 +1,6 @@
 MODEL (
-  name silver.c
+  name silver.c,
+  kind FULL
 );
 
 SELECT DISTINCT col_a

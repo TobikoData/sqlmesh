@@ -1,5 +1,10 @@
 # Browser UI guide
 
+!!! warning
+
+    Browser UI is deprecated. Please use the [VSCode extension](vscode.md) instead.
+
+
 SQLMesh's free, open-source browser user interface (UI) makes it easy to understand, explore, and modify your SQLMesh project.
 
 This page describes the UI's components and how they work.
@@ -24,7 +29,7 @@ For development work, we recommend using the SQLMesh UI alongside an IDE. The UI
 
 Before beginning, ensure that you meet all the [prerequisites](../prerequisites.md) for using SQLMesh. The SQLMesh browser UI requires additional Python libraries not included in the base SQLMesh installation.
 
-To use the UI, install SQLMesh with the `web` add-on. First, if using a python virtual environment, ensure it's activated by running `source .env/bin/activate` command from the folder used during [installation](../installation.md).
+To use the UI, install SQLMesh with the `web` add-on. First, if using a python virtual environment, ensure it's activated by running `source .venv/bin/activate` command from the folder used during [installation](../installation.md).
 
 Next, install the UI with `pip`:
 

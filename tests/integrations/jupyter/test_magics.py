@@ -168,9 +168,9 @@ def test_render(
 
     assert output.stdout == ""
     assert output.stderr == ""
-    assert len(output.outputs) == 1
-    assert len(convert_all_html_output_to_text(output)[0]) > 2200
-    assert len(convert_all_html_output_to_tags(output)[0]) > 150
+    assert len(output.outputs) == 2
+    assert len(convert_all_html_output_to_text(output)[1]) > 2200
+    assert len(convert_all_html_output_to_tags(output)[1]) > 150
 
 
 @pytest.mark.slow
@@ -182,9 +182,9 @@ def test_render_no_format(
 
     assert output.stdout == ""
     assert output.stderr == ""
-    assert len(output.outputs) == 1
-    assert len(convert_all_html_output_to_text(output)[0]) >= 700
-    assert len(convert_all_html_output_to_tags(output)[0]) >= 50
+    assert len(output.outputs) == 2
+    assert len(convert_all_html_output_to_text(output)[1]) >= 700
+    assert len(convert_all_html_output_to_tags(output)[1]) >= 50
 
 
 @pytest.mark.slow
@@ -898,19 +898,16 @@ def test_destroy(
     assert not output.stderr
     text_output = convert_all_html_output_to_text(output)
     expected_messages = [
-        "[WARNING] This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
-        "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
-        "Use this command only when you intend to fully reset the project.",
+        "[WARNING] This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\nThe operation may disrupt any currently running or scheduled plans.",
+        "Schemas to be deleted:",
+        "• memory.sushi",
+        "Snapshot tables to be deleted:",
+        "This action will DELETE ALL the above resources managed by SQLMesh AND\npotentially external resources created by other tools in these schemas.",
+        "Are you ABSOLUTELY SURE you want to proceed with deletion? [y/n]:",
         "Environment 'prod' invalidated.",
         "Deleted object memory.sushi",
-        'Deleted object "memory"."raw"."model1"',
-        'Deleted object "memory"."raw"."model1"',
-        'Deleted object "memory"."raw"."model2"',
-        'Deleted object "memory"."raw"."model2"',
-        'Deleted object "memory"."raw"."demographics"',
-        'Deleted object "memory"."raw"."demographics"',
         "State tables removed.",
         "Destroy completed successfully.",
     ]
     for message in expected_messages:
-        assert message in text_output
+        assert any(message in line for line in text_output)

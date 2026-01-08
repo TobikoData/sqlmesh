@@ -33,7 +33,7 @@ def state_sync(tmp_path: Path, example_project_config: Config) -> StateSync:
     return EngineAdapterStateSync(
         engine_adapter=example_project_config.get_state_connection("main").create_engine_adapter(),  # type: ignore
         schema=c.SQLMESH,
-        context_path=tmp_path,
+        cache_dir=tmp_path / c.CACHE,
     )
 
 
@@ -44,7 +44,7 @@ def test_export_empty_state(tmp_path: Path, state_sync: StateSync) -> None:
     with pytest.raises(SQLMeshError, match=r"Please run a migration"):
         export_state(state_sync, output_file)
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
 
     export_state(state_sync, output_file)
 
@@ -289,8 +289,8 @@ def test_export_local_state(
     full_model = next(s for s in snapshots if "full_model" in s["name"])
     new_model = next(s for s in snapshots if "new_model" in s["name"])
 
-    assert "'1' as modified" in full_model["node"]["query"]
-    assert "SELECT 1 as id" in new_model["node"]["query"]
+    assert "'1' as modified" in full_model["node"]["query"]["sql"]
+    assert "SELECT 1 as id" in new_model["node"]["query"]["sql"]
 
 
 def test_import_invalid_file(tmp_path: Path, state_sync: StateSync) -> None:
@@ -326,7 +326,7 @@ def test_import_invalid_file(tmp_path: Path, state_sync: StateSync) -> None:
 
 
 def test_import_from_older_version_export_fails(tmp_path: Path, state_sync: StateSync) -> None:
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     current_version = state_sync.get_versions()
 
     major, minor = current_version.minor_sqlmesh_version
@@ -354,7 +354,7 @@ def test_import_from_older_version_export_fails(tmp_path: Path, state_sync: Stat
 
 
 def test_import_from_newer_version_export_fails(tmp_path: Path, state_sync: StateSync) -> None:
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     current_version = state_sync.get_versions()
 
     major, minor = current_version.minor_sqlmesh_version
@@ -472,7 +472,7 @@ def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: S
     state_sync.engine_adapter.drop_schema("sqlmesh", cascade=True)
 
     # state was destroyed, plan should have changes
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     plan = context.plan()
     assert plan.has_changes
 
@@ -509,7 +509,7 @@ def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: S
     with pytest.raises(SQLMeshError, match=r"Please run a migration"):
         state_sync.get_versions(validate=True)
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     import_state(state_sync, state_file)
 
     # should be no changes in dev
@@ -610,7 +610,7 @@ def test_roundtrip_includes_environment_statements(tmp_path: Path) -> None:
     with pytest.raises(SQLMeshError, match=r"Please run a migration"):
         state_sync.get_versions(validate=True)
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     import_state(state_sync, state_file)
 
     assert not context.plan().has_changes

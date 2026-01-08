@@ -7,7 +7,9 @@ from rich.console import Console
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 
+from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 from sqlmesh.core.config.connection import (
     CONNECTION_CONFIG_TO_TYPE,
     DIALECT_TO_TYPE,
@@ -112,12 +114,33 @@ linter:
   rules:
     - ambiguousorinvalidcolumn
     - invalidselectstarexpansion
+    - noambiguousprojections
 """,
-        ProjectTemplate.DBT: """from pathlib import Path
+        ProjectTemplate.DBT: f"""# --- DBT-specific options ---
+dbt:
+  # This configuration ensures that each dbt target gets its own isolated state.
+  # The inferred state schemas are named "sqlmesh_state_<profile name>_<target schema>", eg "sqlmesh_state_jaffle_shop_dev"
+  # If this is undesirable, you may manually configure the gateway to use a specific state schema name
+  # https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#selecting-a-different-state-connection
+  infer_state_schema_name: True
 
-from sqlmesh.dbt.loader import sqlmesh_config
+# --- Virtual Data Environment Mode ---
+# Enable Virtual Data Environments (VDE) for *development* environments.
+# Note that the production environment in dbt projects is not virtual by default to maintain compatibility with existing tooling.
+# https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#virtual-data-environment-modes
+virtual_environment_mode: {VirtualEnvironmentMode.DEV_ONLY.lower()}
 
-config = sqlmesh_config(Path(__file__).parent)
+# --- Plan Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#plan
+plan:
+  # For Virtual Data Environments, this ensures that any changes are always considered against prod,
+  # rather than the previous state of that environment
+  always_recreate_environment: True
+
+# --- Model Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
+model_defaults:
+  start: {start or yesterday_ds()}
 """,
     }
 
@@ -283,10 +306,16 @@ def init_example_project(
     dlt_path: t.Optional[str] = None,
     schema_name: str = "sqlmesh_example",
     cli_mode: InitCliMode = InitCliMode.DEFAULT,
+    start: t.Optional[str] = None,
 ) -> Path:
     root_path = Path(path)
-    config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
-    config_path = root_path / f"config.{config_extension}"
+
+    config_path = root_path / "config.yaml"
+    if template == ProjectTemplate.DBT:
+        # name the config file `sqlmesh.yaml` to make it clear that within the context of all
+        # the existing yaml files DBT project, this one specifically relates to configuring the sqlmesh engine
+        config_path = root_path / "sqlmesh.yaml"
+
     audits_path = root_path / "audits"
     macros_path = root_path / "macros"
     models_path = root_path / "models"
@@ -298,7 +327,7 @@ def init_example_project(
             f"Found an existing config file '{config_path}'.\n\nPlease change to another directory or remove the existing file."
         )
 
-    if template == ProjectTemplate.DBT and not Path(root_path, "dbt_project.yml").exists():
+    if template == ProjectTemplate.DBT and not Path(root_path, DBT_PROJECT_FILENAME).exists():
         raise SQLMeshError(
             "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\nPlease add it or change directories before running `sqlmesh init` to set up your project."
         )
@@ -316,7 +345,6 @@ def init_example_project(
 
     models: t.Set[t.Tuple[str, str]] = set()
     settings = None
-    start = None
     if engine_type and template == ProjectTemplate.DLT:
         project_dialect = dialect or DIALECT_TO_TYPE.get(engine_type)
         if pipeline and project_dialect:

@@ -22,19 +22,19 @@ import typing as t
 from pathlib import Path
 from datetime import datetime
 
-from sqlglot import exp
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
 from sqlmesh.core.snapshot import (
     Snapshot,
+    SnapshotIdAndVersion,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotNameVersion,
-    SnapshotTableCleanupTask,
     SnapshotTableInfo,
     start_date,
 )
@@ -42,7 +42,6 @@ from sqlmesh.core.snapshot.definition import (
     Interval,
 )
 from sqlmesh.core.state_sync.base import (
-    PromotionResult,
     StateSync,
     Versions,
 )
@@ -54,6 +53,9 @@ from sqlmesh.core.state_sync.common import (
     StateStream,
     chunk_iterable,
     EnvironmentWithStatements,
+    ExpiredSnapshotBatch,
+    PromotionResult,
+    ExpiredBatchRange,
 )
 from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
@@ -79,7 +81,7 @@ class EngineAdapterStateSync(StateSync):
         engine_adapter: The EngineAdapter to use to store and fetch snapshots.
         schema: The schema to store state metadata in. If None or empty string then no schema is defined
         console: The console to log information to.
-        context_path: The context path, used for caching snapshot models.
+        cache_dir: The cache path, used for caching snapshot models.
     """
 
     def __init__(
@@ -87,14 +89,11 @@ class EngineAdapterStateSync(StateSync):
         engine_adapter: EngineAdapter,
         schema: t.Optional[str],
         console: t.Optional[Console] = None,
-        context_path: Path = Path(),
+        cache_dir: Path = Path(),
     ):
-        self.plan_dags_table = exp.table_("_plan_dags", db=schema)
         self.interval_state = IntervalState(engine_adapter, schema=schema)
         self.environment_state = EnvironmentState(engine_adapter, schema=schema)
-        self.snapshot_state = SnapshotState(
-            engine_adapter, schema=schema, context_path=context_path
-        )
+        self.snapshot_state = SnapshotState(engine_adapter, schema=schema, cache_dir=cache_dir)
         self.version_state = VersionState(engine_adapter, schema=schema)
         self.migrator = StateMigrator(
             engine_adapter,
@@ -102,7 +101,6 @@ class EngineAdapterStateSync(StateSync):
             snapshot_state=self.snapshot_state,
             environment_state=self.environment_state,
             interval_state=self.interval_state,
-            plan_dags_table=self.plan_dags_table,
             console=console,
         )
         # Make sure that if an empty string is provided that we treat it as None
@@ -258,16 +256,24 @@ class EngineAdapterStateSync(StateSync):
     def unpause_snapshots(
         self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
-        self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt, self.interval_state)
+        self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt)
 
     def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         self.environment_state.invalidate_environment(name, protect_prod)
 
     def get_expired_snapshots(
-        self, current_ts: int, ignore_ttl: bool = False
-    ) -> t.List[SnapshotTableCleanupTask]:
+        self,
+        *,
+        batch_range: ExpiredBatchRange,
+        current_ts: t.Optional[int] = None,
+        ignore_ttl: bool = False,
+    ) -> t.Optional[ExpiredSnapshotBatch]:
+        current_ts = current_ts or now_timestamp()
         return self.snapshot_state.get_expired_snapshots(
-            self.environment_state.get_environments(), current_ts=current_ts, ignore_ttl=ignore_ttl
+            environments=self.environment_state.get_environments(),
+            current_ts=current_ts,
+            ignore_ttl=ignore_ttl,
+            batch_range=batch_range,
         )
 
     def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
@@ -275,17 +281,19 @@ class EngineAdapterStateSync(StateSync):
 
     @transactional()
     def delete_expired_snapshots(
-        self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
-    ) -> t.List[SnapshotTableCleanupTask]:
-        current_ts = current_ts or now_timestamp()
-        expired_snapshot_ids, cleanup_targets = self.snapshot_state._get_expired_snapshots(
-            self.environment_state.get_environments(), ignore_ttl=ignore_ttl, current_ts=current_ts
+        self,
+        batch_range: ExpiredBatchRange,
+        ignore_ttl: bool = False,
+        current_ts: t.Optional[int] = None,
+    ) -> None:
+        batch = self.get_expired_snapshots(
+            ignore_ttl=ignore_ttl,
+            current_ts=current_ts,
+            batch_range=batch_range,
         )
-
-        self.snapshot_state.delete_snapshots(expired_snapshot_ids)
-        self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
-
-        return cleanup_targets
+        if batch and batch.expired_snapshot_ids:
+            self.snapshot_state.delete_snapshots(batch.expired_snapshot_ids)
+            self.interval_state.cleanup_intervals(batch.cleanup_tasks, batch.expired_snapshot_ids)
 
     @transactional()
     def delete_expired_environments(
@@ -311,7 +319,6 @@ class EngineAdapterStateSync(StateSync):
             self.environment_state.environments_table,
             self.environment_state.environment_statements_table,
             self.interval_state.intervals_table,
-            self.plan_dags_table,
             self.version_state.versions_table,
         ):
             self.engine_adapter.drop_table(table)
@@ -370,6 +377,16 @@ class EngineAdapterStateSync(StateSync):
         Snapshot.hydrate_with_intervals_by_version(snapshots.values(), intervals)
         return snapshots
 
+    def get_snapshots_by_names(
+        self,
+        snapshot_names: t.Iterable[str],
+        current_ts: t.Optional[int] = None,
+        exclude_expired: bool = True,
+    ) -> t.Set[SnapshotIdAndVersion]:
+        return self.snapshot_state.get_snapshots_by_names(
+            snapshot_names=snapshot_names, current_ts=current_ts, exclude_expired=exclude_expired
+        )
+
     @transactional()
     def add_interval(
         self,
@@ -377,8 +394,9 @@ class EngineAdapterStateSync(StateSync):
         start: TimeLike,
         end: TimeLike,
         is_dev: bool = False,
+        last_altered_ts: t.Optional[int] = None,
     ) -> None:
-        super().add_interval(snapshot, start, end, is_dev)
+        super().add_interval(snapshot, start, end, is_dev, last_altered_ts)
 
     @transactional()
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
@@ -404,7 +422,7 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         self.interval_state.remove_intervals(snapshot_intervals, remove_shared_versions)
@@ -446,14 +464,12 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def migrate(
         self,
-        default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
     ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         self.migrator.migrate(
-            self,
-            default_catalog,
+            self.schema,
             skip_backup=skip_backup,
             promoted_snapshots_only=promoted_snapshots_only,
         )

@@ -21,6 +21,8 @@ models:
         tests:
           - less_than_amount:
               amount: 1000
+          - greater_than_amount:
+              amount: 0
       - name: ds
         description: Date
   - name: top_waiters
@@ -34,12 +36,12 @@ models:
               field: waiter_id
       - name: revenue
         description: Revenue from orders served by this waiter
+      - name: unused_column
+        data_type: int
   - name: waiters
     columns:
       - name: waiter_id
         description: Waiter id
-        tests:
-          - not_null
       - name: ds
         description: Date
   - name: waiter_as_customer_by_day

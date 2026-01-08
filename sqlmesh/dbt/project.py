@@ -55,9 +55,6 @@ class Project:
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
         project_yaml = load_yaml(project_file_path)
 
-        variable_overrides = variables
-        variables = {**project_yaml.get("vars", {}), **(variables or {})}
-
         project_name = context.render(project_yaml.get("name", ""))
         context.project_name = project_name
         if not context.project_name:
@@ -69,12 +66,15 @@ class Project:
         profile = Profile.load(context, context.target_name)
         context.target = profile.target
 
+        variable_overrides = variables or {}
         context.manifest = ManifestHelper(
             project_file_path.parent,
             profile.path.parent,
             profile_name,
             target=profile.target,
             variable_overrides=variable_overrides,
+            cache_dir=context.sqlmesh_config.cache_dir,
+            model_defaults=context.sqlmesh_config.model_defaults,
         )
 
         extra_fields = profile.target.extra
@@ -99,13 +99,22 @@ class Project:
             package = package_loader.load(path.parent)
             packages[package.name] = package
 
+        # Variable resolution precedence:
+        # 1. Variable overrides
+        # 2. Package-scoped variables in the root project's dbt_project.yml
+        # 3. Global project variables in the root project's dbt_project.yml
+        # 4. Variables in the package's dbt_project.yml
+        all_project_variables = {**(project_yaml.get("vars") or {}), **(variable_overrides or {})}
         for name, package in packages.items():
-            package_vars = variables.get(name)
-
-            if isinstance(package_vars, dict):
-                package.variables.update(package_vars)
-
-            package.variables.update(variables)
+            if isinstance(all_project_variables.get(name), dict):
+                project_vars_copy = all_project_variables.copy()
+                package_scoped_vars = project_vars_copy.pop(name)
+                package.variables.update(project_vars_copy)
+                package.variables.update(package_scoped_vars)
+            else:
+                package.variables.update(all_project_variables)
+            if variable_overrides:
+                package.variables.update(variable_overrides)
 
         return Project(context, profile, packages)
 

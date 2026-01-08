@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import datetime
 import typing as t
+import logging
 
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
@@ -8,6 +10,7 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.console import get_console
 from sqlmesh.core.model import (
     EmbeddedKind,
@@ -22,18 +25,33 @@ from sqlmesh.core.model import (
     ManagedKind,
     create_sql_model,
 )
-from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange
+from sqlmesh.core.model.kind import (
+    SCDType2ByTimeKind,
+    OnDestructiveChange,
+    OnAdditiveChange,
+    on_destructive_change_validator,
+    on_additive_change_validator,
+    DbtCustomKind,
+)
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
-from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
+from sqlmesh.dbt.common import SqlStr, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.package import MaterializationConfig
+
+logger = logging.getLogger(__name__)
 
 
-INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite"])
+logger = logging.getLogger(__name__)
+
+
+INCREMENTAL_BY_TIME_RANGE_STRATEGIES = set(
+    ["delete+insert", "insert_overwrite", "microbatch", "incremental_by_time_range"]
+)
 INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
 
 
@@ -69,18 +87,19 @@ class ModelConfig(BaseModelConfig):
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
-    time_column: t.Optional[str] = None
+    time_column: t.Optional[t.Union[str, t.Dict[str, str]]] = None
     cron: t.Optional[str] = None
     interval_unit: t.Optional[str] = None
-    batch_size: t.Optional[int] = None
     batch_concurrency: t.Optional[int] = None
-    lookback: t.Optional[int] = None
     forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
-    allow_partials: t.Optional[bool] = None
+    allow_partials: bool = True
     physical_version: t.Optional[str] = None
     auto_restatement_cron: t.Optional[str] = None
     auto_restatement_intervals: t.Optional[int] = None
+    partition_by_time_column: t.Optional[bool] = None
+    on_destructive_change: t.Optional[OnDestructiveChange] = None
+    on_additive_change: t.Optional[OnAdditiveChange] = None
 
     # DBT configuration fields
     cluster_by: t.Optional[t.List[str]] = None
@@ -90,7 +109,7 @@ class ModelConfig(BaseModelConfig):
     unique_key: t.Optional[t.List[str]] = None
     partition_by: t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]] = None
     full_refresh: t.Optional[bool] = None
-    on_schema_change: t.Optional[str] = None
+    on_schema_change: str = "ignore"
 
     # Snapshot (SCD Type 2) Fields
     updated_at: t.Optional[str] = None
@@ -98,6 +117,15 @@ class ModelConfig(BaseModelConfig):
     invalidate_hard_deletes: bool = False
     target_schema: t.Optional[str] = None
     check_cols: t.Optional[t.Union[t.List[str], str]] = None
+
+    # Microbatch Fields
+    event_time: t.Optional[str] = None
+    begin: t.Optional[datetime.datetime] = None
+    concurrent_batches: t.Optional[bool] = None
+
+    # Shared SQLMesh and DBT configuration fields
+    batch_size: t.Optional[t.Union[int, str]] = None
+    lookback: t.Optional[int] = None
 
     # redshift
     bind: t.Optional[bool] = None
@@ -123,11 +151,9 @@ class ModelConfig(BaseModelConfig):
     inserts_only: t.Optional[bool] = None
     incremental_predicates: t.Optional[t.List[str]] = None
 
-    # Private fields
-    _sql_embedded_config: t.Optional[SqlStr] = None
-    _sql_no_config: t.Optional[SqlStr] = None
-
     _sql_validator = sql_str_validator
+    _on_destructive_change_validator = on_destructive_change_validator
+    _on_additive_change_validator = on_additive_change_validator
 
     @field_validator(
         "unique_key",
@@ -146,6 +172,22 @@ class ModelConfig(BaseModelConfig):
             return "*"
         return ensure_list(v)
 
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def _validate_updated_at(cls, v: t.Optional[str]) -> t.Optional[str]:
+        """
+        Extract column name if updated_at contains a cast.
+
+        SCDType2ByTimeKind and SCDType2ByColumnKind expect a column, and the casting is done later.
+        """
+        if v is None:
+            return None
+        parsed = d.parse_one(v)
+        if isinstance(parsed, exp.Cast) and isinstance(parsed.this, exp.Column):
+            return parsed.this.name
+
+        return v
+
     @field_validator("sql", mode="before")
     @classmethod
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
@@ -153,7 +195,11 @@ class ModelConfig(BaseModelConfig):
 
     @field_validator("partition_by", mode="before")
     @classmethod
-    def _validate_partition_by(cls, v: t.Any) -> t.Union[t.List[str], t.Dict[str, t.Any]]:
+    def _validate_partition_by(
+        cls, v: t.Any
+    ) -> t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]]:
+        if v is None:
+            return None
         if isinstance(v, str):
             return [v]
         if isinstance(v, list):
@@ -169,6 +215,14 @@ class ModelConfig(BaseModelConfig):
             ):
                 granularity = v["granularity"]
                 raise ConfigError(f"Unexpected granularity '{granularity}' in partition_by '{v}'.")
+            if "data_type" in v and v["data_type"].lower() not in (
+                "timestamp",
+                "date",
+                "datetime",
+                "int64",
+            ):
+                data_type = v["data_type"]
+                raise ConfigError(f"Unexpected data_type '{data_type}' in partition_by '{v}'.")
             return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
@@ -226,23 +280,38 @@ class ModelConfig(BaseModelConfig):
 
         # args common to all sqlmesh incremental kinds, regardless of materialization
         incremental_kind_kwargs: t.Dict[str, t.Any] = {}
-        if self.on_schema_change:
-            on_schema_change = self.on_schema_change.lower()
+        on_schema_change = self.on_schema_change.lower()
+        if materialization == Materialization.SNAPSHOT:
+            # dbt snapshots default to `append_new_columns` behavior and can't be changed
+            on_schema_change = "append_new_columns"
 
-            on_destructive_change = OnDestructiveChange.WARN
-            if on_schema_change == "sync_all_columns":
-                on_destructive_change = OnDestructiveChange.ALLOW
-            elif on_schema_change in ("fail", "append_new_columns", "ignore"):
-                on_destructive_change = OnDestructiveChange.ERROR
+        if on_schema_change == "ignore":
+            on_destructive_change = OnDestructiveChange.IGNORE
+            on_additive_change = OnAdditiveChange.IGNORE
+        elif on_schema_change == "fail":
+            on_destructive_change = OnDestructiveChange.ERROR
+            on_additive_change = OnAdditiveChange.ERROR
+        elif on_schema_change == "append_new_columns":
+            on_destructive_change = OnDestructiveChange.IGNORE
+            on_additive_change = OnAdditiveChange.ALLOW
+        elif on_schema_change == "sync_all_columns":
+            on_destructive_change = OnDestructiveChange.ALLOW
+            on_additive_change = OnAdditiveChange.ALLOW
+        else:
+            raise ConfigError(
+                f"{self.canonical_name(context)}: Invalid on_schema_change value '{on_schema_change}'. "
+                "Valid values are 'ignore', 'fail', 'append_new_columns', 'sync_all_columns'."
+            )
 
-            incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
-
-        for field in ("forward_only", "auto_restatement_cron"):
-            field_val = getattr(self, field, None)
-            if field_val is None:
-                field_val = self.meta.get(field, None)
-            if field_val is not None:
-                incremental_kind_kwargs[field] = field_val
+        incremental_kind_kwargs["on_destructive_change"] = (
+            self._get_field_value("on_destructive_change") or on_destructive_change
+        )
+        incremental_kind_kwargs["on_additive_change"] = (
+            self._get_field_value("on_additive_change") or on_additive_change
+        )
+        auto_restatement_cron_value = self._get_field_value("auto_restatement_cron")
+        if auto_restatement_cron_value is not None:
+            incremental_kind_kwargs["auto_restatement_cron"] = auto_restatement_cron_value
 
         if materialization == Materialization.TABLE:
             return FullKind()
@@ -250,38 +319,85 @@ class ModelConfig(BaseModelConfig):
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
             incremental_by_kind_kwargs: t.Dict[str, t.Any] = {"dialect": self.dialect(context)}
+            forward_only_value = self._get_field_value("forward_only")
+            if forward_only_value is not None:
+                incremental_kind_kwargs["forward_only"] = forward_only_value
+
+            is_incremental_by_time_range = self.time_column or (
+                self.incremental_strategy
+                and self.incremental_strategy in {"microbatch", "incremental_by_time_range"}
+            )
+            # Get shared incremental by kwargs
             for field in ("batch_size", "batch_concurrency", "lookback"):
-                field_val = getattr(self, field, None)
-                if field_val is None:
-                    field_val = self.meta.get(field, None)
+                field_val = self._get_field_value(field)
                 if field_val is not None:
+                    # Check if `batch_size` is representing an interval unit and if so that will be handled at the model level
+                    if field == "batch_size" and isinstance(field_val, str):
+                        continue
                     incremental_by_kind_kwargs[field] = field_val
 
-            if self.time_column:
+            disable_restatement = self.disable_restatement
+            if disable_restatement is None:
+                if is_incremental_by_time_range:
+                    disable_restatement = False
+                else:
+                    disable_restatement = (
+                        not self.full_refresh if self.full_refresh is not None else False
+                    )
+            incremental_by_kind_kwargs["disable_restatement"] = disable_restatement
+
+            if is_incremental_by_time_range:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByTimeRangeKind
                 )
 
-                if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
+                if strategy not in INCREMENTAL_BY_TIME_RANGE_STRATEGIES:
                     get_console().log_warning(
                         f"SQLMesh incremental by time strategy is not compatible with '{strategy}' incremental strategy in model '{self.canonical_name(context)}'. "
-                        f"Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}."
+                        f"Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_RANGE_STRATEGIES)}."
+                    )
+
+                if self.time_column and strategy != "incremental_by_time_range":
+                    get_console().log_warning(
+                        f"Using `time_column` on a model with incremental_strategy '{strategy}' has been deprecated. "
+                        f"Please use `incremental_by_time_range` instead in model '{self.canonical_name(context)}'."
+                    )
+
+                if strategy == "microbatch":
+                    if self.time_column:
+                        raise ConfigError(
+                            f"{self.canonical_name(context)}: 'time_column' cannot be used with 'microbatch' incremental strategy. Use 'event_time' instead."
+                        )
+                    time_column = self._get_field_value("event_time")
+                    if not time_column:
+                        raise ConfigError(
+                            f"{self.canonical_name(context)}: 'event_time' is required for microbatch incremental strategy."
+                        )
+                    # dbt microbatch always processes batches in a size of 1
+                    incremental_by_kind_kwargs["batch_size"] = 1
+                else:
+                    if not self.time_column:
+                        raise ConfigError(
+                            f"{self.canonical_name(context)}: 'time_column' is required for incremental by time range models not defined using microbatch."
+                        )
+                    time_column = self.time_column
+
+                incremental_by_time_range_kwargs = {
+                    "time_column": time_column,
+                }
+                if self.auto_restatement_intervals:
+                    incremental_by_time_range_kwargs["auto_restatement_intervals"] = (
+                        self.auto_restatement_intervals
+                    )
+                if self.partition_by_time_column is not None:
+                    incremental_by_time_range_kwargs["partition_by_time_column"] = (
+                        self.partition_by_time_column
                     )
 
                 return IncrementalByTimeRangeKind(
-                    time_column=self.time_column,
-                    disable_restatement=(
-                        self.disable_restatement if self.disable_restatement is not None else False
-                    ),
-                    auto_restatement_intervals=self.auto_restatement_intervals,
                     **incremental_kind_kwargs,
                     **incremental_by_kind_kwargs,
-                )
-
-            disable_restatement = self.disable_restatement
-            if disable_restatement is None:
-                disable_restatement = (
-                    not self.full_refresh if self.full_refresh is not None else False
+                    **incremental_by_time_range_kwargs,
                 )
 
             if self.unique_key:
@@ -292,14 +408,15 @@ class ModelConfig(BaseModelConfig):
                     self.incremental_strategy
                     and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
                 ):
-                    raise ConfigError(
-                        f"{self.canonical_name(context)}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
-                        f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
+                    get_console().log_warning(
+                        f"Unique key is not compatible with '{strategy}' incremental strategy in model '{self.canonical_name(context)}'. "
+                        f"Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}. Falling back to 'merge' strategy."
                     )
 
+                merge_filter = None
                 if self.incremental_predicates:
                     dialect = self.dialect(context)
-                    incremental_kind_kwargs["merge_filter"] = exp.and_(
+                    merge_filter = exp.and_(
                         *[
                             d.parse_one(predicate, dialect=dialect)
                             for predicate in self.incremental_predicates
@@ -309,7 +426,7 @@ class ModelConfig(BaseModelConfig):
 
                 return IncrementalByUniqueKeyKind(
                     unique_key=self.unique_key,
-                    disable_restatement=disable_restatement,
+                    merge_filter=merge_filter,
                     **incremental_kind_kwargs,
                     **incremental_by_kind_kwargs,
                 )
@@ -318,8 +435,8 @@ class ModelConfig(BaseModelConfig):
                 IncrementalUnmanagedKind
             )
             return IncrementalUnmanagedKind(
-                insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
-                disable_restatement=disable_restatement,
+                insert_overwrite=strategy in INCREMENTAL_BY_TIME_RANGE_STRATEGIES,
+                disable_restatement=incremental_by_kind_kwargs["disable_restatement"],
                 **incremental_kind_kwargs,
             )
         if materialization == Materialization.EPHEMERAL:
@@ -353,26 +470,20 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.DYNAMIC_TABLE:
             return ManagedKind()
 
+        if materialization == Materialization.CUSTOM:
+            if custom_materialization := self._get_custom_materialization(context):
+                return DbtCustomKind(
+                    materialization=self.materialized,
+                    adapter=custom_materialization.adapter,
+                    dialect=self.dialect(context),
+                    definition=custom_materialization.definition,
+                )
+
+            raise ConfigError(
+                f"Unknown materialization '{self.materialized}'. Custom materializations must be defined in your dbt project."
+            )
+
         raise ConfigError(f"{materialization.value} materialization not supported.")
-
-    @property
-    def sql_no_config(self) -> SqlStr:
-        if self._sql_no_config is None:
-            self._sql_no_config = SqlStr("")
-            self._extract_sql_config()
-        return self._sql_no_config
-
-    @property
-    def sql_embedded_config(self) -> SqlStr:
-        if self._sql_embedded_config is None:
-            self._sql_embedded_config = SqlStr("")
-            self._extract_sql_config()
-        return self._sql_embedded_config
-
-    def _extract_sql_config(self) -> None:
-        no_config, embedded_config = extract_jinja_config(self.sql)
-        self._sql_no_config = SqlStr(no_config)
-        self._sql_embedded_config = SqlStr(embedded_config)
 
     def _big_query_partition_by_expr(self, context: DbtContext) -> exp.Expression:
         assert isinstance(self.partition_by, dict)
@@ -411,6 +522,18 @@ class ModelConfig(BaseModelConfig):
             dialect="bigquery",
         )
 
+    def _get_custom_materialization(self, context: DbtContext) -> t.Optional[MaterializationConfig]:
+        materializations = context.manifest.materializations()
+        name, target_adapter = self.materialized, context.target.dialect
+
+        adapter_specific_key = f"{name}_{target_adapter}"
+        default_key = f"{name}_default"
+        if adapter_specific_key in materializations:
+            return materializations[adapter_specific_key]
+        if default_key in materializations:
+            return materializations[default_key]
+        return None
+
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return super().sqlmesh_config_fields | {
@@ -418,42 +541,84 @@ class ModelConfig(BaseModelConfig):
             "interval_unit",
             "allow_partials",
             "physical_version",
+            "start",
+            # In microbatch models `begin` is the same as `start`
+            "begin",
         }
 
     def to_sqlmesh(
-        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+        self,
+        context: DbtContext,
+        audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         model_dialect = self.dialect(context)
-        query = d.jinja_query(self.sql_no_config)
+        query = d.jinja_query(self.sql)
+        kind = self.model_kind(context)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
         physical_properties: t.Dict[str, t.Any] = {}
 
         if self.partition_by:
-            partitioned_by = []
-            if isinstance(self.partition_by, list):
-                for p in self.partition_by:
-                    try:
-                        partitioned_by.append(d.parse_one(p, dialect=model_dialect))
-                    except SqlglotError as e:
-                        raise ConfigError(
-                            f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
-                        ) from e
+            if isinstance(kind, (ViewKind, EmbeddedKind)):
+                logger.warning(
+                    "Ignoring partition_by config for model '%s'; partition_by is not supported for %s.",
+                    self.name,
+                    "views" if isinstance(kind, ViewKind) else "ephemeral models",
+                )
+            elif context.target.dialect == "snowflake":
+                logger.warning(
+                    "Ignoring partition_by config for model '%s' targeting %s. The partition_by config is not supported for Snowflake.",
+                    self.name,
+                    context.target.dialect,
+                )
             else:
-                partitioned_by.append(self._big_query_partition_by_expr(context))
-            optional_kwargs["partitioned_by"] = partitioned_by
+                partitioned_by = []
+                if isinstance(self.partition_by, list):
+                    for p in self.partition_by:
+                        try:
+                            partitioned_by.append(d.parse_one(p, dialect=model_dialect))
+                        except SqlglotError as e:
+                            raise ConfigError(
+                                f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
+                            ) from e
+                elif isinstance(self.partition_by, dict):
+                    if context.target.dialect == "bigquery":
+                        partitioned_by.append(self._big_query_partition_by_expr(context))
+                    else:
+                        logger.warning(
+                            "Ignoring partition_by config for model '%s' targeting %s. The format of the config field is only supported for BigQuery.",
+                            self.name,
+                            context.target.dialect,
+                        )
+
+                if partitioned_by:
+                    optional_kwargs["partitioned_by"] = partitioned_by
 
         if self.cluster_by:
-            clustered_by = []
-            for c in self.cluster_by:
-                try:
-                    clustered_by.append(d.parse_one(c, dialect=model_dialect))
-                except SqlglotError as e:
-                    raise ConfigError(
-                        f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
-                    ) from e
-            optional_kwargs["clustered_by"] = clustered_by
+            if isinstance(kind, (ViewKind, EmbeddedKind)):
+                logger.warning(
+                    "Ignoring cluster_by config for model '%s'; cluster_by is not supported for %s.",
+                    self.name,
+                    "views" if isinstance(kind, ViewKind) else "ephemeral models",
+                )
+            else:
+                clustered_by = []
+                for c in self.cluster_by:
+                    try:
+                        cluster_expr = exp.maybe_parse(
+                            c, into=exp.Cluster, prefix="CLUSTER BY", dialect=model_dialect
+                        )
+                        for expr in cluster_expr.expressions:
+                            clustered_by.append(
+                                expr.this if isinstance(expr, exp.Ordered) else expr
+                            )
+                    except SqlglotError as e:
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
+                        ) from e
+                optional_kwargs["clustered_by"] = clustered_by
 
         model_kwargs = self.sqlmesh_model_kwargs(context)
         if self.sql_header:
@@ -551,28 +716,58 @@ class ModelConfig(BaseModelConfig):
                 model_kwargs["physical_properties"] = physical_properties
 
         kind = self.model_kind(context)
+
+        # A falsy grants config (None or {}) is considered as unmanaged per dbt semantics
+        if self.grants and kind.supports_grants:
+            model_kwargs["grants"] = self.grants
+
         allow_partials = model_kwargs.pop("allow_partials", None)
-        if (
-            allow_partials is None
-            and kind.is_materialized
-            and not kind.is_incremental_by_time_range
-        ):
+        if allow_partials is None:
             # Set allow_partials to True for dbt models to preserve the original semantics.
             allow_partials = True
+
+        # pop begin for all models so we don't pass it through for non-incremental materializations
+        # (happens if model config is microbatch but project config overrides)
+        begin = model_kwargs.pop("begin", None)
+        if kind.is_incremental:
+            if self.batch_size and isinstance(self.batch_size, str):
+                if "interval_unit" in model_kwargs:
+                    get_console().log_warning(
+                        f"Both 'interval_unit' and 'batch_size' are set for model '{self.canonical_name(context)}'. 'interval_unit' will be used."
+                    )
+                else:
+                    model_kwargs["interval_unit"] = self.batch_size
+                    self.batch_size = None
+            if begin:
+                if "start" in model_kwargs:
+                    get_console().log_warning(
+                        f"Both 'begin' and 'start' are set for model '{self.canonical_name(context)}'. 'start' will be used."
+                    )
+                else:
+                    model_kwargs["start"] = begin
+            # If user explicitly disables concurrent batches then we want to set depends on past to true which we
+            # will do by including the model in the depends_on
+            if self.concurrent_batches is not None and self.concurrent_batches is False:
+                depends_on = model_kwargs.get("depends_on", set())
+                depends_on.add(self.canonical_name(context))
+
+        model_kwargs["start"] = model_kwargs.get(
+            "start", context.sqlmesh_config.model_defaults.start
+        )
 
         model = create_sql_model(
             self.canonical_name(context),
             query,
             dialect=model_dialect,
             kind=kind,
-            start=self.start,
             audit_definitions=audit_definitions,
-            path=model_kwargs.pop("path", self.path),
             # This ensures that we bypass query rendering that would otherwise be required to extract additional
             # dependencies from the model's SQL.
             # Note: any table dependencies that are not referenced using the `ref` macro will not be included.
             extract_dependencies_from_query=False,
             allow_partials=allow_partials,
+            virtual_environment_mode=virtual_environment_mode,
+            dbt_node_info=self.node_info,
             **optional_kwargs,
             **model_kwargs,
         )

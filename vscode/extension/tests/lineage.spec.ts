@@ -1,122 +1,97 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, Page } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { openLineageView, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openLineageView,
+  openServerPage,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
 import { writeFileSync } from 'fs'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 /**
  * Helper function to launch VS Code and test lineage with given project path config
  */
 async function testLineageWithProjectPath(page: Page): Promise<void> {
-  await page.waitForLoadState('networkidle')
-  await page.waitForLoadState('domcontentloaded')
   await openLineageView(page)
-  await page.waitForSelector('text=Loaded SQLMesh context')
+  await waitForLoadedSQLMesh(page)
 }
 
 test('Lineage panel renders correctly - no project path config (default)', async ({
   page,
+  sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
-  const context = await startCodeServer({
-    tempDir,
-    placeFileWithPythonInterpreter: true,
-  })
-
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-    await testLineageWithProjectPath(page)
-  } finally {
-    await stopCodeServer(context)
-  }
+  await openServerPage(page, tempDir, sharedCodeServer)
+  await testLineageWithProjectPath(page)
 })
 
 test('Lineage panel renders correctly - relative project path', async ({
   page,
+  sharedCodeServer,
+  tempDir,
 }) => {
-  const workspaceDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-workspace-'),
-  )
-  const projectDir = path.join(workspaceDir, 'projects', 'sushi')
+  const projectDir = path.join(tempDir, 'projects', 'sushi')
   await fs.copy(SUSHI_SOURCE_PATH, projectDir)
 
-  const context = await startCodeServer({
-    tempDir: workspaceDir,
+  const settings = {
+    'sqlmesh.projectPaths': ['./projects/sushi'],
+    'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
+  }
+  await fs.ensureDir(path.join(tempDir, '.vscode'))
+  await fs.writeJson(path.join(tempDir, '.vscode', 'settings.json'), settings, {
+    spaces: 2,
   })
 
-  const settings = {
-    'sqlmesh.projectPath': './projects/sushi',
-    'python.defaultInterpreterPath': context.defaultPythonInterpreter,
-  }
-  await fs.ensureDir(path.join(workspaceDir, '.vscode'))
-  await fs.writeJson(
-    path.join(workspaceDir, '.vscode', 'settings.json'),
-    settings,
-    { spaces: 2 },
-  )
-
   try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, tempDir, sharedCodeServer)
     await testLineageWithProjectPath(page)
   } finally {
-    await fs.remove(workspaceDir)
+    await fs.remove(tempDir)
   }
 })
 
 test('Lineage panel renders correctly - absolute project path', async ({
   page,
+  tempDir,
+  sharedCodeServer,
 }) => {
-  const workspaceDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-workspace-'),
-  )
-  const projectDir = path.join(workspaceDir, 'projects', 'sushi')
-  await fs.ensureDir(path.join(workspaceDir, '.vscode'))
+  // Copy the sushi project to temporary directory
+  const projectDir = path.join(tempDir, 'projects', 'sushi')
+  await fs.ensureDir(path.join(tempDir, '.vscode'))
   await fs.copy(SUSHI_SOURCE_PATH, projectDir)
-  await fs.ensureDir(path.join(workspaceDir, '.vscode'))
-  const context = await startCodeServer({
-    tempDir: workspaceDir,
-  })
 
   const settings = {
-    'sqlmesh.projectPath': projectDir,
-    'python.defaultInterpreterPath': context.defaultPythonInterpreter,
+    'sqlmesh.projectPaths': [projectDir],
+    'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
-  await fs.writeJson(
-    path.join(workspaceDir, '.vscode', 'settings.json'),
-    settings,
-    { spaces: 2 },
-  )
+  await fs.writeJson(path.join(tempDir, '.vscode', 'settings.json'), settings, {
+    spaces: 2,
+  })
 
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-    await testLineageWithProjectPath(page)
-  } finally {
-    await stopCodeServer(context)
-  }
+  await openServerPage(page, tempDir, sharedCodeServer)
+  await testLineageWithProjectPath(page)
 })
 
 test('Lineage panel renders correctly - relative project outside of workspace', async ({
   page,
+  sharedCodeServer,
+  tempDir,
 }) => {
-  const tempFolder = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-workspace-'),
-  )
-  const projectDir = path.join(tempFolder, 'projects', 'sushi')
+  const projectDir = path.join(tempDir, 'projects', 'sushi')
   await fs.copy(SUSHI_SOURCE_PATH, projectDir)
 
-  const workspaceDir = path.join(tempFolder, 'workspace')
+  const workspaceDir = path.join(tempDir, 'workspace')
   await fs.ensureDir(workspaceDir)
-  const context = await startCodeServer({
-    tempDir: workspaceDir,
-  })
 
   const settings = {
-    'sqlmesh.projectPath': './../projects/sushi',
-    'python.defaultInterpreterPath': context.defaultPythonInterpreter,
+    'sqlmesh.projectPaths': ['./../projects/sushi'],
+    'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(workspaceDir, '.vscode'))
   await fs.writeJson(
@@ -124,34 +99,24 @@ test('Lineage panel renders correctly - relative project outside of workspace', 
     settings,
     { spaces: 2 },
   )
-
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-    await testLineageWithProjectPath(page)
-  } finally {
-    await stopCodeServer(context)
-  }
+  await openServerPage(page, workspaceDir, sharedCodeServer)
+  await testLineageWithProjectPath(page)
 })
 
 test('Lineage panel renders correctly - absolute path project outside of workspace', async ({
   page,
+  sharedCodeServer,
+  tempDir,
 }) => {
-  const tempFolder = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-workspace-'),
-  )
-  const projectDir = path.join(tempFolder, 'projects', 'sushi')
+  const projectDir = path.join(tempDir, 'projects', 'sushi')
   await fs.copy(SUSHI_SOURCE_PATH, projectDir)
 
-  const workspaceDir = path.join(tempFolder, 'workspace')
+  const workspaceDir = path.join(tempDir, 'workspace')
   await fs.ensureDir(workspaceDir)
-  const context = await startCodeServer({
-    tempDir: workspaceDir,
-    placeFileWithPythonInterpreter: false,
-  })
 
   const settings = {
-    'sqlmesh.projectPath': projectDir,
-    'python.defaultInterpreterPath': context.defaultPythonInterpreter,
+    'sqlmesh.projectPaths': [projectDir],
+    'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(workspaceDir, '.vscode'))
   await fs.writeJson(
@@ -160,17 +125,14 @@ test('Lineage panel renders correctly - absolute path project outside of workspa
     { spaces: 2 },
   )
 
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-    await testLineageWithProjectPath(page)
-  } finally {
-    await stopCodeServer(context)
-  }
+  await openServerPage(page, workspaceDir, sharedCodeServer)
+  await testLineageWithProjectPath(page)
 })
 
 // These work on local machine when debuggin but not on CI, so skipping for now
-test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
+test('Lineage panel renders correctly - multiworkspace setup', async ({
   page,
+  sharedCodeServer,
 }) => {
   const workspaceDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-workspace-'),
@@ -201,13 +163,8 @@ test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
     }),
   )
 
-  const context = await startCodeServer({
-    tempDir: workspaceDir,
-    placeFileWithPythonInterpreter: true,
-  })
-
   const settings = {
-    'python.defaultInterpreterPath': context.defaultPythonInterpreter,
+    'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(projectDir1, '.vscode'))
   await fs.writeJson(
@@ -216,18 +173,14 @@ test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
     { spaces: 2 },
   )
 
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-    await page.waitForSelector('text=Open workspace')
-    await page.click('text=Open workspace')
-    await testLineageWithProjectPath(page)
-  } finally {
-    await stopCodeServer(context)
-  }
+  await openServerPage(page, workspaceFilePath, sharedCodeServer)
+  await page.reload()
+  await testLineageWithProjectPath(page)
 })
 
-test.skip('Lineage panel renders correctly - multiworkspace setup reversed', async ({
+test('Lineage panel renders correctly - multiworkspace setup reversed', async ({
   page,
+  sharedCodeServer,
 }) => {
   const workspaceDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-workspace-'),
@@ -258,12 +211,8 @@ test.skip('Lineage panel renders correctly - multiworkspace setup reversed', asy
     }),
   )
 
-  const context = await startCodeServer({
-    tempDir: workspaceDir,
-  })
-
   const settings = {
-    'python.defaultInterpreterPath': context.defaultPythonInterpreter,
+    'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(projectDir1, '.vscode'))
   await fs.writeJson(
@@ -278,12 +227,7 @@ test.skip('Lineage panel renders correctly - multiworkspace setup reversed', asy
     { spaces: 2 },
   )
 
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-    await page.waitForSelector('text=Open workspace')
-    await page.click('text=Open workspace')
-    await testLineageWithProjectPath(page)
-  } finally {
-    await stopCodeServer(context)
-  }
+  await openServerPage(page, workspaceFilePath, sharedCodeServer)
+  await page.reload()
+  await testLineageWithProjectPath(page)
 })

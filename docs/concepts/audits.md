@@ -7,7 +7,33 @@ By default, SQLMesh will halt plan application when an audit fails so potentiall
 
 A comprehensive suite of audits can identify data issues upstream, whether they are from your vendors or other teams. Audits also empower your data engineers and analysts to work with confidence by catching problems early as they work on new features or make updates to your models.
 
-**NOTE**: For incremental models, audits are only applied to intervals being processed - not for the entire underlying table.
+**NOTE**: For incremental by time range models, audits are only applied to intervals being processed - not for the entire underlying table.
+
+## Blocking audits
+A failed blocking audit halts the execution of a `plan` or `run` to prevent invalid data from propagating to downstream models. The impact of a failure depends on whether you are running a `plan` or a `run`.
+
+SQLMesh's blocking audit process is:
+
+1. Evaluate the model (e.g., insert new data or rebuild the table)
+2. Run the audit query against the newly updated model table. For incremental models, the audit only runs on the processed time intervals.
+3. If the query returns any rows, the audit fails, halting the `plan` or `run`.
+
+### Plan vs. Run
+
+The key difference is when the model's data is promoted to the production environment:
+
+*   **`plan`**: SQLMesh evaluates and audits all modified models *before* promoting them to production. If an audit fails, the `plan` stops, and the production table is untouched. Invalid data is contained in an isolated table and never reaches the production environment.
+
+*   **`run`**: SQLMesh evaluates and audits models directly against the production environment. If an audit fails, the `run` stops, but the invalid data *is already present* in the production table. The "blocking" action prevents this bad data from being used to build other downstream models.
+
+### Fixing a Failed Audit
+
+If a blocking audit fails during a `run`, you must fix the invalid data in the production table. To do so:
+
+1.  **Find the root cause**: examine upstream models and data sources
+2.  **Fix the source**
+    *   If the cause is an **external data source**, fix it there. Then, run a [restatement plan](./plans.md#restatement-plans) on the first SQLMesh model that ingests the source data. This will restate all downstream models, including the one with the failed audit.
+    *   If the cause is a **SQLMesh model**, update the model's logic. Then apply the change with a `plan`, which will automatically re-evaluate all downstream models.
 
 ## User-Defined Audits
 In SQLMesh, user-defined audits are defined in `.sql` files in an `audits` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Alternatively, audits can be defined inline within the model definition itself.

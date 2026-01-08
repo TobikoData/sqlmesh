@@ -1,59 +1,131 @@
-import path from 'path'
-import { runCommand, SUSHI_SOURCE_PATH } from './utils'
-import os from 'os'
-import { test } from '@playwright/test'
+import {
+  openServerPage,
+  runCommand,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
+import { test } from './fixtures'
 import fs from 'fs-extra'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Stop server works', async ({ page }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Stop server works', async ({ page, sharedCodeServer, tempDir }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
-  const context = await startCodeServer({
-    tempDir,
-    placeFileWithPythonInterpreter: true,
+  await createPythonInterpreterSettingsSpecifier(tempDir)
+
+  // Navigate to code-server instance
+  await openServerPage(page, tempDir, sharedCodeServer)
+
+  // Wait for the models folder to be visible in the file explorer
+  await page.waitForSelector('text=models')
+
+  // Click on the models folder, excluding external_models
+  await page
+    .getByRole('treeitem', { name: 'models', exact: true })
+    .locator('a')
+    .click()
+
+  // Open the customers.sql model
+  await page
+    .getByRole('treeitem', { name: 'customers.sql', exact: true })
+    .locator('a')
+    .click()
+
+  await page.waitForSelector('text=grain')
+  await waitForLoadedSQLMesh(page)
+
+  // Stop the server
+  await runCommand(page, 'SQLMesh: Stop Server')
+
+  // Await LSP server stopped message
+  await page.waitForSelector('text=LSP server stopped')
+
+  // Render the model
+  await runCommand(page, 'SQLMesh: Render Model')
+
+  // Await error message
+  await page.waitForSelector(
+    'text="Failed to render model: LSP client not ready."',
+  )
+})
+
+test('Stopped server only restarts when explicitly requested', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+
+  await createPythonInterpreterSettingsSpecifier(tempDir)
+
+  // Navigate to code-server instance
+  await openServerPage(page, tempDir, sharedCodeServer)
+
+  // Wait for the models folder to be visible in the file explorer
+  await page.waitForSelector('text=models')
+
+  // Click on the models folder, excluding external_models
+  await page
+    .getByRole('treeitem', { name: 'models', exact: true })
+    .locator('a')
+    .click()
+
+  // Open the customers.sql model
+  await page
+    .getByRole('treeitem', { name: 'marketing.sql', exact: true })
+    .locator('a')
+    .click()
+  await page.waitForSelector('text=grain')
+  await waitForLoadedSQLMesh(page)
+
+  // Click on sushi.raw_marketing
+  await page.getByText('sushi.raw_marketing;').click()
+
+  // Open the preview hover
+  await runCommand(page, 'Show Definition Preview Hover')
+
+  // Assert that the hover is visible with text "Table of marketing status."
+  await page.waitForSelector('text=Table of marketing status.', {
+    timeout: 5_000,
+    state: 'visible',
   })
 
-  try {
-    // Navigate to code-server instance
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+  // Hit Esc to close the hover
+  await page.keyboard.press('Escape')
 
-    // Wait for code-server to load
-    await page.waitForLoadState('networkidle')
-    await page.waitForSelector('[role="application"]', { timeout: 10000 })
+  // Assert that the hover is no longer visible
+  await page.waitForSelector('text=Table of marketing status.', {
+    timeout: 5_000,
+    state: 'hidden',
+  })
 
-    // Wait for the models folder to be visible in the file explorer
-    await page.waitForSelector('text=models')
+  // Stop the server
+  await runCommand(page, 'SQLMesh: Stop Server')
 
-    // Click on the models folder, excluding external_models
-    await page
-      .getByRole('treeitem', { name: 'models', exact: true })
-      .locator('a')
-      .click()
+  // Await LSP server stopped message
+  await page.waitForSelector('text=LSP server stopped')
 
-    // Open the customers.sql model
-    await page
-      .getByRole('treeitem', { name: 'customers.sql', exact: true })
-      .locator('a')
-      .click()
+  // Open the preview hover again
+  await runCommand(page, 'Show Definition Preview Hover')
 
-    await page.waitForSelector('text=grain')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+  // Assert that the hover is not visible
+  await page.waitForSelector('text=Table of marketing status.', {
+    timeout: 5_000,
+    state: 'hidden',
+  })
 
-    // Stop the server
-    await runCommand(page, 'SQLMesh: Stop Server')
+  // Restart the server explicitly
+  await runCommand(page, 'SQLMesh: Restart Server')
 
-    // Await LSP server stopped message
-    await page.waitForSelector('text=LSP server stopped')
+  // Await LSP server started message
+  await waitForLoadedSQLMesh(page)
 
-    // Render the model
-    await runCommand(page, 'SQLMesh: Render Model')
+  // Open the preview hover again
+  await runCommand(page, 'Show Definition Preview Hover')
 
-    // Await error message
-    await page.waitForSelector(
-      'text="Failed to render model: LSP client not ready."',
-    )
-  } finally {
-    await stopCodeServer(context)
-  }
+  // Assert that the hover is visible with text "Table of marketing status."
+  await page.waitForSelector('text=Table of marketing status.', {
+    timeout: 5_000,
+    state: 'visible',
+  })
 })

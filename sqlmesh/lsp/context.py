@@ -1,15 +1,21 @@
 from dataclasses import dataclass
 from pathlib import Path
-import uuid
+from pygls.server import LanguageServer
 from sqlmesh.core.context import Context
 import typing as t
-
-from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.linter.rule import Range
+from sqlmesh.core.model.definition import SqlModel, ExternalModel
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
-from sqlmesh.lsp.custom import ModelForRendering
+from sqlmesh.core.schema_loader import get_columns
+from sqlmesh.lsp.commands import EXTERNAL_MODEL_UPDATE_COLUMNS
+from sqlmesh.lsp.custom import ModelForRendering, TestEntry, RunTestResponse
 from sqlmesh.lsp.custom import AllModelsResponse, RenderModelEntry
+from sqlmesh.lsp.tests_ranges import get_test_ranges
+from sqlmesh.lsp.helpers import to_lsp_range
 from sqlmesh.lsp.uri import URI
 from lsprotocol import types
+from sqlmesh.utils import yaml
+from sqlmesh.utils.lineage import get_yaml_model_name_ranges
 
 
 @dataclass
@@ -35,14 +41,8 @@ class LSPContext:
     map: t.Dict[Path, t.Union[ModelTarget, AuditTarget]]
     _render_cache: t.Dict[Path, t.List[RenderModelEntry]]
     _lint_cache: t.Dict[Path, t.List[AnnotatedRuleViolation]]
-    _version_id: str
-    """
-    This is a version ID for the context. It is used to track changes to the context. It can be used to 
-    return a version number to the LSP client.
-    """
 
     def __init__(self, context: Context) -> None:
-        self._version_id = str(uuid.uuid4())
         self.context = context
         self._render_cache = {}
         self._lint_cache = {}
@@ -70,10 +70,72 @@ class LSPContext:
             **audit_map,
         }
 
-    @property
-    def version_id(self) -> str:
-        """Get the version ID for the context."""
-        return self._version_id
+    def list_workspace_tests(self) -> t.List[TestEntry]:
+        """List all tests in the workspace."""
+        tests = self.context.select_tests()
+
+        # Use a set to ensure unique URIs
+        unique_test_uris = {URI.from_path(test.path).value for test in tests}
+        test_uris: t.Dict[str, t.Dict[str, Range]] = {}
+        for uri in unique_test_uris:
+            test_ranges = get_test_ranges(URI(uri).to_path())
+            if uri not in test_uris:
+                test_uris[uri] = {}
+
+            test_uris[uri].update(test_ranges)
+
+        return [
+            TestEntry(
+                name=test.test_name,
+                uri=URI.from_path(test.path).value,
+                range=test_uris.get(URI.from_path(test.path).value, {}).get(test.test_name),
+            )
+            for test in tests
+        ]
+
+    def get_document_tests(self, uri: URI) -> t.List[TestEntry]:
+        """Get tests for a specific document.
+
+        Args:
+            uri: The URI of the file to get tests for.
+
+        Returns:
+            List of TestEntry objects for the specified document.
+        """
+        tests = self.context.select_tests(tests=[str(uri.to_path())])
+        test_ranges = get_test_ranges(uri.to_path())
+        return [
+            TestEntry(
+                name=test.test_name,
+                uri=URI.from_path(test.path).value,
+                range=test_ranges.get(test.test_name),
+            )
+            for test in tests
+        ]
+
+    def run_test(self, uri: URI, test_name: str) -> RunTestResponse:
+        """Run a specific test for a model.
+
+        Args:
+            uri: The URI of the file containing the test.
+            test_name: The name of the test to run.
+
+        Returns:
+            List of annotated rule violations from the test run.
+        """
+        path = uri.to_path()
+        results = self.context.test(
+            tests=[str(path)],
+            match_patterns=[test_name],
+        )
+        if results.testsRun != 1:
+            raise ValueError(f"Expected to run 1 test, but ran {results.testsRun} tests.")
+        if len(results.successes) == 1:
+            return RunTestResponse(success=True)
+        return RunTestResponse(
+            success=False,
+            error_message=str(results.failures[0][1]),
+        )
 
     def render_model(self, uri: URI) -> t.List[RenderModelEntry]:
         """Get rendered models for a file, using cache when available.
@@ -213,10 +275,42 @@ class LSPContext:
             if found_violation is not None and found_violation.fixes:
                 # Create code actions for each fix
                 for fix in found_violation.fixes:
-                    # Convert our Fix to LSP TextEdits
-                    text_edits = []
+                    changes: t.Dict[str, t.List[types.TextEdit]] = {}
+                    document_changes: t.List[
+                        t.Union[
+                            types.TextDocumentEdit,
+                            types.CreateFile,
+                            types.RenameFile,
+                            types.DeleteFile,
+                        ]
+                    ] = []
+
+                    for create in fix.create_files:
+                        create_uri = URI.from_path(create.path).value
+                        document_changes.append(types.CreateFile(uri=create_uri))
+                        document_changes.append(
+                            types.TextDocumentEdit(
+                                text_document=types.OptionalVersionedTextDocumentIdentifier(
+                                    uri=create_uri,
+                                    version=None,
+                                ),
+                                edits=[
+                                    types.TextEdit(
+                                        range=types.Range(
+                                            start=types.Position(line=0, character=0),
+                                            end=types.Position(line=0, character=0),
+                                        ),
+                                        new_text=create.text,
+                                    )
+                                ],
+                            )
+                        )
+
                     for edit in fix.edits:
-                        text_edits.append(
+                        uri_key = URI.from_path(edit.path).value
+                        if uri_key not in changes:
+                            changes[uri_key] = []
+                        changes[uri_key].append(
                             types.TextEdit(
                                 range=types.Range(
                                     start=types.Position(
@@ -232,16 +326,49 @@ class LSPContext:
                             )
                         )
 
-                    # Create the code action
+                    workspace_edit = types.WorkspaceEdit(
+                        changes=changes if changes else None,
+                        document_changes=document_changes if document_changes else None,
+                    )
                     code_action = types.CodeAction(
                         title=fix.title,
                         kind=types.CodeActionKind.QuickFix,
                         diagnostics=[diagnostic],
-                        edit=types.WorkspaceEdit(changes={params.text_document.uri: text_edits}),
+                        edit=workspace_edit,
                     )
                     code_actions.append(code_action)
 
         return code_actions if code_actions else None
+
+    def get_code_lenses(self, uri: URI) -> t.Optional[t.List[types.CodeLens]]:
+        models_in_file = self.map.get(uri.to_path())
+        if isinstance(models_in_file, ModelTarget):
+            models = [self.context.get_model(model) for model in models_in_file.names]
+            if any(isinstance(model, ExternalModel) for model in models):
+                code_lenses = self._get_external_model_code_lenses(uri)
+                if code_lenses:
+                    return code_lenses
+
+        return None
+
+    def _get_external_model_code_lenses(self, uri: URI) -> t.List[types.CodeLens]:
+        """Get code lenses for external models YAML files."""
+        ranges = get_yaml_model_name_ranges(uri.to_path())
+        if ranges is None:
+            return []
+        return [
+            types.CodeLens(
+                range=to_lsp_range(range),
+                command=types.Command(
+                    title="Update Columns",
+                    command=EXTERNAL_MODEL_UPDATE_COLUMNS,
+                    arguments=[
+                        name,
+                    ],
+                ),
+            )
+            for name, range in ranges.items()
+        ]
 
     def list_of_models_for_rendering(self) -> t.List[ModelForRendering]:
         """Get a list of models for rendering.
@@ -344,3 +471,74 @@ class LSPContext:
             code=diagnostic.rule.name,
             code_description=types.CodeDescription(href=rule_uri),
         )
+
+    def update_external_model_columns(self, ls: LanguageServer, uri: URI, model_name: str) -> bool:
+        """
+        Update the columns for an external model in the YAML file. Returns True if changed, False if didn't because
+        of the columns already being up to date.
+
+        In this case, the model name is the name of the external model as is defined in the YAML file, not any other version of it.
+
+        Errors still throw exceptions to be handled by the caller.
+        """
+        models = yaml.load(uri.to_path())
+        if not isinstance(models, list):
+            raise ValueError(
+                f"Expected a list of models in {uri.to_path()}, but got {type(models).__name__}"
+            )
+
+        existing_model = next((model for model in models if model.get("name") == model_name), None)
+        if existing_model is None:
+            raise ValueError(f"Could not find model {model_name} in {uri.to_path()}")
+
+        existing_model_columns = existing_model.get("columns")
+
+        # Get the adapter and fetch columns
+        adapter = self.context.engine_adapter
+        # Get columns for the model
+        new_columns = get_columns(
+            adapter=adapter,
+            dialect=self.context.config.model_defaults.dialect,
+            table=model_name,
+            strict=True,
+        )
+        # Compare existing columns and matching types and if they are the same, do not update
+        if existing_model_columns is not None:
+            if existing_model_columns == new_columns:
+                return False
+
+        # Model index to update
+        model_index = next(
+            (i for i, model in enumerate(models) if model.get("name") == model_name), None
+        )
+        if model_index is None:
+            raise ValueError(f"Could not find model {model_name} in {uri.to_path()}")
+
+        # Get end of the file to set the edit range
+        with open(uri.to_path(), "r", encoding="utf-8") as file:
+            read_file = file.read()
+
+        end_line = read_file.count("\n")
+        end_character = len(read_file.splitlines()[-1]) if end_line > 0 else 0
+
+        models[model_index]["columns"] = new_columns
+        edit = types.TextDocumentEdit(
+            text_document=types.OptionalVersionedTextDocumentIdentifier(
+                uri=uri.value,
+                version=None,
+            ),
+            edits=[
+                types.TextEdit(
+                    range=types.Range(
+                        start=types.Position(line=0, character=0),
+                        end=types.Position(
+                            line=end_line,
+                            character=end_character,
+                        ),
+                    ),
+                    new_text=yaml.dump(models),
+                )
+            ],
+        )
+        ls.apply_edit(types.WorkspaceEdit(document_changes=[edit]))
+        return True

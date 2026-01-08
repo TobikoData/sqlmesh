@@ -121,11 +121,12 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
         )
         sql = query.sql(pretty=True, dialect=model.dialect)
 
+    path = model._path
     return models.Model(
         name=model.name,
         fqn=model.fqn,
-        path=str(model._path.absolute().relative_to(context.path).as_posix()),
-        full_path=str(model._path.absolute().as_posix()),
+        path=str(path.absolute().relative_to(context.path).as_posix()) if path else None,
+        full_path=str(path.absolute().as_posix()) if path else None,
         dialect=dialect,
         columns=columns,
         details=details,

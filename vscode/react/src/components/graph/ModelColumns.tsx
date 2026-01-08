@@ -1,11 +1,4 @@
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-  useCallback,
-  Fragment,
-  useRef,
-} from 'react'
+import React, { useEffect, useMemo, useCallback } from 'react'
 import { Handle, Position, useUpdateNodeInternals } from 'reactflow'
 import 'reactflow/dist/base.css'
 import { mergeLineageWithColumns, mergeConnections } from './help'
@@ -15,24 +8,16 @@ import {
   isFalse,
   isNil,
   isNotNil,
-  toID,
   truncate,
 } from '@/utils/index'
-import { EnumSide, type Side } from './types'
+import { toID, type PartialColumnHandleId, type Side } from './types'
 import { NoSymbolIcon } from '@heroicons/react/24/solid'
-import {
-  InformationCircleIcon,
-  ClockIcon,
-  ExclamationCircleIcon,
-} from '@heroicons/react/24/outline'
+import { ClockIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import {
   type ColumnDescription,
-  type Column,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   type LineageColumn,
-  type LineageColumnSource,
-  type LineageColumnExpression,
 } from '@/api/client'
 import Loading from '@/components/loading/Loading'
 import Spinner from '@/components/logo/Spinner'
@@ -42,30 +27,28 @@ import {
   type ModelSQLMeshModel,
 } from '@/domain/sqlmesh-model'
 import { useLineageFlow } from './context'
-import { Popover, Transition } from '@headlessui/react'
 import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
 import type { Lineage } from '@/domain/lineage'
-import type { ModelName } from '@/domain/models'
+import type { Column, ColumnName } from '@/domain/column'
+import type { ModelEncodedFQN } from '@/domain/models'
 
-export default function ModelColumns({
+export function ModelColumns({
   nodeId,
   columns,
   disabled,
   className,
-  limit = 5,
+  limit,
   withHandles = false,
-  withSource = false,
   withDescription = true,
   maxHeight = '50vh',
 }: {
-  nodeId: string
+  nodeId: ModelEncodedFQN
   columns: Column[]
   disabled?: boolean
   className?: string
-  limit?: number
+  limit: number
   withHandles?: boolean
-  withSource?: boolean
   withDescription?: boolean
   maxHeight?: string
 }): JSX.Element {
@@ -142,25 +125,23 @@ export default function ModelColumns({
   }
 
   const isSelectManually = useCallback(
-    function isSelectManually(columnName: string): boolean {
+    function isSelectManually(columnName: ColumnName): boolean {
       if (isNil(manuallySelectedColumn)) return false
 
       const [selectedModel, selectedColumn] = manuallySelectedColumn
 
       if (isNil(selectedModel) || isNil(selectedColumn)) return false
 
-      return selectedModel.name === nodeId && selectedColumn.name === columnName
+      return selectedModel.fqn === nodeId && selectedColumn.name === columnName
     },
     [nodeId, manuallySelectedColumn],
   )
 
   const removeEdges = useCallback(
-    function removeEdges(columnId: string): void {
+    function removeEdges(columnId: PartialColumnHandleId): void {
       const visited = new Set<string>()
 
-      removeActiveEdges(
-        walk(columnId, EnumSide.Left).concat(walk(columnId, EnumSide.Right)),
-      )
+      removeActiveEdges(walk(columnId, 'left').concat(walk(columnId, 'right')))
 
       if (connections.size === 0 && isNotNil(lineageCache)) {
         setLineage(lineageCache)
@@ -181,12 +162,12 @@ export default function ModelColumns({
         return edges
           .map(edge =>
             [
-              side === EnumSide.Left
-                ? [toID(EnumSide.Left, id), toID(EnumSide.Right, edge)]
-                : [toID(EnumSide.Left, edge), toID(EnumSide.Right, id)],
+              side === 'left'
+                ? [toID('left', id), toID('right', edge)]
+                : [toID('left', edge), toID('right', id)],
             ].concat(walk(edge, side)),
           )
-          .flat() as Array<[string, string]>
+          .flat() as Array<[PartialColumnHandleId, PartialColumnHandleId]>
       }
     },
     [removeActiveEdges, connections],
@@ -207,7 +188,7 @@ export default function ModelColumns({
               id={toID(nodeId, column.name)}
               nodeId={nodeId}
               column={column}
-              disabled={true}
+              disabled={disabled}
               updateColumnLineage={updateColumnLineage}
               removeEdges={removeEdges}
               isActive={true}
@@ -224,17 +205,6 @@ export default function ModelColumns({
               }
               withHandles={withHandles}
               withDescription={withDescription}
-              expression={
-                withSource
-                  ? getColumnFromLineage(lineage, nodeId, column.name)
-                      ?.expression
-                  : undefined
-              }
-              source={
-                withSource
-                  ? getColumnFromLineage(lineage, nodeId, column.name)?.source
-                  : undefined
-              }
               isEmpty={
                 isNotNil(getColumnFromLineage(lineage, nodeId, column.name)) &&
                 Object.keys(
@@ -273,17 +243,6 @@ export default function ModelColumns({
               }
               withHandles={withHandles}
               withDescription={withDescription}
-              expression={
-                withSource
-                  ? getColumnFromLineage(lineage, nodeId, column.name)
-                      ?.expression
-                  : undefined
-              }
-              source={
-                withSource
-                  ? getColumnFromLineage(lineage, nodeId, column.name)?.source
-                  : undefined
-              }
               isEmpty={
                 isNotNil(getColumnFromLineage(lineage, nodeId, column.name)) &&
                 Object.keys(
@@ -330,17 +289,6 @@ export default function ModelColumns({
                 }
                 withHandles={withHandles}
                 withDescription={withDescription}
-                expression={
-                  withSource
-                    ? getColumnFromLineage(lineage, nodeId, item.name)
-                        ?.expression
-                    : undefined
-                }
-                source={
-                  withSource
-                    ? getColumnFromLineage(lineage, nodeId, item.name)?.source
-                    : undefined
-                }
                 isEmpty={
                   isNotNil(getColumnFromLineage(lineage, nodeId, item.name)) &&
                   Object.keys(
@@ -373,11 +321,9 @@ function ModelColumn({
   selectManually,
   withHandles = false,
   withDescription = true,
-  source,
-  expression,
 }: {
-  id: string
-  nodeId: string
+  id: PartialColumnHandleId
+  nodeId: ModelEncodedFQN
   column: Column
   disabled?: boolean
   isActive?: boolean
@@ -385,13 +331,11 @@ function ModelColumn({
   hasRight?: boolean
   isEmpty?: boolean
   withHandles?: boolean
-  source?: LineageColumnSource
-  expression?: LineageColumnExpression
   withDescription?: boolean
   updateColumnLineage: (
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
-  removeEdges: (columnId: string) => void
+  removeEdges: (columnId: PartialColumnHandleId) => void
   selectManually?: React.Dispatch<
     React.SetStateAction<
       [ModelSQLMeshModel<InitialSQLMeshModel>, Column] | undefined
@@ -447,12 +391,6 @@ function ModelColumn({
             disabled={disabled}
             className="px-2"
           >
-            {isNotNil(source) && (
-              <ColumnSource
-                source={source}
-                expression={expression}
-              />
-            )}
             <ColumnStatus
               isFetching={isFetching}
               isError={isError}
@@ -514,8 +452,8 @@ function ColumnHandles({
   children,
   className,
 }: {
-  nodeId: string
-  id: string
+  nodeId: ModelEncodedFQN
+  id: PartialColumnHandleId
   children: React.ReactNode
   className?: string
   hasLeft?: boolean
@@ -542,7 +480,7 @@ function ColumnHandles({
       {hasLeft && (
         <Handle
           type="target"
-          id={toID(EnumSide.Left, id)}
+          id={toID('left', id)}
           position={Position.Left}
           isConnectable={false}
           className="w-2 h-2 rounded-full"
@@ -552,7 +490,7 @@ function ColumnHandles({
       {hasRight && (
         <Handle
           type="source"
-          id={toID(EnumSide.Right, id)}
+          id={toID('right', id)}
           position={Position.Right}
           isConnectable={false}
           className="w-2 h-2 rounded-full"
@@ -570,19 +508,13 @@ function ColumnDisplay({
   disabled = false,
   withDescription = true,
 }: {
-  columnName: string
+  columnName: ColumnName
   columnType: string
   columnDescription?: ColumnDescription
   disabled?: boolean
   withDescription?: boolean
   className?: string
 }): JSX.Element {
-  let decodedColumnName = columnName
-
-  try {
-    decodedColumnName = decodeURI(columnName)
-  } catch {}
-
   return (
     <div
       className={clsx(
@@ -593,7 +525,7 @@ function ColumnDisplay({
     >
       <div className="w-full flex justify-between items-center">
         <span
-          title={decodedColumnName}
+          title={columnName}
           className={clsx('flex items-center', disabled && 'opacity-50')}
         >
           {disabled && (
@@ -602,7 +534,7 @@ function ColumnDisplay({
               className="w-3 h-3 mr-2"
             />
           )}
-          {truncate(decodedColumnName, 50, 20)}
+          {truncate(columnName, 50, 20)}
         </span>
         <span
           title={columnType}
@@ -644,94 +576,10 @@ function ColumnStatus({
   )
 }
 
-function ColumnSource({
-  // source,
-  expression,
-}: {
-  source: LineageColumnSource
-  expression?: LineageColumnExpression
-}): JSX.Element {
-  const elSourceContainer = useRef<HTMLDivElement>(null)
-  // const { handleClickModel } = useLineageFlow()
-
-  // const modelExtensions = useSQLMeshModelExtensions(undefined, model => {
-  //   handleClickModel?.(model.name)
-  // })
-
-  const [isShowing, setIsShowing] = useState(false)
-
-  useEffect(() => {
-    if (isShowing) {
-      scrollToExpression()
-    }
-  }, [isShowing, expression])
-
-  function scrollToExpression(): void {
-    // NOTE: This is a hack to scroll to the expression
-    // and should be replaced with a code mirror extension
-    setTimeout(() => {
-      const lines = Array.from(
-        elSourceContainer.current?.querySelector('[role="textbox"].cm-content')
-          ?.children ?? [],
-      )
-
-      for (const node of lines) {
-        if (node.textContent?.trim() === expression) {
-          node.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest',
-          })
-          setTimeout(() => node.classList.add('sqlmesh-expression'), 500)
-          return
-        }
-      }
-    }, 300)
-  }
-
-  return (
-    <Popover
-      onMouseLeave={() => setIsShowing(false)}
-      onMouseOver={() => setIsShowing(true)}
-      className="flex"
-    >
-      <InformationCircleIcon
-        className={clsx(
-          'inline-block mr-3 w-4 h-4',
-          isShowing ? 'text-inherit' : 'text-prose',
-        )}
-      />
-      <Transition
-        show={isShowing}
-        as={Fragment}
-        enter="transition ease-out duration-200"
-        enterFrom="opacity-0 -translate-y-[40%]"
-        enterTo="opacity-100 -translate-y-[50%]"
-        leave="transition ease-in duration-150"
-        leaveFrom="opacity-100 -translate-y-[50%]"
-        leaveTo="opacity-0 -translate-y-[40%]"
-      >
-        <Popover.Panel
-          ref={elSourceContainer}
-          className="fixed -translate-x-[100%] -translate-y-[50%] z-10 content transform cursor-pointer rounded-lg bg-theme border-4 border-neutral-200 dark:border-neutral-600"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* <CodeEditorDefault
-            content={source as string}
-            type={EnumFileExtensions.SQL}
-            className="w-full h-[25rem] text-xs rounded-lg scrollbar scrollbar--vertical scrollbar--horizontal overflow-auto max-w-[40rem]"
-            extensions={modelExtensions}
-          /> */}
-        </Popover.Panel>
-      </Transition>
-    </Popover>
-  )
-}
-
 function getColumnFromLineage(
   lineage: Record<string, Lineage>,
   nodeId: string,
   columnName: string,
 ): LineageColumn | undefined {
-  return lineage?.[nodeId]?.columns?.[encodeURI(columnName) as ModelName]
+  return lineage?.[nodeId]?.columns?.[columnName as ColumnName]
 }

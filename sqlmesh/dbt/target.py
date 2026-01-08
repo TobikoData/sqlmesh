@@ -5,7 +5,7 @@ import typing as t
 from pathlib import Path
 
 from dbt.adapters.base import BaseRelation, Column
-from pydantic import Field
+from pydantic import Field, AliasChoices
 
 from sqlmesh.core.console import get_console
 from sqlmesh.core.config.connection import (
@@ -29,6 +29,7 @@ from sqlmesh.core.model import (
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
 )
+from sqlmesh.core.schema_diff import NestedSupport
 from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.util import DBT_VERSION
@@ -44,11 +45,44 @@ IncrementalKind = t.Union[
 
 # We only serialize a subset of fields in order to avoid persisting sensitive information
 SERIALIZABLE_FIELDS = {
-    "type",
+    # core
     "name",
-    "database",
     "schema_",
+    "type",
+    "threads",
+    # snowflake
+    "database",
+    "warehouse",
+    "user",
+    "role",
+    "account",
+    # postgres/redshift
+    "dbname",
+    "host",
+    "port",
+    # bigquery
+    "project",
+    "dataset",
 }
+
+SCHEMA_DIFFER_OVERRIDES = {
+    "schema_differ_overrides": {
+        "treat_alter_data_type_as_destructive": True,
+        "nested_support": NestedSupport.IGNORE,
+    }
+}
+
+
+def with_schema_differ_overrides(
+    func: t.Callable[..., ConnectionConfig],
+) -> t.Callable[..., ConnectionConfig]:
+    """Decorator that merges default config with kwargs."""
+
+    def wrapper(self: TargetConfig, **kwargs: t.Any) -> ConnectionConfig:
+        merged_kwargs = {**SCHEMA_DIFFER_OVERRIDES, **kwargs}
+        return func(self, **merged_kwargs)
+
+    return wrapper
 
 
 class TargetConfig(abc.ABC, DbtConfig):
@@ -83,8 +117,26 @@ class TargetConfig(abc.ABC, DbtConfig):
             The configuration of the provided profile target
         """
         db_type = data["type"]
-        if config_class := TARGET_TYPE_TO_CONFIG_CLASS.get(db_type):
-            return config_class(**data)
+        if db_type == "databricks":
+            return DatabricksConfig(**data)
+        if db_type == "duckdb":
+            return DuckDbConfig(**data)
+        if db_type == "postgres":
+            return PostgresConfig(**data)
+        if db_type == "redshift":
+            return RedshiftConfig(**data)
+        if db_type == "snowflake":
+            return SnowflakeConfig(**data)
+        if db_type == "bigquery":
+            return BigQueryConfig(**data)
+        if db_type == "sqlserver":
+            return MSSQLConfig(**data)
+        if db_type == "trino":
+            return TrinoConfig(**data)
+        if db_type == "clickhouse":
+            return ClickhouseConfig(**data)
+        if db_type == "athena":
+            return AthenaConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -92,12 +144,9 @@ class TargetConfig(abc.ABC, DbtConfig):
         """The default incremental strategy for the db"""
         raise NotImplementedError
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""
-        raise NotImplementedError
-
-    @classmethod
-    def from_sqlmesh(cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]) -> "TargetConfig":
         raise NotImplementedError
 
     def attribute_dict(self) -> AttributeDict:
@@ -177,6 +226,7 @@ class DuckDbConfig(TargetConfig):
 
         return DuckDBRelation
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         if self.extensions is not None:
             kwargs["extensions"] = self.extensions
@@ -189,18 +239,6 @@ class DuckDbConfig(TargetConfig):
         return DuckDBConnectionConfig(
             database=self.path,
             concurrent_tasks=1,
-            **kwargs,
-        )
-
-    @classmethod
-    def from_sqlmesh(cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]) -> "DuckDbConfig":
-        if not isinstance(config, DuckDBConnectionConfig):
-            raise ValueError(f"Incorrect config type: {type(config)}")
-
-        return cls(
-            path=config.database,
-            extensions=config.extensions,
-            settings=config.connector_config,
             **kwargs,
         )
 
@@ -286,6 +324,7 @@ class SnowflakeConfig(TargetConfig):
 
         return SnowflakeColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return SnowflakeConnectionConfig(
             user=self.user,
@@ -329,7 +368,7 @@ class PostgresConfig(TargetConfig):
     type: t.Literal["postgres"] = "postgres"
     host: str
     user: str
-    password: str
+    password: str = Field(validation_alias=AliasChoices("pass", "password"))
     port: int
     dbname: str
     keepalives_idle: t.Optional[int] = None
@@ -359,6 +398,7 @@ class PostgresConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return PostgresConnectionConfig(
             host=self.host,
@@ -371,28 +411,6 @@ class PostgresConfig(TargetConfig):
             connect_timeout=self.connect_timeout,
             role=self.role,
             sslmode=self.sslmode,
-            **kwargs,
-        )
-
-    @classmethod
-    def from_sqlmesh(
-        cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]
-    ) -> "PostgresConfig":
-        if not isinstance(config, PostgresConnectionConfig):
-            raise ValueError(f"Incorrect config type: {type(config)}")
-
-        return cls(
-            schema="public",
-            host=config.host,
-            user=config.user,
-            password=config.password,
-            port=config.port,
-            dbname=config.database,
-            keepalives_idle=config.keepalives_idle,
-            threads=config.concurrent_tasks,
-            connect_timeout=config.connect_timeout,
-            role=config.role,
-            sslmode=config.sslmode,
             **kwargs,
         )
 
@@ -417,7 +435,7 @@ class RedshiftConfig(TargetConfig):
     type: t.Literal["redshift"] = "redshift"
     host: str
     user: str
-    password: str
+    password: str = Field(validation_alias=AliasChoices("pass", "password"))
     port: int
     dbname: str
     connect_timeout: t.Optional[int] = None
@@ -454,6 +472,7 @@ class RedshiftConfig(TargetConfig):
             return RedshiftColumn
         return super(RedshiftConfig, cls).column_class
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return RedshiftConnectionConfig(
             user=self.user,
@@ -504,6 +523,7 @@ class DatabricksConfig(TargetConfig):
 
         return DatabricksColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return DatabricksConnectionConfig(
             server_hostname=self.host,
@@ -581,12 +601,17 @@ class BigQueryConfig(TargetConfig):
         if not isinstance(data, dict):
             return data
 
-        data["schema"] = data.get("schema") or data.get("dataset")
-        if not data["schema"]:
+        # dbt treats schema and dataset interchangeably
+        schema = data.get("schema") or data.get("dataset")
+        if not schema:
             raise ConfigError("Either schema or dataset must be set")
-        data["database"] = data.get("database") or data.get("project")
-        if not data["database"]:
+        data["dataset"] = data["schema"] = schema
+
+        # dbt treats database and project interchangeably
+        database = data.get("database") or data.get("project")
+        if not database:
             raise ConfigError("Either database or project must be set")
+        data["database"] = data["project"] = database
 
         return data
 
@@ -605,6 +630,7 @@ class BigQueryConfig(TargetConfig):
 
         return BigQueryColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         job_retries = self.job_retries if self.job_retries is not None else self.retries
         job_execution_timeout_seconds = (
@@ -634,39 +660,6 @@ class BigQueryConfig(TargetConfig):
             job_retry_deadline_seconds=self.job_retry_deadline_seconds,
             priority=self.priority,
             maximum_bytes_billed=self.maximum_bytes_billed,
-            **kwargs,
-        )
-
-    @classmethod
-    def from_sqlmesh(
-        cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]
-    ) -> "BigQueryConfig":
-        if not isinstance(config, BigQueryConnectionConfig):
-            raise ValueError(f"Incorrect config type: {type(config)}")
-
-        return cls(
-            schema="__unknown__",
-            method=config.method,
-            project=config.project,
-            execution_project=config.execution_project,
-            quota_project=config.quota_project,
-            location=config.location,
-            threads=config.concurrent_tasks,
-            keyfile=config.keyfile,
-            keyfile_json=config.keyfile_json,
-            token=config.token,
-            refresh_token=config.refresh_token,
-            client_id=config.client_id,
-            client_secret=config.client_secret,
-            token_uri=config.token_uri,
-            scopes=config.scopes,
-            impersonated_service_account=config.impersonated_service_account,
-            job_creation_timeout_seconds=config.job_creation_timeout_seconds,
-            job_execution_timeout_seconds=config.job_execution_timeout_seconds,
-            job_retries=config.job_retries,
-            job_retry_deadline_seconds=config.job_retry_deadline_seconds,
-            priority=config.priority,
-            maximum_bytes_billed=config.maximum_bytes_billed,
             **kwargs,
         )
 
@@ -778,6 +771,7 @@ class MSSQLConfig(TargetConfig):
     def dialect(self) -> str:
         return "tsql"
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return MSSQLConnectionConfig(
             host=self.host,
@@ -892,6 +886,7 @@ class TrinoConfig(TargetConfig):
 
         return TrinoColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return TrinoConnectionConfig(
             method=self._method_to_auth_enum[self.method],
@@ -1002,6 +997,7 @@ class ClickhouseConfig(TargetConfig):
 
         return ClickHouseColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return ClickhouseConnectionConfig(
             host=self.host,
@@ -1085,6 +1081,7 @@ class AthenaConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "insert_overwrite"
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return AthenaConnectionConfig(
             type="athena",

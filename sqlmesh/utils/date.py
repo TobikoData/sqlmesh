@@ -253,8 +253,12 @@ def date_dict(
 
     for prefix, time_like in prefixes:
         dt = to_datetime(time_like)
+        dtntz = dt.replace(tzinfo=None)
+
         millis = to_timestamp(time_like)
+
         kwargs[f"{prefix}_dt"] = dt
+        kwargs[f"{prefix}_dtntz"] = dtntz
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
         kwargs[f"{prefix}_ts"] = to_ts(dt)
@@ -262,6 +266,7 @@ def date_dict(
         kwargs[f"{prefix}_epoch"] = millis / 1000
         kwargs[f"{prefix}_millis"] = millis
         kwargs[f"{prefix}_hour"] = dt.hour
+
     return kwargs
 
 
@@ -336,6 +341,13 @@ def make_exclusive(time: TimeLike) -> datetime:
     if is_date(time):
         dt = dt + timedelta(days=1)
     return dt
+
+
+def make_ts_exclusive(time: TimeLike, dialect: DialectType) -> datetime:
+    ts = to_datetime(time)
+    if dialect == "tsql":
+        return to_utc_timestamp(ts) - pd.Timedelta(1, unit="ns")
+    return ts + timedelta(microseconds=1)
 
 
 def to_utc_timestamp(time: datetime) -> pd.Timestamp:
@@ -432,7 +444,7 @@ def to_time_column(
 
 
 def pandas_timestamp_to_pydatetime(
-    df: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
+    df: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
 ) -> pd.DataFrame:
     import pandas as pd
     from pandas.api.types import is_datetime64_any_dtype  # type: ignore

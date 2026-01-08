@@ -3,6 +3,7 @@ import pathlib
 import re
 from pathlib import Path
 from unittest import mock
+import typing as t
 
 import pytest
 from pytest_mock import MockerFixture
@@ -17,9 +18,9 @@ from sqlmesh.core.config import (
     MotherDuckConnectionConfig,
     BuiltInSchedulerConfig,
     EnvironmentSuffixTarget,
+    TableNamingConvention,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
-from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
@@ -30,10 +31,11 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
-from sqlmesh.core.loader import MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils import yaml
+from sqlmesh.dbt.loader import DbtLoader
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -295,12 +297,10 @@ def test_load_config_from_env():
         {
             "SQLMESH__GATEWAY__CONNECTION__TYPE": "duckdb",
             "SQLMESH__GATEWAY__CONNECTION__DATABASE": "test_db",
-            "SQLMESH__FEATURE_FLAGS__DBT__SCD_TYPE_2_SUPPORT": "false",
         },
     ):
         assert Config.parse_obj(load_config_from_env()) == Config(
             gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
-            feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
         )
 
 
@@ -501,35 +501,6 @@ def test_physical_schema_mapping_mutually_exclusive_with_physical_schema_overrid
         Config(physical_schema_override={"foo": "bar"}, physical_schema_mapping={"^foo$": "bar"})  # type: ignore
 
 
-def test_load_feature_flag(tmp_path_factory):
-    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w", encoding="utf-8") as fd:
-        fd.write(
-            """
-gateways:
-    duckdb_gateway:
-        connection:
-            type: duckdb
-model_defaults:
-    dialect: bigquery
-feature_flags:
-    dbt:
-        scd_type_2_support: false
-        """
-        )
-
-    assert load_config_from_paths(
-        Config,
-        project_paths=[config_path],
-    ) == Config(
-        gateways={
-            "duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig()),
-        },
-        model_defaults=ModelDefaultsConfig(dialect="bigquery"),
-        feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
-    )
-
-
 def test_load_alternative_config_type(yaml_config_path: Path, python_config_path: Path):
     class DerivedConfig(Config):
         pass
@@ -674,6 +645,65 @@ model_defaults:
     assert config.model_defaults.audits[1][1]["column"].this.this == "id"
     assert type(config.model_defaults.audits[1][1]["threshold"]) == exp.Literal
     assert config.model_defaults.audits[1][1]["threshold"].this == "1000"
+
+
+def test_load_model_defaults_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '10GB'
+        - CREATE TEMP TABLE temp_data AS SELECT 1 as id
+    post_statements:
+        - DROP TABLE IF EXISTS temp_data
+        - ANALYZE @this_model
+        - SET memory_limit = '5GB'
+    on_virtual_update:
+        - UPDATE stats_table SET last_update = CURRENT_TIMESTAMP
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.model_defaults.pre_statements is not None
+    assert len(config.model_defaults.pre_statements) == 2
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[0]), exp.Set)
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[1]), exp.Create)
+
+    assert config.model_defaults.post_statements is not None
+    assert len(config.model_defaults.post_statements) == 3
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[0]), exp.Drop)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[1]), exp.Analyze)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[2]), exp.Set)
+
+    assert config.model_defaults.on_virtual_update is not None
+    assert len(config.model_defaults.on_virtual_update) == 1
+    assert isinstance(exp.maybe_parse(config.model_defaults.on_virtual_update[0]), exp.Update)
+
+
+def test_load_model_defaults_validation_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements_wrong.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - 313
+        """
+        )
+
+    with pytest.raises(TypeError, match=r"expected str instance, int found"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
 
 
 def test_scheduler_config(tmp_path_factory):
@@ -1035,32 +1065,6 @@ def test_config_complex_types_supplied_as_json_strings_from_env(tmp_path: Path) 
         assert conn.keyfile_json == {"foo": "bar"}
 
 
-def test_loader_for_migrated_dbt_project(tmp_path: Path):
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text("""
-    gateways:
-      bigquery:
-        connection:
-          type: bigquery
-          project: unit-test
-
-    default_gateway: bigquery
-
-    model_defaults:
-      dialect: bigquery
-
-    variables:
-      __dbt_project_name__: sushi
-""")
-
-    config = load_config_from_paths(
-        Config,
-        project_paths=[config_path],
-    )
-
-    assert config.loader == MigratedDbtProjectLoader
-
-
 def test_config_user_macro_function(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text("""
@@ -1238,6 +1242,66 @@ SQLMESH__MODEL_DEFAULTS__DIALECT="athena"
     )
 
 
+def test_load_config_dotenv_directory_not_loaded(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("config_with_env_dir")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: test.db
+model_defaults:
+  dialect: duckdb
+"""
+        )
+
+    # Create a .env directory instead of a file  to simulate a Python virtual environment
+    env_dir = main_dir / ".env"
+    env_dir.mkdir()
+    (env_dir / "pyvenv.cfg").touch()
+
+    # Also create a regular .env file in another project directory
+    other_dir = tmp_path_factory.mktemp("config_with_env_file")
+    other_config_path = other_dir / "config.yaml"
+    with open(other_config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: test.db
+model_defaults:
+  dialect: duckdb
+"""
+        )
+
+    env_file = other_dir / ".env"
+    with open(env_file, "w", encoding="utf-8") as fd:
+        fd.write('TEST_ENV_VAR="from_dotenv_file"')
+
+    # Test that the .env directory doesn't cause an error and is skipped
+    with mock.patch.dict(os.environ, {}, clear=True):
+        load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+        )
+        # Should succeed without loading any env vars from the directory
+        assert "TEST_ENV_VAR" not in os.environ
+
+    # Test that a real .env file is still loaded properly
+    with mock.patch.dict(os.environ, {}, clear=True):
+        load_configs(
+            "config",
+            Config,
+            paths=[other_dir],
+        )
+        # The env var should be loaded from the file
+        assert os.environ.get("TEST_ENV_VAR") == "from_dotenv_file"
+
+
 def test_load_yaml_config_custom_dotenv_path(tmp_path_factory):
     main_dir = tmp_path_factory.mktemp("yaml_config_2")
     config_path = main_dir / "config.yaml"
@@ -1293,3 +1357,127 @@ SQLMESH__MODEL_DEFAULTS__DIALECT="postgres"
         default_gateway="test_gateway",
         model_defaults=ModelDefaultsConfig(dialect="postgres"),
     )
+
+
+@pytest.mark.parametrize(
+    "convention_str, expected",
+    [
+        (None, TableNamingConvention.SCHEMA_AND_TABLE),
+        ("schema_and_table", TableNamingConvention.SCHEMA_AND_TABLE),
+        ("table_only", TableNamingConvention.TABLE_ONLY),
+        ("hash_md5", TableNamingConvention.HASH_MD5),
+    ],
+)
+def test_physical_table_naming_convention(
+    convention_str: t.Optional[str], expected: t.Optional[TableNamingConvention], tmp_path: Path
+):
+    config_part = f"physical_table_naming_convention: {convention_str}" if convention_str else ""
+    (tmp_path / "config.yaml").write_text(f"""
+gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+model_defaults:
+  dialect: duckdb
+{config_part}
+    """)
+
+    config = load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+    assert config.physical_table_naming_convention == expected
+
+
+def test_load_configs_includes_sqlmesh_yaml(tmp_path: Path):
+    for extension in ("yaml", "yml"):
+        config_file = tmp_path / f"sqlmesh.{extension}"
+        config_file.write_text("""
+model_defaults:
+  start: '2023-04-05'
+  dialect: bigquery""")
+
+        configs = load_configs(config=None, config_type=Config, paths=[tmp_path])
+        assert len(configs) == 1
+
+        config: Config = list(configs.values())[0]
+
+        assert config.model_defaults.start == "2023-04-05"
+        assert config.model_defaults.dialect == "bigquery"
+
+        config_file.unlink()
+
+
+def test_load_configs_without_main_connection(tmp_path: Path):
+    # this is for DBT projects where the main connection is defined in profiles.yml
+    # but we also need to be able to specify the sqlmesh state connection without editing any DBT files
+    # and without also duplicating the main connection
+    config_file = tmp_path / "sqlmesh.yaml"
+    with config_file.open("w") as f:
+        yaml.dump(
+            {
+                "gateways": {"": {"state_connection": {"type": "duckdb", "database": "state.db"}}},
+                "model_defaults": {"dialect": "duckdb", "start": "2020-01-01"},
+            },
+            f,
+        )
+
+    configs = list(load_configs(config=None, config_type=Config, paths=[tmp_path]).values())
+    assert len(configs) == 1
+
+    config = configs[0]
+    state_connection_config = config.get_state_connection()
+    assert isinstance(state_connection_config, DuckDBConnectionConfig)
+    assert state_connection_config.database == "state.db"
+
+
+def test_load_configs_in_dbt_project_without_config_py(tmp_path: Path):
+    # this is when someone either:
+    # - inits a dbt project for sqlmesh, which creates a sqlmesh.yaml file
+    # - uses the sqlmesh_dbt cli for the first time, which runs init if the config doesnt exist, which creates a config
+    # when in pure yaml mode, sqlmesh should be able to auto-detect the presence of DBT and select the DbtLoader instead
+    # of the main loader
+    (tmp_path / "dbt_project.yml").write_text("""
+name: jaffle_shop
+    """)
+
+    (tmp_path / "profiles.yml").write_text("""
+jaffle_shop:
+
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'jaffle_shop.duckdb'
+    """)
+
+    (tmp_path / "sqlmesh.yaml").write_text("""
+gateways:
+  dev:
+    state_connection:
+      type: duckdb
+      database: state.db
+model_defaults:
+  start: '2020-01-01'
+""")
+
+    configs = list(load_configs(config=None, config_type=Config, paths=[tmp_path]).values())
+    assert len(configs) == 1
+
+    config = configs[0]
+    assert config.loader == DbtLoader
+
+    assert list(config.gateways) == ["dev"]
+
+    # main connection
+    connection_config = config.get_connection()
+    assert connection_config
+    assert isinstance(connection_config, DuckDBConnectionConfig)
+    assert connection_config.database == "jaffle_shop.duckdb"  # from dbt profiles.yml
+
+    # state connection
+    state_connection_config = config.get_state_connection()
+    assert state_connection_config
+    assert isinstance(state_connection_config, DuckDBConnectionConfig)
+    assert state_connection_config.database == "state.db"  # from sqlmesh.yaml
+
+    # model_defaults
+    assert config.model_defaults.dialect == "duckdb"  # from dbt profiles.yml
+    assert config.model_defaults.start == "2020-01-01"  # from sqlmesh.yaml

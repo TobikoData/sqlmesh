@@ -8,6 +8,7 @@ from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.dbt.relation import RelationType
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 
@@ -35,6 +36,7 @@ class SourceConfig(GeneralConfig):
     # DBT configuration fields
     name: str = ""
     source_name_: str = Field("", alias="source_name")
+    fqn_: t.List[str] = Field(default_factory=list, alias="fqn")
     database: t.Optional[str] = None
     schema_: t.Optional[str] = Field(None, alias="schema")
     identifier: t.Optional[str] = None
@@ -46,6 +48,7 @@ class SourceConfig(GeneralConfig):
     external: t.Optional[t.Dict[str, t.Any]] = {}
     source_meta: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
+    event_time: t.Optional[str] = None
 
     _canonical_name: t.Optional[str] = None
 
@@ -62,6 +65,10 @@ class SourceConfig(GeneralConfig):
     def config_name(self) -> str:
         return f"{self.source_name_}.{self.name}"
 
+    @property
+    def fqn(self) -> str:
+        return ".".join(self.fqn_)
+
     def canonical_name(self, context: DbtContext) -> str:
         if self._canonical_name is None:
             source = context.get_callable_macro("source")
@@ -72,7 +79,7 @@ class SourceConfig(GeneralConfig):
                 relation = source(self.source_name_, self.name)
             except Exception as e:
                 raise ConfigError(
-                    f"'source' macro failed for '{self.config_name}' with exeception '{e}'."
+                    f"'source' macro failed for '{self.config_name}' with exception '{e}'."
                 )
 
             relation = relation.quote(
@@ -93,6 +100,11 @@ class SourceConfig(GeneralConfig):
         )
         if external_location:
             extras["external"] = external_location.replace("{name}", self.table_name)
+
+        if DBT_VERSION >= (1, 9, 0) and self.event_time:
+            extras["event_time_filter"] = {
+                "field_name": self.event_time,
+            }
 
         return AttributeDict(
             {

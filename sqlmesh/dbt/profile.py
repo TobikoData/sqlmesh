@@ -60,7 +60,7 @@ class Profile:
             if not context.profile_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")
 
-        profile_filepath = cls._find_profile(context.project_root)
+        profile_filepath = cls._find_profile(context.project_root, context.profiles_dir)
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found.")
 
@@ -68,8 +68,8 @@ class Profile:
         return Profile(profile_filepath, target_name, target)
 
     @classmethod
-    def _find_profile(cls, project_root: Path) -> t.Optional[Path]:
-        dir = os.environ.get("DBT_PROFILES_DIR", "")
+    def _find_profile(cls, project_root: Path, profiles_dir: t.Optional[Path]) -> t.Optional[Path]:
+        dir = os.environ.get("DBT_PROFILES_DIR", profiles_dir or "")
         path = Path(project_root, dir, cls.PROFILE_FILE)
         if path.exists():
             return path
@@ -101,8 +101,10 @@ class Profile:
             target_name = context.render(project_data.get("target"))
 
         if target_name not in outputs:
+            target_names = "\n".join(f"- {name}" for name in outputs)
             raise ConfigError(
-                f"Target '{target_name}' not specified in profiles for '{context.profile_name}'."
+                f"Target '{target_name}' not specified in profiles for '{context.profile_name}'. "
+                f"The valid target names for this profile are:\n{target_names}"
             )
 
         target_fields = load_yaml(context.render(yaml.dump(outputs[target_name])))

@@ -15,12 +15,11 @@ from sqlmesh.core.model.common import (
     bool_validator,
     default_catalog_validator,
     depends_on_validator,
-    expression_validator,
     sort_python_env,
     sorted_python_env_payloads,
 )
-from sqlmesh.core.model.common import make_python_env, single_value_or_tuple
-from sqlmesh.core.node import _Node
+from sqlmesh.core.model.common import make_python_env, single_value_or_tuple, ParsableSql
+from sqlmesh.core.node import _Node, DbtInfoMixin, DbtNodeInfo
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
@@ -67,15 +66,26 @@ class AuditMixin(AuditCommonMetaMixin):
         jinja_macros: A registry of jinja macros to use when rendering the audit query.
     """
 
-    query: t.Union[exp.Query, d.JinjaQuery]
+    query_: ParsableSql
     defaults: t.Dict[str, exp.Expression]
-    expressions_: t.Optional[t.List[exp.Expression]]
+    expressions_: t.Optional[t.List[ParsableSql]]
     jinja_macros: JinjaMacroRegistry
     formatting: t.Optional[bool]
 
     @property
+    def query(self) -> t.Union[exp.Query, d.JinjaQuery]:
+        return t.cast(t.Union[exp.Query, d.JinjaQuery], self.query_.parse(self.dialect))
+
+    @property
     def expressions(self) -> t.List[exp.Expression]:
-        return self.expressions_ or []
+        if not self.expressions_:
+            return []
+        result = []
+        for e in self.expressions_:
+            parsed = e.parse(self.dialect)
+            if not isinstance(parsed, exp.Semicolon):
+                result.append(parsed)
+        return result
 
     @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
@@ -110,7 +120,7 @@ def audit_map_validator(cls: t.Type, v: t.Any, values: t.Any) -> t.Dict[str, t.A
     return {}
 
 
-class ModelAudit(PydanticModel, AuditMixin, frozen=True):
+class ModelAudit(PydanticModel, AuditMixin, DbtInfoMixin, frozen=True):
     """
     Audit is an assertion made about your tables.
 
@@ -122,16 +132,17 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     skip: bool = False
     blocking: bool = True
     standalone: t.Literal[False] = False
-    query: t.Union[exp.Query, d.JinjaQuery]
+    query_: ParsableSql = Field(alias="query")
     defaults: t.Dict[str, exp.Expression] = {}
-    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
+    expressions_: t.Optional[t.List[ParsableSql]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     formatting: t.Optional[bool] = Field(default=None, exclude=True)
+    dbt_node_info_: t.Optional[DbtNodeInfo] = Field(alias="dbt_node_info", default=None)
 
     _path: t.Optional[Path] = None
 
     # Validators
-    _query_validator = expression_validator
+    _query_validator = ParsableSql.validator()
     _bool_validator = bool_validator
     _string_validator = audit_string_validator
     _map_validator = audit_map_validator
@@ -139,6 +150,10 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     def __str__(self) -> str:
         path = f": {self._path.name}" if self._path else ""
         return f"{self.__class__.__name__}<{self.name}{path}>"
+
+    @property
+    def dbt_node_info(self) -> t.Optional[DbtNodeInfo]:
+        return self.dbt_node_info_
 
 
 class StandaloneAudit(_Node, AuditMixin):
@@ -153,9 +168,9 @@ class StandaloneAudit(_Node, AuditMixin):
     skip: bool = False
     blocking: bool = False
     standalone: t.Literal[True] = True
-    query: t.Union[exp.Query, d.JinjaQuery]
+    query_: ParsableSql = Field(alias="query")
     defaults: t.Dict[str, exp.Expression] = {}
-    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
+    expressions_: t.Optional[t.List[ParsableSql]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
@@ -165,7 +180,7 @@ class StandaloneAudit(_Node, AuditMixin):
     source_type: t.Literal["audit"] = "audit"
 
     # Validators
-    _query_validator = expression_validator
+    _query_validator = ParsableSql.validator()
     _bool_validator = bool_validator
     _string_validator = audit_string_validator
     _map_validator = audit_map_validator
@@ -276,8 +291,8 @@ class StandaloneAudit(_Node, AuditMixin):
                 self.cron_tz.key if self.cron_tz else None,
             ]
 
-            query = self.render_audit_query() or self.query
-            data.append(gen(query))
+            data.append(self.query_.sql)
+            data.extend([e.sql for e in self.expressions_ or []])
             self._metadata_hash = hash_data(data)
         return self._metadata_hash
 
@@ -438,13 +453,15 @@ def load_audit(
 
     extra_kwargs: t.Dict[str, t.Any] = {}
     if is_standalone:
-        jinja_macro_refrences, used_variables = extract_macro_references_and_variables(
+        jinja_macro_refrences, referenced_variables = extract_macro_references_and_variables(
             *(gen(s) for s in statements),
             gen(query),
         )
         jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_refrences)
         for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+            referenced_variables.update(
+                extract_macro_references_and_variables(jinja_macro.definition)[1]
+            )
 
         extra_kwargs["jinja_macros"] = jinja_macros
         extra_kwargs["python_env"] = make_python_env(
@@ -453,17 +470,23 @@ def load_audit(
             module_path,
             macros or macro.get_registry(),
             variables=variables,
-            used_variables=used_variables,
+            referenced_variables=referenced_variables,
         )
         extra_kwargs["default_catalog"] = default_catalog
         if project is not None:
             extra_kwargs["project"] = project
 
-    dialect = meta_fields.pop("dialect", dialect)
+    dialect = meta_fields.pop("dialect", dialect) or ""
+
+    parsable_query = ParsableSql.from_parsed_expression(query, dialect, use_meta_sql=True)
+    parsable_statements = [
+        ParsableSql.from_parsed_expression(s, dialect, use_meta_sql=True) for s in statements
+    ]
+
     try:
         audit = audit_class(
-            query=query,
-            expressions=statements,
+            query=parsable_query,
+            expressions=parsable_statements,
             dialect=dialect,
             **extra_kwargs,
             **meta_fields,
@@ -534,4 +557,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "tags": single_value_or_tuple,
     "default_catalog": exp.to_identifier,
+    "dbt_node_info_": lambda value: value.to_expression(),
 }

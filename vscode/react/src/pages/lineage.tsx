@@ -16,11 +16,11 @@ import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
 import type { Model } from '@/api/client'
 import { useRpc } from '@/utils/rpc'
-import type {
-  ModelEncodedFQN,
-  ModelName,
-  ModelPath,
-  ModelFullPath,
+import {
+  type ModelPath,
+  type ModelFullPath,
+  type ModelName,
+  type ModelEncodedFQN,
 } from '@/domain/models'
 
 export function LineagePage() {
@@ -99,8 +99,13 @@ function Lineage() {
       }
       // @ts-ignore
       const fileUri: string = activeFile.fileUri
-      const filePath = URI.parse(fileUri).fsPath
-      const model = models.find((m: Model) => m.full_path === filePath)
+      const filePath = URI.file(fileUri).path
+      const model = models.find((m: Model) => {
+        if (!m.full_path) {
+          return false
+        }
+        return URI.file(m.full_path).path === filePath
+      })
       if (model) {
         return model.name
       }
@@ -129,9 +134,9 @@ function Lineage() {
 
   React.useEffect(() => {
     const handleChangeFocusedFile = (fileUri: { fileUri: string }) => {
-      const full_path = URI.parse(fileUri.fileUri).fsPath
+      const full_path = URI.parse(fileUri.fileUri).path
       const model = Object.values(modelsRecord).find(
-        m => m.full_path === full_path,
+        m => URI.file(m.full_path).path === full_path,
       )
       if (model) {
         setSelectedModel(model.name)
@@ -192,6 +197,9 @@ export function LineageComponentFromWeb({
     const model = Object.values(models).find(m => m.fqn === decodedId)
     if (!model) {
       throw new Error('Model not found')
+    }
+    if (!model.full_path) {
+      return
     }
     vscode('openFile', { uri: URI.file(model.full_path).toString() })
   }

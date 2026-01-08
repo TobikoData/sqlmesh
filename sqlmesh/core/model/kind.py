@@ -4,7 +4,7 @@ import typing as t
 from enum import Enum
 from typing_extensions import Self
 
-from pydantic import Field, BeforeValidator
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -23,7 +23,7 @@ from sqlmesh.utils.pydantic import (
     PydanticModel,
     SQLGlotBool,
     SQLGlotColumn,
-    SQLGlotListOfColumnsOrStar,
+    SQLGlotListOfFieldsOrStar,
     SQLGlotListOfFields,
     SQLGlotPositiveInt,
     SQLGlotString,
@@ -33,7 +33,7 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     get_dialect,
     validate_string,
-    positive_int_validator,
+    validate_expression,
 )
 
 
@@ -120,6 +120,10 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.MANAGED
 
     @property
+    def is_dbt_custom(self) -> bool:
+        return self.model_kind_name == ModelKindName.DBT_CUSTOM
+
+    @property
     def is_symbolic(self) -> bool:
         """A symbolic model is one that doesn't execute at all."""
         return self.model_kind_name in (ModelKindName.EMBEDDED, ModelKindName.EXTERNAL)
@@ -150,6 +154,11 @@ class ModelKindMixin:
     def supports_python_models(self) -> bool:
         return True
 
+    @property
+    def supports_grants(self) -> bool:
+        """Whether this model kind supports grants configuration."""
+        return self.is_materialized or self.is_view
+
 
 class ModelKindName(str, ModelKindMixin, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
@@ -170,6 +179,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     EXTERNAL = "EXTERNAL"
     CUSTOM = "CUSTOM"
     MANAGED = "MANAGED"
+    DBT_CUSTOM = "DBT_CUSTOM"
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -188,6 +198,7 @@ class OnDestructiveChange(str, Enum):
     ERROR = "ERROR"
     WARN = "WARN"
     ALLOW = "ALLOW"
+    IGNORE = "IGNORE"
 
     @property
     def is_error(self) -> bool:
@@ -201,6 +212,35 @@ class OnDestructiveChange(str, Enum):
     def is_allow(self) -> bool:
         return self == OnDestructiveChange.ALLOW
 
+    @property
+    def is_ignore(self) -> bool:
+        return self == OnDestructiveChange.IGNORE
+
+
+class OnAdditiveChange(str, Enum):
+    """What should happen when a forward-only model change requires an additive schema change."""
+
+    ERROR = "ERROR"
+    WARN = "WARN"
+    ALLOW = "ALLOW"
+    IGNORE = "IGNORE"
+
+    @property
+    def is_error(self) -> bool:
+        return self == OnAdditiveChange.ERROR
+
+    @property
+    def is_warn(self) -> bool:
+        return self == OnAdditiveChange.WARN
+
+    @property
+    def is_allow(self) -> bool:
+        return self == OnAdditiveChange.ALLOW
+
+    @property
+    def is_ignore(self) -> bool:
+        return self == OnAdditiveChange.IGNORE
+
 
 def _on_destructive_change_validator(
     cls: t.Type, v: t.Union[OnDestructiveChange, str, exp.Identifier]
@@ -211,6 +251,20 @@ def _on_destructive_change_validator(
         )
     return v
 
+
+def _on_additive_change_validator(
+    cls: t.Type, v: t.Union[OnAdditiveChange, str, exp.Identifier]
+) -> t.Any:
+    if v and not isinstance(v, OnAdditiveChange):
+        return OnAdditiveChange(
+            v.this.upper() if isinstance(v, (exp.Identifier, exp.Literal)) else v.upper()
+        )
+    return v
+
+
+on_additive_change_validator = field_validator("on_additive_change", mode="before")(
+    _on_additive_change_validator
+)
 
 on_destructive_change_validator = field_validator("on_destructive_change", mode="before")(
     _on_destructive_change_validator
@@ -330,15 +384,18 @@ kind_dialect_validator = field_validator("dialect", mode="before")(_kind_dialect
 
 class _Incremental(_ModelKind):
     on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
+    on_additive_change: OnAdditiveChange = OnAdditiveChange.ALLOW
     auto_restatement_cron: t.Optional[SQLGlotCron] = None
 
     _on_destructive_change_validator = on_destructive_change_validator
+    _on_additive_change_validator = on_additive_change_validator
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
         return [
             *super().metadata_hash_values,
             str(self.on_destructive_change),
+            str(self.on_additive_change),
             self.auto_restatement_cron,
         ]
 
@@ -351,6 +408,7 @@ class _Incremental(_ModelKind):
                 *_properties(
                     {
                         "on_destructive_change": self.on_destructive_change.value,
+                        "on_additive_change": self.on_additive_change.value,
                         "auto_restatement_cron": self.auto_restatement_cron,
                     }
                 ),
@@ -456,7 +514,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.Whens] = None
     merge_filter: t.Optional[exp.Expression] = None
-    batch_concurrency: t.Annotated[t.Literal[1], BeforeValidator(positive_int_validator)] = 1
+    batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
     def _when_matched_validator(
@@ -468,15 +526,19 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             return v
         if isinstance(v, list):
             v = " ".join(v)
+
+        dialect = get_dialect(info.data)
+
         if isinstance(v, str):
             # Whens wrap the WHEN clauses, but the parentheses aren't parsed by sqlglot
             v = v.strip()
             if v.startswith("("):
                 v = v[1:-1]
 
-            return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(info.data)))
+            v = t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=dialect))
 
-        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases))
+        v = validate_expression(v, dialect=dialect)
+        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases, dialect=dialect))
 
     @field_validator("merge_filter", mode="before")
     def _merge_filter_validator(
@@ -486,11 +548,15 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     ) -> t.Optional[exp.Expression]:
         if v is None:
             return v
+
+        dialect = get_dialect(info.data)
+
         if isinstance(v, str):
             v = v.strip()
-            return d.parse_one(v, dialect=get_dialect(info.data))
+            v = d.parse_one(v, dialect=dialect)
 
-        return v.transform(d.replace_merge_table_aliases)
+        v = validate_expression(v, dialect=dialect)
+        return v.transform(d.replace_merge_table_aliases, dialect=dialect)
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -786,7 +852,7 @@ class SCDType2ByTimeKind(_SCDType2Kind):
 
 class SCDType2ByColumnKind(_SCDType2Kind):
     name: t.Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
-    columns: SQLGlotListOfColumnsOrStar
+    columns: SQLGlotListOfFieldsOrStar
     execution_time_as_valid_from: SQLGlotBool = False
     updated_at_name: t.Optional[SQLGlotColumn] = None
 
@@ -829,6 +895,46 @@ class ManagedKind(_ModelKind):
     @property
     def supports_python_models(self) -> bool:
         return False
+
+
+class DbtCustomKind(_ModelKind):
+    name: t.Literal[ModelKindName.DBT_CUSTOM] = ModelKindName.DBT_CUSTOM
+    materialization: str
+    adapter: str = "default"
+    definition: str
+    dialect: t.Optional[str] = Field(None, validate_default=True)
+
+    _dialect_validator = kind_dialect_validator
+
+    @field_validator("materialization", "adapter", "definition", mode="before")
+    @classmethod
+    def _validate_fields(cls, v: t.Any) -> str:
+        return validate_string(v)
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().data_hash_values,
+            self.materialization,
+            self.definition,
+            self.adapter,
+            self.dialect,
+        ]
+
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "materialization": exp.Literal.string(self.materialization),
+                        "adapter": exp.Literal.string(self.adapter),
+                    }
+                ),
+            ],
+        )
 
 
 class EmbeddedKind(_ModelKind):
@@ -936,6 +1042,7 @@ ModelKind = t.Annotated[
         SCDType2ByColumnKind,
         CustomKind,
         ManagedKind,
+        DbtCustomKind,
     ],
     Field(discriminator="name"),
 ]
@@ -955,6 +1062,7 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.SCD_TYPE_2_BY_COLUMN: SCDType2ByColumnKind,
     ModelKindName.CUSTOM: CustomKind,
     ModelKindName.MANAGED: ManagedKind,
+    ModelKindName.DBT_CUSTOM: DbtCustomKind,
 }
 
 
@@ -987,14 +1095,27 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
         if "dialect" in kind_type.all_fields() and props.get("dialect") is None:
             props["dialect"] = dialect
 
-        # only pass the on_destructive_change user default to models inheriting from _Incremental
+        # only pass the on_destructive_change or on_additive_change user default to models inheriting from _Incremental
         # that don't explicitly set it in the model definition
-        if (
-            issubclass(kind_type, _Incremental)
-            and props.get("on_destructive_change") is None
-            and defaults.get("on_destructive_change") is not None
-        ):
-            props["on_destructive_change"] = defaults.get("on_destructive_change")
+        if issubclass(kind_type, _Incremental):
+            for on_change_property in ("on_additive_change", "on_destructive_change"):
+                if (
+                    props.get(on_change_property) is None
+                    and defaults.get(on_change_property) is not None
+                ):
+                    props[on_change_property] = defaults.get(on_change_property)
+
+        # only pass the batch_concurrency user default to models inheriting from _IncrementalBy
+        # that don't explicitly set it in the model definition, but ignore subclasses of _IncrementalBy
+        # that hardcode a specific batch_concurrency
+        if issubclass(kind_type, _IncrementalBy):
+            BATCH_CONCURRENCY: t.Final = "batch_concurrency"
+            if (
+                props.get(BATCH_CONCURRENCY) is None
+                and defaults.get(BATCH_CONCURRENCY) is not None
+                and kind_type.all_field_infos()[BATCH_CONCURRENCY].default is None
+            ):
+                props[BATCH_CONCURRENCY] = defaults.get(BATCH_CONCURRENCY)
 
         if kind_type == CustomKind:
             # load the custom materialization class and check if it uses a custom kind type

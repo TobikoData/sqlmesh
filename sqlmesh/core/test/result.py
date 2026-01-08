@@ -4,6 +4,8 @@ import types
 import typing as t
 import unittest
 
+from sqlmesh.core.test.definition import ModelTest
+
 if t.TYPE_CHECKING:
     ErrorType = t.Union[
         t.Tuple[type[BaseException], BaseException, types.TracebackType],
@@ -42,7 +44,10 @@ class ModelTextTestResult(unittest.TextTestResult):
             exctype, value, tb = err
             err = (exctype, value, None)  # type: ignore
 
-        super().addSubTest(test, subtest, err)
+            if err[0] and issubclass(err[0], test.failureException):
+                self.addFailure(test, err)
+            else:
+                self.addError(test, err)
 
     def _print_char(self, char: str) -> None:
         from sqlmesh.core.console import TerminalConsole
@@ -117,4 +122,14 @@ class ModelTextTestResult(unittest.TextTestResult):
             skipped_args = other.skipped[0]
             self.addSkip(skipped_args[0], skipped_args[1])
 
-        self.testsRun += 1
+        self.testsRun += other.testsRun
+
+    def get_fail_and_error_tests(self) -> t.List[ModelTest]:
+        # If tests contain failed subtests (e.g testing CTE outputs) we don't want
+        # to report it as different test failures
+        test_name_to_test = {
+            test.test_name: test
+            for test, _ in self.failures + self.errors
+            if isinstance(test, ModelTest)
+        }
+        return list(test_name_to_test.values())

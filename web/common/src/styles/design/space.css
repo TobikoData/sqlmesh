@@ -1,0 +1,23 @@
+:root {
+  --one: 1px;
+  --base: 4px;
+  --half: calc(var(--base) / 2);
+  --step: var(--base);
+  --step-2: calc(var(--base) * 2);
+  --step-3: calc(var(--base) * 3);
+  --step-4: calc(var(--base) * 4);
+  --step-5: calc(var(--base) * 5);
+  --step-6: calc(var(--base) * 6);
+  --step-7: calc(var(--base) * 7);
+  --step-8: calc(var(--base) * 8);
+  --step-9: calc(var(--base) * 9);
+  --step-10: calc(var(--base) * 10);
+  --step-11: calc(var(--base) * 11);
+  --step-12: calc(var(--base) * 12);
+  --step-15: calc(var(--base) * 15);
+  --step-16: calc(var(--base) * 16);
+  --step-20: calc(var(--base) * 20);
+  --step-24: calc(var(--base) * 24);
+  --step-30: calc(var(--base) * 30);
+  --step-32: calc(var(--base) * 32);
+}

@@ -8,6 +8,7 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.node import IntervalUnit
 from tests.core.engine_adapter import to_sql_calls
 
@@ -41,6 +42,11 @@ def test_replace_query_exists(mocker: MockFixture, make_mocked_engine_adapter: t
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
@@ -78,6 +84,11 @@ def test_replace_query_pandas_exists(mocker: MockFixture, make_mocked_engine_ada
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
@@ -95,7 +106,7 @@ def test_clone_table(mocker: MockFixture, make_mocked_engine_adapter: t.Callable
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.clone_table("target_table", "source_table")
     adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE `target_table` SHALLOW CLONE `source_table`"
+        "CREATE TABLE IF NOT EXISTS `target_table` SHALLOW CLONE `source_table`"
     )
 
 
@@ -117,15 +128,192 @@ def test_get_current_catalog(mocker: MockFixture, make_mocked_engine_adapter: t.
     assert to_sql_calls(adapter) == ["SELECT CURRENT_CATALOG()"]
 
 
-def test_get_current_database(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+def test_get_current_schema(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
     mocker.patch(
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.cursor.fetchone.return_value = ("test_database",)
 
-    assert adapter.get_current_database() == "test_database"
+    assert adapter._get_current_schema() == "test_database"
     assert to_sql_calls(adapter) == ["SELECT CURRENT_DATABASE()"]
+
+
+def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockFixture):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main")
+    relation = exp.to_table("main.test_schema.test_table", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["group1", "group2"],
+        "MODIFY": ["writers"],
+    }
+
+    current_grants = [
+        ("SELECT", "legacy"),
+        ("REFRESH", "stale"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM main.information_schema.table_privileges "
+        "WHERE table_catalog = 'main' AND table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert "GRANT SELECT ON TABLE `main`.`test_schema`.`test_table` TO `group1`" in sql_calls
+    assert "GRANT SELECT ON TABLE `main`.`test_schema`.`test_table` TO `group2`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `main`.`test_schema`.`test_table` TO `writers`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `main`.`test_schema`.`test_table` FROM `legacy`" in sql_calls
+    assert "REVOKE REFRESH ON TABLE `main`.`test_schema`.`test_table` FROM `stale`" in sql_calls
+
+
+def test_sync_grants_config_with_overlaps(
+    make_mocked_engine_adapter: t.Callable, mocker: MockFixture
+):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main")
+    relation = exp.to_table("main.test_schema.test_table", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["shared", "new_role"],
+        "MODIFY": ["shared", "writer"],
+    }
+
+    current_grants = [
+        ("SELECT", "shared"),
+        ("SELECT", "legacy"),
+        ("MODIFY", "shared"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM main.information_schema.table_privileges "
+        "WHERE table_catalog = 'main' AND table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 3
+
+    assert "GRANT SELECT ON TABLE `main`.`test_schema`.`test_table` TO `new_role`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `main`.`test_schema`.`test_table` TO `writer`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `main`.`test_schema`.`test_table` FROM `legacy`" in sql_calls
+
+
+@pytest.mark.parametrize(
+    "table_type, expected_keyword",
+    [
+        (DataObjectType.TABLE, "TABLE"),
+        (DataObjectType.VIEW, "VIEW"),
+        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
+        (DataObjectType.MANAGED_TABLE, "TABLE"),
+    ],
+)
+def test_sync_grants_config_object_kind(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockFixture,
+    table_type: DataObjectType,
+    expected_keyword: str,
+) -> None:
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main")
+    relation = exp.to_table("main.test_schema.test_object", dialect="databricks")
+
+    mocker.patch.object(adapter, "fetchall", return_value=[])
+
+    adapter.sync_grants_config(relation, {"SELECT": ["test"]}, table_type)
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        f"GRANT SELECT ON {expected_keyword} `main`.`test_schema`.`test_object` TO `test`"
+    ]
+
+
+def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocker: MockFixture):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="`test_db`")
+    relation = exp.to_table("`test_db`.`test_schema`.`test_table`", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["group1", "group2"],
+        "MODIFY": ["writers"],
+    }
+
+    current_grants = [
+        ("SELECT", "legacy"),
+        ("REFRESH", "stale"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM `test_db`.information_schema.table_privileges "
+        "WHERE table_catalog = 'test_db' AND table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert "GRANT SELECT ON TABLE `test_db`.`test_schema`.`test_table` TO `group1`" in sql_calls
+    assert "GRANT SELECT ON TABLE `test_db`.`test_schema`.`test_table` TO `group2`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `test_db`.`test_schema`.`test_table` TO `writers`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `test_db`.`test_schema`.`test_table` FROM `legacy`" in sql_calls
+    assert "REVOKE REFRESH ON TABLE `test_db`.`test_schema`.`test_table` FROM `stale`" in sql_calls
+
+
+def test_sync_grants_config_no_catalog_or_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockFixture
+):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main_catalog")
+    relation = exp.to_table("test_table", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["group1", "group2"],
+        "MODIFY": ["writers"],
+    }
+
+    current_grants = [
+        ("SELECT", "legacy"),
+        ("REFRESH", "stale"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    mocker.patch.object(adapter, "_get_current_schema", return_value="schema")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="main_catalog")
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM `main_catalog`.information_schema.table_privileges "
+        "WHERE table_catalog = 'main_catalog' AND table_schema = 'schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert "GRANT SELECT ON TABLE `test_table` TO `group1`" in sql_calls
+    assert "GRANT SELECT ON TABLE `test_table` TO `group2`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `test_table` TO `writers`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `test_table` FROM `legacy`" in sql_calls
+    assert "REVOKE REFRESH ON TABLE `test_table` FROM `stale`" in sql_calls
 
 
 def test_insert_overwrite_by_partition_query(
@@ -148,7 +336,7 @@ def test_insert_overwrite_by_partition_query(
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
             d.parse_one("b"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
             "b": exp.DataType.build("boolean"),
@@ -184,7 +372,67 @@ def test_materialized_view_properties(mocker: MockFixture, make_mocked_engine_ad
     sql_calls = to_sql_calls(adapter)
     # https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-ddl-create-materialized-view.html#syntax
     assert sql_calls == [
-        "CREATE OR REPLACE MATERIALIZED VIEW test_table PARTITIONED BY (ds) AS SELECT 1",
+        "CREATE OR REPLACE MATERIALIZED VIEW `test_table` PARTITIONED BY (`ds`) AS SELECT 1",
+    ]
+
+
+def test_materialized_view_with_column_comments(
+    mocker: MockFixture, make_mocked_engine_adapter: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="test_catalog")
+
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM source_table"),
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("STRING"),
+        },
+        materialized=True,
+        column_descriptions={
+            "a": "column a description",
+            "b": "column b description",
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # Databricks requires column types when column comments are present in materialized views
+    assert sql_calls == [
+        "CREATE OR REPLACE MATERIALIZED VIEW `test_view` (`a` INT COMMENT 'column a description', `b` STRING COMMENT 'column b description') AS SELECT `a`, `b` FROM `source_table`",
+    ]
+
+
+def test_regular_view_with_column_comments(
+    mocker: MockFixture, make_mocked_engine_adapter: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="test_catalog")
+
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM source_table"),
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("STRING"),
+        },
+        materialized=False,
+        column_descriptions={
+            "a": "column a description",
+            "b": "column b description",
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # Regular views should NOT include column types even when column comments are present
+    assert sql_calls == [
+        "CREATE OR REPLACE VIEW `test_view` (`a` COMMENT 'column a description', `b` COMMENT 'column b description') AS SELECT `a`, `b` FROM `source_table`",
     ]
 
 
@@ -208,3 +456,73 @@ def test_create_table_clustered_by(mocker: MockFixture, make_mocked_engine_adapt
     assert sql_calls == [
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING) CLUSTER BY (`cola`)",
     ]
+
+
+def test_get_data_objects_distinguishes_view_types(mocker):
+    adapter = DatabricksEngineAdapter(lambda: None, default_catalog="test_catalog")
+
+    # (Databricks requires DBSQL Serverless or Pro warehouse to test materialized views which we do not have setup)
+    # so this mocks the fetchdf call to simulate the response we would expect from the correct SQL query
+    mock_df = pd.DataFrame(
+        [
+            {
+                "name": "regular_view",
+                "schema": "test_schema",
+                "catalog": "test_catalog",
+                "type": "view",
+            },
+            {
+                "name": "mat_view",
+                "schema": "test_schema",
+                "catalog": "test_catalog",
+                "type": "materialized_view",
+            },
+            {
+                "name": "regular_table",
+                "schema": "test_schema",
+                "catalog": "test_catalog",
+                "type": "table",
+            },
+        ]
+    )
+
+    mocker.patch.object(adapter, "fetchdf", return_value=mock_df)
+
+    data_objects = adapter._get_data_objects(
+        schema_name=exp.Table(db="test_schema", catalog="test_catalog")
+    )
+
+    adapter.fetchdf.assert_called_once()
+    call_args = adapter.fetchdf.call_args
+    sql_query_exp = call_args[0][0]
+
+    # _get_data_objects query should distinguish between VIEW and MATERIALIZED_VIEW types
+    sql_query = sql_query_exp.sql(dialect="databricks")
+    assert (
+        "CASE table_type WHEN 'VIEW' THEN 'view' WHEN 'MATERIALIZED_VIEW' THEN 'materialized_view' ELSE 'table' END AS type"
+        in sql_query
+    )
+
+    objects_by_name = {obj.name: obj for obj in data_objects}
+    assert objects_by_name["regular_view"].type == DataObjectType.VIEW
+    assert objects_by_name["mat_view"].type == DataObjectType.MATERIALIZED_VIEW
+    assert objects_by_name["regular_table"].type == DataObjectType.TABLE
+
+
+def test_drop_data_object_materialized_view_calls_correct_drop(mocker: MockFixture):
+    adapter = DatabricksEngineAdapter(lambda: None, default_catalog="test_catalog")
+
+    mv_data_object = DataObject(
+        catalog="test_catalog",
+        schema="test_schema",
+        name="test_mv",
+        type=DataObjectType.MATERIALIZED_VIEW,
+    )
+
+    drop_view_mock = mocker.patch.object(adapter, "drop_view")
+    adapter.drop_data_object(mv_data_object)
+
+    # Ensure drop_view is called with materialized=True
+    drop_view_mock.assert_called_once_with(
+        mv_data_object.to_table(), ignore_if_not_exists=True, materialized=True
+    )

@@ -43,15 +43,6 @@ This is a common choice in scenarios such as an addition of a new column, an act
 
 If any downstream models contain a `select *` from the model, SQLMesh attempts to infer breaking status on a best-effort basis. We recommend explicitly specifying a query's columns to avoid unnecessary recomputation.
 
-### Forward-only change
-A modified (either directly or indirectly) model that is categorized as forward-only will continue to use the existing physical table once the change is deployed to production (the `prod` environment). This means that no backfill will take place.
-
-While iterating on forward-only changes in the development environment, the model's output will be stored in either a temporary table or a shallow clone of the production table if supported by the engine.
-
-In either case the data produced this way in the development environment can only be used for preview and will **not** be reused once the change is deployed to production. See [Forward-only Plans](#forward-only-plans) for more details.
-
-This category is assigned by SQLMesh automatically either when a user opts into using a [forward-only plan](#forward-only-plans) or when a model is explicitly configured to be forward-only.
-
 ### Summary
 
 | Change Category                      | Change Type                                                                                | Behaviour                                          |
@@ -59,7 +50,17 @@ This category is assigned by SQLMesh automatically either when a user opts into 
 | [Breaking](#breaking-change)         | [Direct](glossary.md#direct-modification) or [Indirect](glossary.md#indirect-modification) | [Backfill](glossary.md#backfill)                   |
 | [Non-breaking](#non-breaking-change) | [Direct](glossary.md#direct-modification)                                                  | [Backfill](glossary.md#backfill)                   |
 | [Non-breaking](#non-breaking-change) | [Indirect](glossary.md#indirect-modification)                                              | [No Backfill](glossary.md#backfill)                |
-| [Forward-only](#forward-only-change) | [Direct](glossary.md#direct-modification) or [Indirect](glossary.md#indirect-modification) | [No Backfill](glossary.md#backfill), schema change |
+
+## Forward-only change
+In addition to categorizing a change as breaking or non-breaking, it can also be classified as forward-only.
+
+A model change classified as forward-only will continue to use the existing physical table once the change is deployed to production (the `prod` environment). This means that no backfill will take place.
+
+While iterating on forward-only changes in the development environment, the model's output will be stored in either a temporary table or a shallow clone of the production table if supported by the engine.
+
+In either case the data produced this way in the development environment can only be used for preview and will **not** be reused once the change is deployed to production. See [Forward-only Plans](#forward-only-plans) for more details.
+
+This category is assigned by SQLMesh automatically either when a user opts into using a [forward-only plan](#forward-only-plans) or when a model is explicitly configured to be forward-only.
 
 ## Plan application
 Once a plan has been created and reviewed, it is then applied to the target [environment](environments.md) in order for its changes to take effect.
@@ -246,6 +247,63 @@ Models needing backfill (missing dates):
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until '2024-09-27 00:00:00':
 ```
 
+#### Minimum intervals
+
+When you run a plan with a fixed `--start` or `--end` date, you create a virtual data environment with a limited subset of data. However, if the time range specified is less than the size of an interval on one of your models, that model will be skipped by default.
+
+For example, if you have a model like so:
+
+```sql
+MODEL(
+    name sqlmesh_example.monthly_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column month
+    ),
+    cron '@monthly'
+);
+
+SELECT SUM(a) AS sum_a, MONTH(day) AS month
+FROM sqlmesh_example.upstream_model
+WHERE day BETWEEN @start_ds AND @end_ds
+```
+
+make a change to it and run the following:
+
+```bash linenums="1" hl_lines="8"
+$ sqlmesh plan dev --start '1 day ago' 
+
+Models:
+└── Added:
+    └── sqlmesh_example__dev.monthly_model
+Apply - Virtual Update [y/n]: y
+
+SKIP: No model batches to execute
+```
+
+No data will be backfilled because `1 day ago` does not contain a complete month. However, you can use the `--min-intervals` option to override this behaviour like so:
+
+```bash linenums="1" hl_lines="11"
+$ sqlmesh plan dev --start '1 day ago' --min-intervals 1
+
+Models:
+└── Added:
+    └── sqlmesh_example__dev.monthly_model
+Apply - Virtual Update [y/n]: y
+
+[1/1] sqlmesh_example__dev.monthly_model   [insert 2025-06-01 - 2025-06-30]   0.08s   
+Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00                                                             
+                                                                                                                                                    
+✔ Model batches executed
+```
+
+This will ensure that regardless of the plan `--start` date, all added or modified models will have at least `--min-intervals` intervals considered for backfill.
+
+!!! info
+
+    If you are running plans manually you can just adjust the `--start` date to be wide enough to cover the models in question.
+
+    The `--min-intervals` option is primarily intended for [automation scenarios](../integrations/github.md) where the plan is always run with a default relative start date and you always want (for example) "2 weeks worth of data" in the target environment.
+
 ### Data preview for forward-only changes
 As mentioned earlier, the data output produced by [forward-only changes](#forward-only-change) in a development environment can only be used for preview and will not be reused in production.
 
@@ -297,9 +355,25 @@ Some model changes destroy existing data in a table. SQLMesh automatically detec
 
 Forward-only plans treats all of the plan's model changes as forward-only. In these plans, SQLMesh will check all modified incremental models for destructive schema changes, not just forward-only models.
 
-SQLMesh determines what to do for each model based on this setting hierarchy: the [model's `on_destructive_change` value](../guides/incremental_time.md#destructive-changes) (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`.
+SQLMesh determines what to do for each model based on this setting hierarchy: 
 
-If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's `--allow-destructive-model` selector to specify which models. Learn more about model selectors [here](../guides/model_selection.md).
+- **For destructive changes**: the [model's `on_destructive_change` value](../guides/incremental_time.md#schema-changes) (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`
+- **For additive changes**: the [model's `on_additive_change` value](../guides/incremental_time.md#schema-changes) (if present), the `on_additive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `allow`
+
+If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's `--allow-destructive-model` selector to specify which models. 
+Similarly, if you want to temporarily allow additive changes to models configured with `on_additive_change=error`, use the `--allow-additive-model` selector. 
+
+For example, to allow destructive changes to all models in the `analytics` schema:
+```bash
+sqlmesh plan --forward-only --allow-destructive-model "analytics.*"
+```
+
+Or to allow destructive changes to multiple specific models:
+```bash
+sqlmesh plan --forward-only --allow-destructive-model "sales.revenue_model" --allow-destructive-model "marketing.campaign_model"
+```
+
+Learn more about model selectors [here](../guides/model_selection.md).
 
 ### Effective date
 Changes that are part of the forward-only plan can also be applied retroactively to the production environment by specifying the effective date:

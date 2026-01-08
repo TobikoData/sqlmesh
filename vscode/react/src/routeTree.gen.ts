@@ -8,104 +8,88 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-// Import Routes
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as TablediffRouteImport } from './routes/tablediff'
+import { Route as LineageRouteImport } from './routes/lineage'
+import { Route as IndexRouteImport } from './routes/index'
 
-import { Route as rootRoute } from './routes/__root'
-import { Route as LineageImport } from './routes/lineage'
-import { Route as IndexImport } from './routes/index'
-
-// Create/Update Routes
-
-const LineageRoute = LineageImport.update({
+const TablediffRoute = TablediffRouteImport.update({
+  id: '/tablediff',
+  path: '/tablediff',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LineageRoute = LineageRouteImport.update({
   id: '/lineage',
   path: '/lineage',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const IndexRoute = IndexImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
 
-// Populate the FileRoutesByPath interface
+export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
+  '/lineage': typeof LineageRoute
+  '/tablediff': typeof TablediffRoute
+}
+export interface FileRoutesByTo {
+  '/': typeof IndexRoute
+  '/lineage': typeof LineageRoute
+  '/tablediff': typeof TablediffRoute
+}
+export interface FileRoutesById {
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/lineage': typeof LineageRoute
+  '/tablediff': typeof TablediffRoute
+}
+export interface FileRouteTypes {
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths: '/' | '/lineage' | '/tablediff'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/' | '/lineage' | '/tablediff'
+  id: '__root__' | '/' | '/lineage' | '/tablediff'
+  fileRoutesById: FileRoutesById
+}
+export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
+  LineageRoute: typeof LineageRoute
+  TablediffRoute: typeof TablediffRoute
+}
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
+    '/tablediff': {
+      id: '/tablediff'
+      path: '/tablediff'
+      fullPath: '/tablediff'
+      preLoaderRoute: typeof TablediffRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/lineage': {
       id: '/lineage'
       path: '/lineage'
       fullPath: '/lineage'
-      preLoaderRoute: typeof LineageImport
-      parentRoute: typeof rootRoute
+      preLoaderRoute: typeof LineageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
-}
-
-// Create and export the route tree
-
-export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/lineage': typeof LineageRoute
-}
-
-export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/lineage': typeof LineageRoute
-}
-
-export interface FileRoutesById {
-  __root__: typeof rootRoute
-  '/': typeof IndexRoute
-  '/lineage': typeof LineageRoute
-}
-
-export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/lineage'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/lineage'
-  id: '__root__' | '/' | '/lineage'
-  fileRoutesById: FileRoutesById
-}
-
-export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  LineageRoute: typeof LineageRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LineageRoute: LineageRoute,
+  TablediffRoute: TablediffRoute,
 }
-
-export const routeTree = rootRoute
+export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-/* ROUTE_MANIFEST_START
-{
-  "routes": {
-    "__root__": {
-      "filePath": "__root.tsx",
-      "children": [
-        "/",
-        "/lineage"
-      ]
-    },
-    "/": {
-      "filePath": "index.tsx"
-    },
-    "/lineage": {
-      "filePath": "lineage.tsx"
-    }
-  }
-}
-ROUTE_MANIFEST_END */

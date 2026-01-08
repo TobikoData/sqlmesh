@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import re
 import typing as t
+from dataclasses import dataclass
 from pathlib import Path
 
 from ruamel.yaml.constructor import DuplicateKeyError
 from sqlglot.helper import ensure_list
 
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
@@ -17,7 +20,8 @@ from sqlmesh.utils.yaml import load
 
 T = t.TypeVar("T", bound="GeneralConfig")
 
-PROJECT_FILENAME = "dbt_project.yml"
+PROJECT_FILENAME = DBT_PROJECT_FILENAME
+RAW_CODE_KEY = "raw_code" if DBT_VERSION >= (1, 3, 0) else "raw_sql"  # type: ignore
 
 JINJA_ONLY = {
     "adapter",
@@ -35,12 +39,16 @@ JINJA_ONLY = {
 
 def load_yaml(source: str | Path) -> t.Dict:
     try:
-        return load(source, render_jinja=False)
+        return load(
+            source, render_jinja=False, allow_duplicate_keys=True, keep_last_duplicate_key=True
+        )
     except DuplicateKeyError as ex:
         raise ConfigError(f"{source}: {ex}" if isinstance(source, Path) else f"{ex}")
 
 
-def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+def parse_meta(v: t.Optional[t.Dict[str, t.Any]]) -> t.Dict[str, t.Any]:
+    if v is None:
+        return {}
     for key, value in v.items():
         if isinstance(value, str):
             v[key] = try_str_to_bool(value)
@@ -109,7 +117,7 @@ class GeneralConfig(DbtConfig):
 
     @field_validator("meta", mode="before")
     @classmethod
-    def _validate_meta(cls, v: t.Dict[str, t.Union[str, t.Any]]) -> t.Dict[str, t.Any]:
+    def _validate_meta(cls, v: t.Optional[t.Dict[str, t.Union[str, t.Any]]]) -> t.Dict[str, t.Any]:
         return parse_meta(v)
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -128,6 +136,10 @@ class GeneralConfig(DbtConfig):
     @property
     def config_attribute_dict(self) -> AttributeDict[str, t.Any]:
         return AttributeDict(self.dict(exclude=EXCLUDED_CONFIG_ATTRIBUTE_KEYS))
+
+    def _get_field_value(self, field: str) -> t.Optional[t.Any]:
+        field_val = getattr(self, field, None)
+        return field_val if field_val is not None else self.meta.get(field, None)
 
     def replace(self, other: T) -> None:
         """
@@ -149,9 +161,7 @@ class GeneralConfig(DbtConfig):
         """
         kwargs = {}
         for field in self.sqlmesh_config_fields:
-            field_val = getattr(self, field, None)
-            if field_val is None:
-                field_val = self.meta.get(field, None)
+            field_val = self._get_field_value(field)
             if field_val is not None:
                 kwargs[field] = field_val
         return kwargs
@@ -165,6 +175,12 @@ class GeneralConfig(DbtConfig):
             A set of SQLMesh config fields that can be set in dbt projects.
         """
         return set()
+
+
+@dataclass
+class ModelAttrs:
+    attrs: t.Set[str]
+    all_attrs: bool = False
 
 
 class Dependencies(PydanticModel):
@@ -181,7 +197,9 @@ class Dependencies(PydanticModel):
     sources: t.Set[str] = set()
     refs: t.Set[str] = set()
     variables: t.Set[str] = set()
-    model_attrs: t.Set[str] = set()
+    model_attrs: ModelAttrs = ModelAttrs(attrs=set())
+
+    has_dynamic_var_names: bool = False
 
     def union(self, other: Dependencies) -> Dependencies:
         return Dependencies(
@@ -189,7 +207,11 @@ class Dependencies(PydanticModel):
             sources=self.sources | other.sources,
             refs=self.refs | other.refs,
             variables=self.variables | other.variables,
-            model_attrs=self.model_attrs | other.model_attrs,
+            model_attrs=ModelAttrs(
+                attrs=self.model_attrs.attrs | other.model_attrs.attrs,
+                all_attrs=self.model_attrs.all_attrs or other.model_attrs.all_attrs,
+            ),
+            has_dynamic_var_names=self.has_dynamic_var_names or other.has_dynamic_var_names,
         )
 
     @field_validator("macros", mode="after")

@@ -7,6 +7,7 @@ from sqlglot.helper import first
 
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import AuditResult, SqlModel
 from sqlmesh.core.model.kind import (
@@ -21,6 +22,9 @@ from sqlmesh.core.scheduler import (
     interval_diff,
     compute_interval_params,
     SnapshotToIntervals,
+    EvaluateNode,
+    SchedulingUnit,
+    DummyNode,
 )
 from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import (
@@ -28,6 +32,7 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotChangeCategory,
     DeployabilityIndex,
+    snapshots_to_dag,
 )
 from sqlmesh.utils.date import to_datetime, to_timestamp, DatetimeRanges, TimeLike
 from sqlmesh.utils.errors import CircuitBreakerError, NodeAuditsErrors
@@ -77,7 +82,7 @@ def get_batched_missing_intervals(
         execution_time: t.Optional[TimeLike] = None,
     ) -> SnapshotToIntervals:
         merged_intervals = scheduler.merged_missing_intervals(start, end, execution_time)
-        return scheduler.batch_intervals(merged_intervals, mocker.Mock())
+        return scheduler.batch_intervals(merged_intervals, mocker.Mock(), mocker.Mock())
 
     return _get_batched_missing_intervals
 
@@ -160,9 +165,10 @@ def test_incremental_by_unique_key_kind_dag(
     batches = get_batched_missing_intervals(scheduler, start, end, end)
     dag = scheduler._dag(batches)
     assert dag.graph == {
-        (
+        EvaluateNode(
             unique_by_key_snapshot.name,
-            ((to_timestamp("2023-01-01"), to_timestamp("2023-01-07")), 0),
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
+            batch_index=0,
         ): set(),
     }
 
@@ -202,60 +208,66 @@ def test_incremental_time_self_reference_dag(
 
     assert dag.graph == {
         # Only run one day at a time and each day relies on the previous days
-        (
+        EvaluateNode(
             incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
         ): set(),
-        (
+        EvaluateNode(
             incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 1),
+            interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+            batch_index=1,
         ): {
-            (
-                incremental_self_snapshot.name,
-                ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
-            )
-        },
-        (
-            incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 2),
-        ): {
-            (
-                incremental_self_snapshot.name,
-                ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 1),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
             ),
         },
-        (
+        EvaluateNode(
             incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 3),
+            interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+            batch_index=2,
         ): {
-            (
-                incremental_self_snapshot.name,
-                ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 2),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                batch_index=1,
             ),
         },
-        (
-            incremental_self_snapshot.name,
-            ((to_timestamp(0), to_timestamp(0)), -1),
-        ): set(
-            [
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
-                ),
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 1),
-                ),
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 2),
-                ),
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 3),
-                ),
-            ]
-        ),
+        EvaluateNode(
+            snapshot_name=incremental_self_snapshot.name,
+            interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+            batch_index=3,
+        ): {
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                batch_index=2,
+            ),
+        },
+        DummyNode(snapshot_name=incremental_self_snapshot.name): {
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
+            ),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                batch_index=1,
+            ),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                batch_index=2,
+            ),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                batch_index=3,
+            ),
+        },
     }
 
 
@@ -266,16 +278,26 @@ def test_incremental_time_self_reference_dag(
             2,
             2,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-03")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+                    batch_index=0,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-05")), 1),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-05")),
+                    batch_index=1,
                 ): set(),
-                ('"test_model"', ((to_timestamp("2023-01-05"), to_timestamp("2023-01-07")), 2)): {
-                    ('"test_model"', ((to_timestamp("2023-01-01"), to_timestamp("2023-01-03")), 0)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-05"), to_timestamp("2023-01-07")),
+                    batch_index=2,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+                        batch_index=0,
+                    ),
                 },
             },
         ),
@@ -283,26 +305,53 @@ def test_incremental_time_self_reference_dag(
             1,
             3,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    batch_index=0,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-02"), to_timestamp("2023-01-03")), 1),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    batch_index=1,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 2),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    batch_index=2,
                 ): set(),
-                ('"test_model"', ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 3)): {
-                    ('"test_model"', ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    batch_index=3,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                        batch_index=0,
+                    ),
                 },
-                ('"test_model"', ((to_timestamp("2023-01-05"), to_timestamp("2023-01-06")), 4)): {
-                    ('"test_model"', ((to_timestamp("2023-01-02"), to_timestamp("2023-01-03")), 1)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    batch_index=4,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                        batch_index=1,
+                    ),
                 },
-                ('"test_model"', ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 5)): {
-                    ('"test_model"', ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 2)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                    batch_index=5,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                        batch_index=2,
+                    ),
                 },
             },
         ),
@@ -310,29 +359,35 @@ def test_incremental_time_self_reference_dag(
             1,
             10,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    batch_index=0,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-02"), to_timestamp("2023-01-03")), 1),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    batch_index=1,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 2),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    batch_index=2,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 3),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    batch_index=3,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-05"), to_timestamp("2023-01-06")), 4),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    batch_index=4,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 5),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                    batch_index=5,
                 ): set(),
             },
         ),
@@ -340,9 +395,10 @@ def test_incremental_time_self_reference_dag(
             10,
             10,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-07")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
+                    batch_index=0,
                 ): set(),
             },
         ),
@@ -350,9 +406,10 @@ def test_incremental_time_self_reference_dag(
             10,
             1,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-07")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
+                    batch_index=0,
                 ): set(),
             },
         ),
@@ -364,7 +421,7 @@ def test_incremental_batch_concurrency(
     get_batched_missing_intervals,
     batch_size: int,
     batch_concurrency: int,
-    expected_graph: t.Dict[str, t.Any],
+    expected_graph: t.Dict[SchedulingUnit, t.Set[SchedulingUnit]],
 ):
     start = to_datetime("2023-01-01")
     end = to_datetime("2023-01-07")
@@ -392,7 +449,7 @@ def test_incremental_batch_concurrency(
 
     batches = get_batched_missing_intervals(scheduler, start, end, end)
     dag = scheduler._dag(batches)
-    graph = {k: v for k, v in dag.graph.items() if k[1][1] != -1}  # exclude the terminal node.}
+    graph = {k: v for k, v in dag.graph.items() if isinstance(k, EvaluateNode)}
     assert graph == expected_graph
 
 
@@ -877,3 +934,282 @@ def test_scd_type_2_batch_size(
 
     # Verify batches match expectations
     assert batches == expected_batches
+
+
+def test_before_all_environment_statements_called_first(mocker: MockerFixture, make_snapshot):
+    model = SqlModel(
+        name="test.model_items",
+        query=parse_one("SELECT id, ds FROM raw.items"),
+        kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds")),
+    )
+    snapshot = make_snapshot(model)
+
+    # to track the order of calls
+    call_order = []
+
+    mock_state_sync = mocker.MagicMock()
+    mock_state_sync.get_environment_statements.return_value = [
+        ("CREATE TABLE IF NOT EXISTS test_table (id INT)", RuntimeStage.BEFORE_ALL)
+    ]
+
+    def record_get_environment_statements(*args, **kwargs):
+        call_order.append("get_environment_statements")
+        return mock_state_sync.get_environment_statements.return_value
+
+    mock_state_sync.get_environment_statements.side_effect = record_get_environment_statements
+
+    mock_snapshot_evaluator = mocker.MagicMock()
+    mock_adapter = mocker.MagicMock()
+    mock_snapshot_evaluator.adapter = mock_adapter
+
+    def record_get_snapshots_to_create(*args, **kwargs):
+        call_order.append("get_snapshots_to_create")
+        return []
+
+    mock_snapshot_evaluator.get_snapshots_to_create.side_effect = record_get_snapshots_to_create
+
+    mock_execute_env_statements = mocker.patch(
+        "sqlmesh.core.scheduler.execute_environment_statements"
+    )
+
+    def record_execute_environment_statements(*args, **kwargs):
+        call_order.append("execute_environment_statements")
+
+    mock_execute_env_statements.side_effect = record_execute_environment_statements
+
+    scheduler = Scheduler(
+        snapshots=[snapshot],
+        snapshot_evaluator=mock_snapshot_evaluator,
+        state_sync=mock_state_sync,
+        default_catalog=None,
+    )
+    merged_intervals = {
+        snapshot: [
+            (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        ],
+    }
+
+    deployability_index = DeployabilityIndex.create([snapshot])
+    environment_naming_info = EnvironmentNamingInfo(name="test_env")
+
+    scheduler.run_merged_intervals(
+        merged_intervals=merged_intervals,
+        deployability_index=deployability_index,
+        environment_naming_info=environment_naming_info,
+        run_environment_statements=True,
+    )
+
+    mock_state_sync.get_environment_statements.assert_called_once_with("test_env")
+    mock_snapshot_evaluator.get_snapshots_to_create.assert_called_once()
+
+    # execute_environment_statements is called twice
+    assert mock_execute_env_statements.call_count == 2
+
+    # first for before all and second for after all
+    first_call = mock_execute_env_statements.call_args_list[0]
+    assert first_call.kwargs["runtime_stage"] == RuntimeStage.BEFORE_ALL
+    second_call = mock_execute_env_statements.call_args_list[1]
+    assert second_call.kwargs["runtime_stage"] == RuntimeStage.AFTER_ALL
+
+    assert "get_environment_statements" in call_order
+    assert "execute_environment_statements" in call_order
+    assert "get_snapshots_to_create" in call_order
+
+    # Verify the before all environment statements are called first before get_snapshots_to_create
+    env_statements_idx = call_order.index("get_environment_statements")
+    execute_env_idx = call_order.index("execute_environment_statements")
+    snapshots_to_create_idx = call_order.index("get_snapshots_to_create")
+    assert env_statements_idx < execute_env_idx < snapshots_to_create_idx
+
+
+def test_dag_transitive_deps(mocker: MockerFixture, make_snapshot):
+    # Create a simple dependency chain: A <- B <- C
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1 as id")))
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT * FROM a")))
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("SELECT * FROM b")))
+
+    snapshot_b = snapshot_b.model_copy(update={"parents": (snapshot_a.snapshot_id,)})
+    snapshot_c = snapshot_c.model_copy(update={"parents": (snapshot_b.snapshot_id,)})
+
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    scheduler = Scheduler(
+        snapshots=[snapshot_a, snapshot_b, snapshot_c],
+        snapshot_evaluator=mocker.Mock(),
+        state_sync=mocker.Mock(),
+        default_catalog=None,
+    )
+
+    # Test scenario: select only A and C (skip B)
+    merged_intervals = {
+        snapshot_a: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshot_c: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+    }
+
+    deployability_index = DeployabilityIndex.create([snapshot_a, snapshot_b, snapshot_c])
+
+    full_dag = snapshots_to_dag([snapshot_a, snapshot_b, snapshot_c])
+
+    dag = scheduler._dag(merged_intervals, snapshot_dag=full_dag)
+    assert dag.graph == {
+        EvaluateNode(
+            snapshot_name='"a"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): set(),
+        EvaluateNode(
+            snapshot_name='"c"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): {
+            EvaluateNode(
+                snapshot_name='"a"',
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
+            )
+        },
+    }
+
+
+def test_dag_multiple_chain_transitive_deps(mocker: MockerFixture, make_snapshot):
+    # Create a more complex dependency graph:
+    # A <- B <- D <- E
+    # A <- C <- D <- E
+    # Select A and E only
+    snapshots = {}
+    for name in ["a", "b", "c", "d", "e"]:
+        snapshots[name] = make_snapshot(SqlModel(name=name, query=parse_one("SELECT 1 as id")))
+        snapshots[name].categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Set up dependencies
+    snapshots["b"] = snapshots["b"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+    snapshots["c"] = snapshots["c"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+    snapshots["d"] = snapshots["d"].model_copy(
+        update={"parents": (snapshots["b"].snapshot_id, snapshots["c"].snapshot_id)}
+    )
+    snapshots["e"] = snapshots["e"].model_copy(update={"parents": (snapshots["d"].snapshot_id,)})
+
+    scheduler = Scheduler(
+        snapshots=list(snapshots.values()),
+        snapshot_evaluator=mocker.Mock(),
+        state_sync=mocker.Mock(),
+        default_catalog=None,
+    )
+
+    # Only provide intervals for A and E
+    batched_intervals = {
+        snapshots["a"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshots["e"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+    }
+
+    # Create subdag including transitive dependencies
+    full_dag = snapshots_to_dag(snapshots.values())
+
+    dag = scheduler._dag(batched_intervals, snapshot_dag=full_dag)
+    assert dag.graph == {
+        EvaluateNode(
+            snapshot_name='"a"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): set(),
+        EvaluateNode(
+            snapshot_name='"e"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): {
+            EvaluateNode(
+                snapshot_name='"a"',
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
+            )
+        },
+    }
+
+
+def test_dag_upstream_dependency_caching_with_complex_diamond(mocker: MockerFixture, make_snapshot):
+    r"""
+    Test that the upstream dependency caching correctly handles a complex diamond dependency graph.
+
+    Dependency graph:
+            A (has intervals)
+           / \
+          B   C (no intervals - transitive)
+         / \ / \
+        D   E   F (no intervals - transitive)
+         \ / \ /
+          G   H (has intervals - selected)
+
+    This creates multiple paths from G and H to A. Without caching, A's dependencies would be
+    computed multiple times (once for each path). With caching, they should be computed once
+    and reused.
+    """
+    snapshots = {}
+
+    for name in ["a", "b", "c", "d", "e", "f", "g", "h"]:
+        snapshots[name] = make_snapshot(SqlModel(name=name, query=parse_one("SELECT 1 as id")))
+        snapshots[name].categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # A is the root
+    snapshots["b"] = snapshots["b"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+    snapshots["c"] = snapshots["c"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+
+    # Middle layer: D, E, F depend on B and/or C
+    snapshots["d"] = snapshots["d"].model_copy(update={"parents": (snapshots["b"].snapshot_id,)})
+    snapshots["e"] = snapshots["e"].model_copy(
+        update={"parents": (snapshots["b"].snapshot_id, snapshots["c"].snapshot_id)}
+    )
+    snapshots["f"] = snapshots["f"].model_copy(update={"parents": (snapshots["c"].snapshot_id,)})
+
+    # Bottom layer: G and H depend on D/E and E/F respectively
+    snapshots["g"] = snapshots["g"].model_copy(
+        update={"parents": (snapshots["d"].snapshot_id, snapshots["e"].snapshot_id)}
+    )
+    snapshots["h"] = snapshots["h"].model_copy(
+        update={"parents": (snapshots["e"].snapshot_id, snapshots["f"].snapshot_id)}
+    )
+
+    scheduler = Scheduler(
+        snapshots=list(snapshots.values()),
+        snapshot_evaluator=mocker.Mock(),
+        state_sync=mocker.Mock(),
+        default_catalog=None,
+    )
+
+    batched_intervals = {
+        snapshots["a"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshots["g"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshots["h"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+    }
+
+    full_dag = snapshots_to_dag(snapshots.values())
+    dag = scheduler._dag(batched_intervals, snapshot_dag=full_dag)
+
+    # Verify the DAG structure:
+    # 1. A should be evaluated first (no dependencies)
+    # 2. Both G and H should depend on A (through transitive dependencies)
+    # 3. Transitive nodes (B, C, D, E, F) should not appear as separate evaluation nodes
+    expected_a_node = EvaluateNode(
+        snapshot_name='"a"',
+        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        batch_index=0,
+    )
+
+    expected_g_node = EvaluateNode(
+        snapshot_name='"g"',
+        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        batch_index=0,
+    )
+
+    expected_h_node = EvaluateNode(
+        snapshot_name='"h"',
+        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        batch_index=0,
+    )
+
+    assert dag.graph == {
+        expected_a_node: set(),
+        expected_g_node: {expected_a_node},
+        expected_h_node: {expected_a_node},
+    }

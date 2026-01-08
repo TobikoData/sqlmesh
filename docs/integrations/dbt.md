@@ -44,16 +44,36 @@ Prepare an existing dbt project to be run by SQLMesh by executing the `sqlmesh i
 $ sqlmesh init -t dbt
 ```
 
-SQLMesh will use the data warehouse connection target in your dbt project `profiles.yml` file. The target can be changed at any time.
+This will create a file called `sqlmesh.yaml` containing the [default model start date](../reference/model_configuration.md#model-defaults). This configuration file is a minimum starting point for enabling SQLMesh to work with your DBT project.
+
+As you become more comfortable with running your project under SQLMesh, you may specify additional SQLMesh [configuration](../reference/configuration.md) as required to unlock more features.
+
+!!! note "profiles.yml"
+
+    SQLMesh will use the existing data warehouse connection target from your dbt project's `profiles.yml` file so the connection configuration does not need to be duplicated in `sqlmesh.yaml`. You may change the target at any time in the dbt config and SQLMesh will pick up the new target.
 
 ### Setting model backfill start dates
 
-Models **require** a start date for backfilling data through use of the `start` configuration parameter. `start` can be defined individually for each model in its `config` block or globally in the `dbt_project.yml` file as follows:
+Models **require** a start date for backfilling data through use of the `start` configuration parameter. `start` can be defined individually for each model in its `config` block or globally in the `sqlmesh.yaml` file as follows:
 
-```
-> models:
->   +start: Jan 1 2000
-```
+=== "sqlmesh.yaml"
+
+    ```yaml
+    model_defaults:
+      start: '2000-01-01'
+    ```
+
+=== "dbt Model"
+
+    ```jinja
+    {{
+      config(
+        materialized='incremental',
+        start='2000-01-01',
+        ...
+      )
+    }}
+    ```
 
 ### Configuration
 
@@ -63,47 +83,89 @@ SQLMesh derives a project's configuration from its dbt configuration files. This
 
 [Certain engines](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/?h=unsupported#state-connection), like Trino, cannot be used to store SQLMesh's state.
 
-As a workaround, we recommend specifying a supported state engine using the `state_connection` argument instead.
+In addition, even if your warehouse is supported for state, you may find that you get better performance by using a [traditional database](../concepts/state.md) to store state as these are a better fit for the state workload than a warehouse optimized for analytics workloads.
 
-Learn more about how to configure state connections in Python [here](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection).
+In these cases, we recommend specifying a [supported production state engine](../concepts/state.md#state) using the `state_connection` configuration.
+
+This involves updating `sqlmesh.yaml` to add a gateway configuration for the state connection:
+
+```yaml
+gateways:
+  "": # "" (empty string) is the default gateway
+    state_connection:
+      type: postgres
+      ...
+
+model_defaults:
+  start: '2000-01-01'
+```
+
+Or, for a specific dbt profile defined in `profiles.yml`, eg `dev`:
+
+```yaml
+gateways:
+  dev: # must match the target dbt profile name
+    state_connection:
+      type: postgres
+      ...
+
+model_defaults:
+  start: '2000-01-01'
+```
+
+Learn more about how to configure state connections [here](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection).
 
 #### Runtime vars
 
 dbt supports passing variable values at runtime with its [CLI `vars` option](https://docs.getdbt.com/docs/build/project-variables#defining-variables-on-the-command-line).
 
-In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `config.py` is created in your project directory.
+In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `sqlmesh.yaml` is created in your project directory.
 
-The file creates a SQLMesh `config` object pointing to the project directory:
-
-```python
-config = sqlmesh_config(Path(__file__).parent)
-```
-
-Specify runtime variables by adding a Python dictionary to the `sqlmesh_config()` `variables` argument.
+You may define global variables in the same way as a native project by adding a `variables` section to the config.
 
 For example, we could specify the runtime variable `is_marketing` and its value `no` as:
 
-```python
-config = sqlmesh_config(
-    Path(__file__).parent,
-    variables={"is_marketing": "no"}
-    )
+```yaml
+variables:
+  is_marketing: no
+
+model_defaults:
+  start: '2000-01-01'
 ```
 
+Variables can also be set at the gateway/profile level which override variables set at the project level. See the [variables documentation](../concepts/macros/sqlmesh_macros.md#gateway-variables) to learn more about how to specify them at different levels.
+
+#### Combinations
+
 Some projects use combinations of runtime variables to control project behavior. Different combinations can be specified in different `sqlmesh_config` objects, with the relevant configuration passed to the SQLMesh CLI command.
+
+!!! info "Python config"
+
+    Switching between different config objects requires the use of [Python config](../guides/configuration.md#python) instead of the default YAML config.
+
+    You will need to create a file called `config.py` in the root of your project with the following contents:
+
+    ```py
+    from pathlib import Path
+    from sqlmesh.dbt.loader import sqlmesh_config
+
+    config = sqlmesh_config(Path(__file__).parent)
+    ```
+
+    Note that any config from `sqlmesh.yaml` will be overlayed on top of the active Python config so you dont need to remove the `sqlmesh.yaml` file
 
 For example, consider a project with a special configuration for the `marketing` department. We could create separate configurations to pass at runtime like this:
 
 ```python
 config = sqlmesh_config(
-    Path(__file__).parent,
-    variables={"is_marketing": "no", "include_pii": "no"}
-    )
+  Path(__file__).parent,
+  variables={"is_marketing": "no", "include_pii": "no"}
+)
 
 marketing_config = sqlmesh_config(
-    Path(__file__).parent,
-    variables={"is_marketing": "yes", "include_pii": "yes"}
-    )
+  Path(__file__).parent,
+  variables={"is_marketing": "yes", "include_pii": "yes"}
+)
 ```
 
 By default, SQLMesh will use the configuration object named `config`. Use a different configuration by passing the object name to SQLMesh CLI commands with the `--config` option. For example, we could run a `plan` with the marketing configuration like this:
@@ -157,7 +219,7 @@ This section describes how to adapt dbt's incremental models to run on sqlmesh a
 SQLMesh supports two approaches to implement [idempotent](../concepts/glossary.md#idempotency) incremental loads:
 
 * Using merge (with the sqlmesh [`INCREMENTAL_BY_UNIQUE_KEY` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key))
-* Using insert-overwrite/delete+insert (with the sqlmesh [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range))
+* Using [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range)
 
 #### Incremental by unique key
 
@@ -171,28 +233,22 @@ To enable incremental_by_unique_key incrementality, the model configuration shou
 
 #### Incremental by time range
 
-To enable incremental_by_time_range incrementality, the model configuration should contain:
+To enable incremental_by_time_range incrementality, the model configuration must contain:
 
-* The `time_column` key with the model's time column field name as the value (see [`time column`](../concepts/models/model_kinds.md#time-column) for details)
 * The `materialized` key with value `'incremental'`
-* Either:
-    * The `incremental_strategy` key with value `'insert_overwrite'` or
-    * The `incremental_strategy` key with value `'delete+insert'`
-    * Note: in this context, these two strategies are synonyms. Regardless of which one is specified SQLMesh will use the [`best incremental strategy`](../concepts/models/model_kinds.md#materialization-strategy) for the target engine.
+* The `incremental_strategy` key with the value `incremental_by_time_range`
+* The `time_column` key with the model's time column field name as the value (see [`time column`](../concepts/models/model_kinds.md#time-column) for details)
 
 ### Incremental logic
 
-SQLMesh requires a new jinja block gated by `{% if sqlmesh_incremental is defined %}`. The new block should supersede the existing `{% if is_incremental() %}` block and contain the `WHERE` clause selecting the time interval.
+Unlike dbt incremental strategies, SQLMesh does not require the use of `is_incremental` jinja blocks to implement incremental logic. 
+Instead, SQLMesh provides predefined time macro variables that can be used in the model's SQL to filter data based on the time column.
 
 For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja block gated by `{% if sqlmesh_incremental is defined %}` as follows:
 
 ```bash
-> {% if sqlmesh_incremental is defined %}
 >   WHERE
 >     ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
-> {% elif is_incremental() %}
->   ; < your existing is_incremental block >
-> {% endif %}
 ```
 
 `{{ start_ds }}` and `{{ end_ds }}` are the jinja equivalents of SQLMesh's `@start_ds` and `@end_ds` predefined time macro variables. See all [predefined time variables](../concepts/macros/macro_variables.md) available in jinja.
@@ -201,28 +257,26 @@ For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja blo
 
 SQLMesh provides configuration parameters that enable control over how incremental computations occur. These parameters are set in the model's `config` block.
 
-The [`batch_size` parameter](../concepts/models/overview.md#batch_size) determines the maximum number of time intervals to run in a single job.
-
-The [`lookback` parameter](../concepts/models/overview.md#lookback) is used to capture late arriving data. It sets the number of units of late arriving data the model should expect and must be a positive integer.
+See [Incremental Model Properties](../concepts/models/overview.md#incremental-model-properties) for the full list of incremental model configuration parameters.
 
 **Note:** By default, all incremental dbt models are configured to be [forward-only](../concepts/plans.md#forward-only-plans). However, you can change this behavior by setting the `forward_only: false` setting either in the configuration of an individual model or globally for all models in the `dbt_project.yaml` file. The [forward-only](../concepts/plans.md#forward-only-plans) mode aligns more closely with the typical operation of dbt and therefore better meets user's expectations.
 
-Similarly, the [allow_partials](../concepts/models/overview.md#allow_partials) parameter is set to `true` by default for incremental dbt models unless the time column is specified, or the `allow_partials` parameter is explicitly set to `false` in the model configuration.
+Similarly, the [allow_partials](../concepts/models/overview.md#allow_partials) parameter is set to `true` by default unless the `allow_partials` parameter is explicitly set to `false` in the model configuration.
 
 #### on_schema_change
 
-SQLMesh automatically detects destructive schema changes to [forward-only incremental models](../guides/incremental_time.md#forward-only-models) and to all incremental models in [forward-only plans](../concepts/plans.md#destructive-changes).
+SQLMesh automatically detects both destructive and additive schema changes to [forward-only incremental models](../guides/incremental_time.md#forward-only-models) and to all incremental models in [forward-only plans](../concepts/plans.md#destructive-changes).
 
-A model's [`on_destructive_change` setting](../guides/incremental_time.md#destructive-changes) determines whether it errors (default), warns, or silently allows the changes. SQLMesh always allows non-destructive forward-only schema changes, such as adding or casting a column in place.
+A model's [`on_destructive_change` and `on_additive_change` settings](../guides/incremental_time.md#schema-changes) determine whether it errors, warns, silently allows, or ignores the changes. SQLMesh provides fine-grained control over both destructive changes (like dropping columns) and additive changes (like adding new columns).
 
-`on_schema_change` configuration values are mapped to these SQLMesh `on_destructive_change` values:
+`on_schema_change` configuration values are mapped to these SQLMesh settings:
 
-| `on_schema_change` | SQLMesh `on_destructive_change` |
-| ------------------ | ------------------------------- |
-| ignore             | warn                            |
-| append_new_columns | warn                            |
-| sync_all_columns   | allow                           |
-| fail               | error                           |
+| `on_schema_change` | SQLMesh `on_destructive_change` | SQLMesh `on_additive_change` |
+|--------------------|---------------------------------|------------------------------|
+| ignore             | ignore                          | ignore                       |
+| fail               | error                           | error                        |
+| append_new_columns | ignore                          | allow                        |
+| sync_all_columns   | allow                           | allow                        |
 
 
 ## Snapshot support
@@ -282,18 +336,16 @@ Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-
 
 SQLMesh supports running dbt projects using the majority of dbt jinja methods, including:
 
-| Method      | Method         | Method       | Method  |
-| ----------- | -------------- | ------------ | ------- |
-| adapter (*) | env_var        | project_name | target  |
-| as_bool     | exceptions     | ref          | this    |
-| as_native   | from_yaml      | return       | to_yaml |
-| as_number   | is_incremental | run_query    | var     |
-| as_text     | load_result    | schema       | zip     |
-| api         | log            | set          |         |
-| builtins    | modules        | source       |         |
-| config      | print          | statement    |         |
-
-\* `adapter.rename_relation` and `adapter.expand_target_column_types` are not currently supported.
+| Method    | Method         | Method       | Method  |
+| --------- | -------------- | ------------ | ------- |
+| adapter   | env_var        | project_name | target  |
+| as_bool   | exceptions     | ref          | this    |
+| as_native | from_yaml      | return       | to_yaml |
+| as_number | is_incremental | run_query    | var     |
+| as_text   | load_result    | schema       | zip     |
+| api       | log            | set          |         |
+| builtins  | modules        | source       |         |
+| config    | print          | statement    |         |
 
 ## Unsupported dbt jinja methods
 
@@ -301,8 +353,6 @@ The dbt jinja methods that are not currently supported are:
 
 * debug
 * selected_sources
-* adapter.expand_target_column_types
-* adapter.rename_relation
 * graph.nodes.values
 * graph.metrics.values
 

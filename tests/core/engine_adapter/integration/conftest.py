@@ -9,6 +9,7 @@ from pytest import FixtureRequest
 
 
 from sqlmesh import Config, EngineAdapter
+from sqlmesh.core.constants import SQLMESH_PATH
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     AthenaConnectionConfig,
@@ -27,15 +28,15 @@ from tests.core.engine_adapter.integration import (
 logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="session")
-def config() -> Config:
+@pytest.fixture
+def config(tmp_path: pathlib.Path) -> Config:
     return load_config_from_paths(
         Config,
         project_paths=[
-            pathlib.Path("examples/wursthall/config.yaml"),
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
         ],
-        personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
+        personal_paths=[(SQLMESH_PATH / "config.yaml").expanduser()],
+        variables={"tmp_path": str(tmp_path)},
     )
 
 
@@ -89,7 +90,9 @@ def create_engine_adapter(
 
 @pytest.fixture
 def create_test_context(
-    request: FixtureRequest, create_engine_adapter: t.Callable[[str, str], EngineAdapter]
+    request: FixtureRequest,
+    create_engine_adapter: t.Callable[[str, str], EngineAdapter],
+    tmp_path: pathlib.Path,
 ) -> t.Callable[[IntegrationTestEngine, str, str, str], t.Iterable[TestContext]]:
     def _create(
         engine: IntegrationTestEngine, gateway: str, test_type: str, table_format: str
@@ -103,6 +106,7 @@ def create_test_context(
             engine_adapter,
             f"{engine.engine}_{table_format}",
             gateway,
+            tmp_path=tmp_path,
             is_remote=is_remote,
         )
 

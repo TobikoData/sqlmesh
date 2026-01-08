@@ -5,7 +5,9 @@ import typing as t
 from functools import partial
 
 from sqlglot import exp
+
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.mixins import GrantsFromInfoSchemaMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -15,7 +17,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.core.schema_diff import NestedSupport
 from sqlmesh.engines.spark.db_api.spark_session import connection, SparkSessionConnection
 from sqlmesh.utils.errors import SQLMeshError, MissingDefaultCatalogError
 
@@ -28,21 +30,24 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DatabricksEngineAdapter(SparkEngineAdapter):
+class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
-    SCHEMA_DIFFER = SchemaDiffer(
-        support_positional_add=True,
-        support_nested_operations=True,
-        support_nested_drop=True,
-        array_element_selector="element",
-        parameterized_type_defaults={
+    SUPPORTS_GRANTS = True
+    USE_CATALOG_IN_GRANTS = True
+    # Spark has this set to false for compatibility when mixing with Trino but that isn't a concern with Databricks
+    QUOTE_IDENTIFIERS_IN_VIEWS = True
+    SCHEMA_DIFFER_KWARGS = {
+        "support_positional_add": True,
+        "nested_support": NestedSupport.ALL,
+        "array_element_selector": "element",
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(10, 0), (0,)],
         },
-    )
+    }
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
@@ -150,6 +155,28 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
 
+    @staticmethod
+    def _grant_object_kind(table_type: DataObjectType) -> str:
+        if table_type == DataObjectType.VIEW:
+            return "VIEW"
+        if table_type == DataObjectType.MATERIALIZED_VIEW:
+            return "MATERIALIZED VIEW"
+        return "TABLE"
+
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        # We only care about explicitly granted privileges and not inherited ones
+        # if this is removed you would see grants inherited from the catalog get returned
+        expression = super()._get_grant_expression(table)
+        expression.args["where"].set(
+            "this",
+            exp.and_(
+                expression.args["where"].this,
+                exp.column("inherited_from").eq(exp.Literal.string("NONE")),
+                wrap=False,
+            ),
+        )
+        return expression
+
     def _begin_session(self, properties: SessionProperties) -> t.Any:
         """Begin a new session."""
         # Align the different possible connectors to a single catalog
@@ -161,25 +188,26 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         if not self._use_spark_session:
             return super(SparkEngineAdapter, self)._df_to_source_queries(
-                df, columns_to_types, batch_size, target_table
+                df, target_columns_to_types, batch_size, target_table, source_columns=source_columns
             )
-        df = self._ensure_pyspark_df(df, columns_to_types)
+        pyspark_df = self._ensure_pyspark_df(
+            df, target_columns_to_types, source_columns=source_columns
+        )
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
+            pyspark_df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
             self._connection_pool.set_attribute("use_spark_engine_adapter", True)
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
+            return exp.select(*self._select_columns(target_columns_to_types)).from_(temp_table)
 
-        if self._use_spark_session:
-            return [SourceQuery(query_factory=query_factory)]
-        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        return [SourceQuery(query_factory=query_factory)]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -266,7 +294,9 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 exp.column("table_catalog").as_("catalog"),
                 exp.case(exp.column("table_type"))
                 .when(exp.Literal.string("VIEW"), exp.Literal.string("view"))
-                .when(exp.Literal.string("MATERIALIZED_VIEW"), exp.Literal.string("view"))
+                .when(
+                    exp.Literal.string("MATERIALIZED_VIEW"), exp.Literal.string("materialized_view")
+                )
                 .else_(exp.Literal.string("table"))
                 .as_("type"),
             )
@@ -297,6 +327,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         target_table_name: TableName,
         source_table_name: TableName,
         replace: bool = False,
+        exists: bool = True,
         clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ) -> None:
@@ -337,7 +368,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -350,7 +381,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             partition_interval_unit=partition_interval_unit,
             clustered_by=clustered_by,
             table_properties=table_properties,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             table_kind=table_kind,
         )
@@ -363,3 +394,20 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             expressions.append(clustered_by_exp)
             properties = exp.Properties(expressions=expressions)
         return properties
+
+    def _build_column_defs(
+        self,
+        target_columns_to_types: t.Dict[str, exp.DataType],
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        is_view: bool = False,
+        materialized: bool = False,
+    ) -> t.List[exp.ColumnDef]:
+        # Databricks requires column types to be specified when adding column comments
+        # in CREATE MATERIALIZED VIEW statements. Override is_view to False to force
+        # column types to be included when comments are present.
+        if is_view and materialized and column_descriptions:
+            is_view = False
+
+        return super()._build_column_defs(
+            target_columns_to_types, column_descriptions, is_view, materialized
+        )

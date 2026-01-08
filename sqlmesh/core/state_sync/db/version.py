@@ -54,7 +54,8 @@ class VersionState:
                     }
                 ]
             ),
-            columns_to_types=self._version_columns_to_types,
+            target_columns_to_types=self._version_columns_to_types,
+            track_rows_processed=False,
         )
 
     def get_versions(self) -> Versions:

@@ -5,7 +5,7 @@ gateways:
       type: duckdb
       catalogs:
         memory: ':memory:'
-        testing: 'testing.duckdb'
+        testing: "{{ var('tmp_path') }}/testing.duckdb"
 
   # Databases with docker images available
   inttest_trino_hive:
@@ -185,6 +185,34 @@ gateways:
       check_import: false
     state_connection:
       type: duckdb
+
+  inttest_fabric:
+    connection:
+      type: fabric
+      driver: pyodbc
+      host: {{ env_var("FABRIC_HOST") }}
+      user: {{ env_var("FABRIC_CLIENT_ID") }}
+      password: {{ env_var("FABRIC_CLIENT_SECRET") }}
+      database: {{ env_var("FABRIC_DATABASE") }}
+      tenant_id: {{ env_var("FABRIC_TENANT_ID") }}
+      workspace_id: {{ env_var("FABRIC_WORKSPACE_ID") }}
+      odbc_properties:
+        Authentication: ActiveDirectoryServicePrincipal
+      check_import: false
+    state_connection:
+      type: duckdb
+
+  inttest_gcp_postgres:
+    connection:
+      type: gcp_postgres
+      instance_connection_string: {{ env_var("GCP_POSTGRES_INSTANCE_CONNECTION_STRING") }}
+      user: {{ env_var("GCP_POSTGRES_USER") }}
+      password: {{ env_var("GCP_POSTGRES_PASSWORD") }}
+      keyfile_json: {{ env_var("GCP_POSTGRES_KEYFILE_JSON", "") }}
+      db: {{ env_var("GCP_POSTGRES_DATABASE") }}
+      enable_iam_auth: true
+      check_import: false
+
 
 model_defaults:
     dialect: duckdb

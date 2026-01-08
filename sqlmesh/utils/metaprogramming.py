@@ -5,6 +5,7 @@ import dis
 import importlib
 import inspect
 import linecache
+import logging
 import os
 import re
 import sys
@@ -22,6 +23,9 @@ from sqlmesh.core import constants as c
 from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
+
+logger = logging.getLogger(__name__)
+
 
 IGNORE_DECORATORS = {"macro", "model", "signal"}
 SERIALIZABLE_CALLABLES = (type, types.FunctionType)
@@ -279,7 +283,7 @@ def build_env(
     env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]],
     name: str,
     path: Path,
-    is_metadata_obj: t.Optional[bool] = None,
+    is_metadata_obj: bool = False,
 ) -> None:
     """Fills in env dictionary with all globals needed to execute the object.
 
@@ -295,7 +299,7 @@ def build_env(
     # We don't rely on `env` to keep track of visited objects, because it's populated in post-order
     visited: t.Set[str] = set()
 
-    def walk(obj: t.Any, name: str, is_metadata: t.Optional[bool] = None) -> None:
+    def walk(obj: t.Any, name: str, is_metadata: bool = False) -> None:
         obj_module = inspect.getmodule(obj)
         if obj_module and obj_module.__name__ == "builtins":
             return
@@ -316,7 +320,7 @@ def build_env(
                 # The existing object in the env is "metadata only" but we're walking it again as a
                 # non-"metadata only" dependency, so we update this flag to ensure all transitive
                 # dependencies are also not marked as "metadata only"
-                is_metadata = None
+                is_metadata = False
 
             if hasattr(obj, c.SQLMESH_MACRO):
                 # We only need to add the undecorated code of @macro() functions in env, which
@@ -376,7 +380,7 @@ def build_env(
             )
 
     # The "metadata only" annotation of the object is transitive
-    walk(obj, name, is_metadata_obj or getattr(obj, c.SQLMESH_METADATA, None))
+    walk(obj, name, is_metadata_obj or getattr(obj, c.SQLMESH_METADATA, False))
 
 
 @dataclass
@@ -424,8 +428,15 @@ class Executable(PydanticModel):
         return self.kind == ExecutableKind.VALUE
 
     @classmethod
-    def value(cls, v: t.Any, is_metadata: t.Optional[bool] = None) -> Executable:
-        return Executable(payload=repr(v), kind=ExecutableKind.VALUE, is_metadata=is_metadata)
+    def value(
+        cls, v: t.Any, is_metadata: t.Optional[bool] = None, sort_root_dict: bool = False
+    ) -> Executable:
+        payload = _dict_sort(v) if sort_root_dict else repr(v)
+        return Executable(
+            payload=payload,
+            kind=ExecutableKind.VALUE,
+            is_metadata=is_metadata or None,
+        )
 
 
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
@@ -440,6 +451,9 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
     serialized = {}
 
     for k, (v, is_metadata) in env.items():
+        # We don't store `False` for `is_metadata` to reduce the pydantic model's payload size
+        is_metadata = is_metadata or None
+
         if isinstance(v, LITERALS) or v is None:
             serialized[k] = Executable.value(v, is_metadata=is_metadata)
         elif inspect.ismodule(v):
@@ -631,6 +645,15 @@ def print_exception(
     """
     tb = format_evaluated_code_exception(exception, python_env)
     out.write(tb)
+
+
+def _dict_sort(obj: t.Any) -> str:
+    try:
+        if isinstance(obj, dict):
+            obj = dict(sorted(obj.items(), key=lambda x: str(x[0])))
+    except Exception:
+        logger.warning("Failed to sort non-recursive dict", exc_info=True)
+    return repr(obj)
 
 
 def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:

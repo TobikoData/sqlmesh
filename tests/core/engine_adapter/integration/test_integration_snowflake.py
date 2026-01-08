@@ -1,20 +1,25 @@
-import typing as t
 import pytest
-from pytest import FixtureRequest
-from sqlglot import exp
+import typing as t
+from datetime import datetime
 from pathlib import Path
-from sqlglot.optimizer.qualify_columns import quote_identifiers
+from pytest import FixtureRequest
+from pytest_mock import MockerFixture
+
+import sqlmesh.core.dialect as d
+from sqlglot import exp
+from sqlmesh import Config, ExecutionContext, model
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject
-import sqlmesh.core.dialect as d
-from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.model import ModelKindName, SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
-from tests.core.engine_adapter.integration import TestContext
-from sqlmesh import model, ExecutionContext
-from sqlmesh.core.model import ModelKindName
-from datetime import datetime
-
+from sqlmesh.core.snapshot import SnapshotId, SnapshotIdBatch
+from sqlmesh.core.snapshot.execution_tracker import (
+    QueryExecutionContext,
+    QueryExecutionTracker,
+)
 from tests.core.engine_adapter.integration import (
     TestContext,
     generate_pytest_params,
@@ -52,42 +57,42 @@ def test_get_alter_expressions_includes_clustering(
     )
     engine_adapter.execute(f"CREATE TABLE {normal_table} (c1 int, c2 timestamp)")
 
-    assert len(engine_adapter.get_alter_expressions(normal_table, normal_table)) == 0
-    assert len(engine_adapter.get_alter_expressions(clustered_table, clustered_table)) == 0
+    assert len(engine_adapter.get_alter_operations(normal_table, normal_table)) == 0
+    assert len(engine_adapter.get_alter_operations(clustered_table, clustered_table)) == 0
 
     # alter table drop clustered
-    clustered_to_normal = engine_adapter.get_alter_expressions(clustered_table, normal_table)
+    clustered_to_normal = engine_adapter.get_alter_operations(clustered_table, normal_table)
     assert len(clustered_to_normal) == 1
     assert (
-        clustered_to_normal[0].sql(dialect=ctx.dialect)
+        clustered_to_normal[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {clustered_table} DROP CLUSTERING KEY"
     )
 
     # alter table add clustered
-    normal_to_clustered = engine_adapter.get_alter_expressions(normal_table, clustered_table)
+    normal_to_clustered = engine_adapter.get_alter_operations(normal_table, clustered_table)
     assert len(normal_to_clustered) == 1
     assert (
-        normal_to_clustered[0].sql(dialect=ctx.dialect)
+        normal_to_clustered[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {normal_table} CLUSTER BY (c1)"
     )
 
     # alter table change clustering
-    clustered_to_clustered_differently = engine_adapter.get_alter_expressions(
+    clustered_to_clustered_differently = engine_adapter.get_alter_operations(
         clustered_table, clustered_differently_table
     )
     assert len(clustered_to_clustered_differently) == 1
     assert (
-        clustered_to_clustered_differently[0].sql(dialect=ctx.dialect)
+        clustered_to_clustered_differently[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {clustered_table} CLUSTER BY (c1, TO_DATE(c2))"
     )
 
     # alter table change clustering
-    clustered_differently_to_clustered = engine_adapter.get_alter_expressions(
+    clustered_differently_to_clustered = engine_adapter.get_alter_operations(
         clustered_differently_table, clustered_table
     )
     assert len(clustered_differently_to_clustered) == 1
     assert (
-        clustered_differently_to_clustered[0].sql(dialect=ctx.dialect)
+        clustered_differently_to_clustered[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {clustered_differently_table} CLUSTER BY (c1)"
     )
 
@@ -307,3 +312,69 @@ def test_create_drop_catalog(ctx: TestContext, engine_adapter: SnowflakeEngineAd
 
     engine_adapter.drop_catalog(sqlmesh_managed_catalog)  # works, catalog is SQLMesh-managed
     assert fetch_database_names() == {non_sqlmesh_managed_catalog}
+
+
+def test_rows_tracker(
+    ctx: TestContext, engine_adapter: SnowflakeEngineAdapter, mocker: MockerFixture
+):
+    sqlmesh = ctx.create_context()
+    tracker = QueryExecutionTracker()
+
+    add_execution_spy = mocker.spy(QueryExecutionContext, "add_execution")
+
+    with tracker.track_execution(
+        SnapshotIdBatch(snapshot_id=SnapshotId(name="a", identifier="a"), batch_id=0)
+    ):
+        # Snowflake doesn't report row counts for CTAS, so this should not be tracked
+        engine_adapter._create_table("a", exp.select("1 as id"))
+
+    assert add_execution_spy.call_count == 0
+
+    stats = tracker.get_execution_stats(
+        SnapshotIdBatch(snapshot_id=SnapshotId(name="a", identifier="a"), batch_id=0)
+    )
+    assert stats is not None
+    assert stats.total_rows_processed is None
+    assert stats.total_bytes_processed is None
+
+
+def test_unit_test(tmp_path: Path, ctx: TestContext):
+    models_path = tmp_path / "models"
+    tests_path = tmp_path / "tests"
+
+    models_path.mkdir()
+    tests_path.mkdir()
+
+    test_payload = """
+test_dummy_model:
+  model: s.dummy
+  inputs:
+    s.src_table:
+      rows:
+        - c: 1
+  outputs:
+    query:
+      - c: 1
+    """
+
+    (models_path / "dummy_model.sql").write_text(f"MODEL (name s.dummy); SELECT c FROM s.src_table")
+    (tests_path / "test_dummy_model.yaml").write_text(test_payload)
+
+    def _config_mutator(gateway_name: str, config: Config):
+        config.model_defaults = ModelDefaultsConfig(dialect="snowflake")
+        test_connection = config.gateways[gateway_name].connection.copy()  # type: ignore
+
+        # Force the database to lowercase to test that we normalize (if we didn't, the test would fail)
+        test_connection.database = test_connection.database.lower()  # type: ignore
+        config.gateways[gateway_name].test_connection = test_connection
+
+    sqlmesh = ctx.create_context(path=tmp_path, config_mutator=_config_mutator)
+
+    test_conn = sqlmesh.config.get_test_connection(ctx.gateway)
+    assert test_conn.type_ == "snowflake"
+
+    catalog = test_conn.get_catalog()
+    assert catalog is not None and catalog.islower()
+
+    test_results = sqlmesh.test()
+    assert not test_results.errors

@@ -33,3 +33,37 @@ pip install "sqlmesh[redshift]"
 | `serverless_acct_id`    | The account ID of the serverless cluster                                                                    | string |    N     |
 | `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
 | `enable_merge`         | Whether the incremental_by_unique_key model kind will use the native Redshift MERGE operation or SQLMesh's logical merge. (Default: `False`)           |  bool  |    N     |
+
+## Performance Considerations
+
+### Timestamp Macro Variables and Sort Keys
+
+When working with Redshift tables that have a `TIMESTAMP` sort key, using the standard `@start_dt` and `@end_dt` macro variables may lead to performance issues. These macros render as `TIMESTAMP WITH TIME ZONE` values in SQL queries, which prevents Redshift from performing efficient pruning when filtering against `TIMESTAMP` (without timezone) sort keys.
+
+This can result in full table scans instead, causing significant performance degradation.
+
+**Solution**: Use the `_dtntz` (datetime no timezone) variants of macro variables:
+
+- `@start_dtntz` instead of `@start_dt`
+- `@end_dtntz` instead of `@end_dt`
+
+These variants render as `TIMESTAMP WITHOUT TIME ZONE`, allowing Redshift to properly utilize sort key optimizations.
+
+**Example**:
+
+```sql linenums="1"
+-- Inefficient: May cause full table scan
+SELECT * FROM my_table
+WHERE timestamp_column >= @start_dt
+  AND timestamp_column < @end_dt
+
+-- Efficient: Uses sort key optimization
+SELECT * FROM my_table
+WHERE timestamp_column >= @start_dtntz
+  AND timestamp_column < @end_dtntz
+
+-- Alternative: Cast to timestamp
+SELECT * FROM my_table
+WHERE timestamp_column >= @start_ts::timestamp
+  AND timestamp_column < @end_ts::timestamp
+```

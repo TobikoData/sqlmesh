@@ -5,19 +5,26 @@ import {
   isNil,
   isNotNil,
   isObjectEmpty,
-  toID,
 } from '@/utils/index'
-import { type LineageColumn, type Column, type Model } from '@/api/client'
+import { type LineageColumn } from '@/api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type ActiveEdges, type Connections } from './context'
-import { EnumSide } from './types'
+import { toID, toKeys } from './types'
 import {
   EnumLineageNodeModelType,
   type LineageNodeModelType,
 } from './ModelNode'
 import type { Lineage } from '@/domain/lineage'
-import type { ConnectedNode } from '@/workers/lineage'
-import type { ModelEncodedFQN, ModelName } from '@/domain/models'
+import type { ConnectedNode } from '@/components/graph/types'
+import { encode, type ModelEncodedFQN, type ModelURI } from '@/domain/models'
+import type { Column, ColumnName } from '@/domain/column'
+import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
+import {
+  CHAR_WIDTH,
+  COLUMN_LINE_HEIGHT,
+  MAX_VISIBLE_COLUMNS,
+  NODE_BALANCE_SPACE,
+} from './constants'
 
 export interface GraphNodeData {
   label: string
@@ -28,23 +35,7 @@ export interface GraphNodeData {
   [key: string]: any
 }
 
-export {
-  getNodeMap,
-  getEdges,
-  createGraphLayout,
-  mergeLineageWithColumns,
-  mergeConnections,
-  getLineageIndex,
-  getActiveNodes,
-  getUpdatedNodes,
-  getUpdatedEdges,
-  hasActiveEdge,
-  hasActiveEdgeConnector,
-  getModelNodeTypeTitle,
-  getModelAncestors,
-}
-
-function createGraphLayout({
+export function createGraphLayout({
   nodesMap,
   nodes = [],
   edges = [],
@@ -97,8 +88,10 @@ function createGraphLayout({
   }
 }
 
-function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
-  const modelNames = Object.keys(lineage)
+export function getEdges(
+  lineage: Record<ModelEncodedFQN, Lineage> = {},
+): Edge[] {
+  const modelNames = toKeys(lineage)
   const outputEdges: Edge[] = []
 
   for (const targetModelName of modelNames) {
@@ -108,28 +101,21 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
       outputEdges.push(createGraphEdge(sourceModelName, targetModelName))
     })
 
-    for (const targetColumnName in targetModel.columns) {
-      const sourceModel = targetModel.columns[targetColumnName as ModelName]
+    const targetColumnNames = toKeys(targetModel.columns ?? {})
+    for (const targetColumnName of targetColumnNames) {
+      const sourceModel = targetModel.columns?.[targetColumnName]
 
       if (isNil(sourceModel) || isNil(sourceModel.models)) continue
 
-      for (const sourceModelName in sourceModel.models) {
+      const sourceModelNames = toKeys(sourceModel.models)
+      for (const sourceModelName of sourceModelNames) {
         const sourceColumns = sourceModel.models[sourceModelName]
 
         if (isNil(sourceColumns)) continue
 
         for (const sourceColumnName of sourceColumns) {
-          const sourceHandler = toID(
-            EnumSide.Right,
-            sourceModelName,
-            sourceColumnName,
-          )
-          const targetHandler = toID(
-            EnumSide.Left,
-            targetModelName,
-            targetColumnName,
-          )
-
+          const sourceHandler = toID('right', sourceModelName, sourceColumnName)
+          const targetHandler = toID('left', targetModelName, targetColumnName)
           outputEdges.push(
             createGraphEdge(
               sourceModelName,
@@ -151,23 +137,18 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
   return outputEdges
 }
 
-function getNodeMap({
+export function getNodeMap({
   lineage,
   models,
   unknownModels,
   withColumns,
 }: {
-  models: Record<string, Model>
+  models: Record<string, ModelSQLMeshModel>
   withColumns: boolean
   unknownModels: Set<string>
   lineage?: Record<string, Lineage>
 }): Record<string, Node> {
   if (isNil(lineage)) return {}
-
-  const NODE_BALANCE_SPACE = 64
-  const COLUMN_LINE_HEIGHT = 24
-  const CHAR_WIDTH = 8
-  const MAX_VISIBLE_COLUMNS = 5
 
   const sources = new Set(Object.values(lineage).flatMap(l => l.models))
   const modelNames = Object.keys(lineage)
@@ -197,7 +178,7 @@ function getNodeMap({
       : 0
 
     const maxWidth = Math.min(
-      getNodeMaxWidth(modelName, columnsCount === 0),
+      getNodeMaxWidth(modelName, columnsCount === 0, models),
       320,
     )
     const maxHeight = getNodeMaxHeight(columnsCount)
@@ -219,29 +200,32 @@ function getNodeMap({
 
     return acc
   }, {})
+}
 
-  function getNodeMaxWidth(label: string, hasColumns: boolean = false): number {
-    const defaultWidth = label.length * CHAR_WIDTH
-    const columns = models[label]?.columns ?? []
+function getNodeMaxWidth(
+  label: string,
+  hasColumns: boolean = false,
+  models: Record<string, ModelSQLMeshModel> = {},
+): number {
+  const defaultWidth = label.length * CHAR_WIDTH
+  const columns = models[label]?.columns ?? []
 
-    return hasColumns
-      ? Math.max(...columns.map(getColumnWidth), defaultWidth)
-      : defaultWidth
-  }
+  return hasColumns
+    ? Math.max(...columns.map(getColumnWidth), defaultWidth)
+    : defaultWidth
+}
 
-  function getNodeMaxHeight(columnsCount: number): number {
-    return (
-      COLUMN_LINE_HEIGHT * Math.min(columnsCount, MAX_VISIBLE_COLUMNS) +
-      NODE_BALANCE_SPACE
-    )
-  }
+function getColumnWidth(column: Column): number {
+  return (
+    (column.name.length + column.type.length) * CHAR_WIDTH + NODE_BALANCE_SPACE
+  )
+}
 
-  function getColumnWidth(column: Column): number {
-    return (
-      (column.name.length + column.type.length) * CHAR_WIDTH +
-      NODE_BALANCE_SPACE
-    )
-  }
+function getNodeMaxHeight(columnsCount: number): number {
+  return (
+    COLUMN_LINE_HEIGHT * Math.min(columnsCount, MAX_VISIBLE_COLUMNS) +
+    NODE_BALANCE_SPACE
+  )
 }
 
 function repositionNodes(
@@ -290,14 +274,14 @@ function createGraphNode(
   }
 }
 
-function createGraphEdge<TData = any>(
+function createGraphEdge<Data>(
   source: string,
   target: string,
   sourceHandle?: string,
   targetHandle?: string,
   hidden: boolean = false,
-  data?: TData,
-): Edge<TData> {
+  data?: Data,
+): Edge<Data> {
   const output: Edge = {
     id: toID(source, target, sourceHandle, targetHandle),
     source,
@@ -321,7 +305,7 @@ function createGraphEdge<TData = any>(
   return output
 }
 
-function mergeLineageWithColumns(
+export function mergeLineageWithColumns(
   currentLineage: Record<string, Lineage> = {},
   newLineage: Record<string, Record<string, LineageColumn>> = {},
 ): Record<string, Lineage> {
@@ -344,9 +328,9 @@ function mergeLineageWithColumns(
       }
 
       // New Column Lineage delivers fresh data, so we can just assign it
-      currentLineageModel.columns[targetColumnNameEncoded as ModelName] = {
-        expression: newLineageModelColumn.expression,
-        source: newLineageModelColumn.source,
+      currentLineageModel.columns[targetColumnNameEncoded as ColumnName] = {
+        expression: newLineageModelColumn.expression ?? undefined,
+        source: newLineageModelColumn.source ?? undefined,
         models: {},
       }
 
@@ -354,25 +338,30 @@ function mergeLineageWithColumns(
       if (isObjectEmpty(newLineageModelColumn.models)) continue
 
       const currentLineageModelColumn =
-        currentLineageModel.columns[targetColumnNameEncoded as ModelName]!
+        currentLineageModel.columns[targetColumnNameEncoded as ColumnName]!
       const currentLineageModelColumnModels = currentLineageModelColumn.models
 
       for (const sourceColumnName in newLineageModelColumn.models) {
         const sourceColumnNameEncoded = encodeURI(sourceColumnName)
         const currentLineageModelColumnModel =
-          currentLineageModelColumnModels[sourceColumnNameEncoded]!
+          currentLineageModelColumnModels[
+            sourceColumnNameEncoded as ModelEncodedFQN
+          ]!
         const newLineageModelColumnModel =
           newLineageModelColumn.models[sourceColumnName]!
 
-        currentLineageModelColumnModels[sourceColumnNameEncoded] = Array.from(
+        // @ts-expect-error TODO: fix this
+        currentLineageModelColumnModels[
+          sourceColumnNameEncoded as ModelEncodedFQN
+        ] = Array.from(
           new Set(
             isNil(currentLineageModelColumnModel)
               ? newLineageModelColumnModel
               : currentLineageModelColumnModel.concat(
-                  newLineageModelColumnModel,
+                  newLineageModelColumnModel as ColumnName[],
                 ),
           ),
-        ).map((uri: string) => encodeURI(uri))
+        ).map(uri => encode(uri as ModelURI))
       }
     }
   }
@@ -380,7 +369,7 @@ function mergeLineageWithColumns(
   return currentLineage
 }
 
-function mergeConnections(
+export function mergeConnections(
   connections: Map<string, Connections>,
   lineage: Record<string, Record<string, LineageColumn>> = {},
 ): {
@@ -451,14 +440,14 @@ function mergeConnections(
           // And right bucket contains references to all targets (left handlers)
           connectionsModelSource.left.forEach(id => {
             activeEdges.push([
-              toID(EnumSide.Left, modelColumnIdSource),
-              toID(EnumSide.Right, id),
+              toID('left', modelColumnIdSource),
+              toID('right', id),
             ])
           })
           connectionsModelSource.right.forEach(id => {
             activeEdges.push([
-              toID(EnumSide.Left, id),
-              toID(EnumSide.Right, modelColumnIdSource),
+              toID('left', id),
+              toID('right', modelColumnIdSource),
             ])
           })
         })
@@ -472,7 +461,7 @@ function mergeConnections(
   }
 }
 
-function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
+export function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
   return Object.keys(lineage)
     .reduce((acc: string[], key) => {
       const { models = [], columns = {} } = lineage[key]!
@@ -481,11 +470,10 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
       models.forEach(m => allModels.add(m))
 
       if (isNotNil(columns)) {
-        Object.keys(columns).forEach(columnName => {
-          const column = columns[columnName as ModelName]
-
+        toKeys(columns).forEach(columnName => {
+          const column = columns[columnName]
           if (isNotNil(column) && isNotNil(column.models)) {
-            Object.keys(column.models).forEach(m => allModels.add(m))
+            toKeys(column.models).forEach(m => allModels.add(m))
           }
         })
       }
@@ -496,7 +484,7 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
     .join('')
 }
 
-function getModelAncestors(
+export function getModelAncestors(
   lineage: Record<string, Lineage> = {},
   name: string,
   output = new Set<string>(),
@@ -513,14 +501,14 @@ function getModelAncestors(
   return output
 }
 
-function getActiveNodes(
+export function getActiveNodes(
   edges: Edge[] = [],
   activeEdges: ActiveEdges,
   selectedEdges: ConnectedNode[],
   nodesMap: Record<string, Node>,
-): Set<string> {
-  return new Set<string>(
-    edges.reduce((acc: string[], edge) => {
+): Set<ModelEncodedFQN> {
+  return new Set(
+    edges.reduce((acc: ModelEncodedFQN[], edge) => {
       const sourceNode = isNil(edge.sourceHandle)
         ? undefined
         : nodesMap[edge.sourceHandle]
@@ -534,14 +522,14 @@ function getActiveNodes(
         sourceNode.data.type === EnumLineageNodeModelType.external &&
         hasActiveEdgeConnector(activeEdges, edge.sourceHandle)
       ) {
-        acc.push(edge.source)
+        acc.push(edge.source as ModelEncodedFQN)
       } else if (
         isNotNil(targetNode) &&
         isNotNil(edge.targetHandle) &&
         targetNode.data.type === EnumLineageNodeModelType.external &&
         hasActiveEdgeConnector(activeEdges, edge.targetHandle)
       ) {
-        acc.push(edge.target)
+        acc.push(edge.target as ModelEncodedFQN)
       } else {
         const isActiveEdge = hasActiveEdge(activeEdges, [
           edge.targetHandle,
@@ -550,11 +538,11 @@ function getActiveNodes(
 
         if (isActiveEdge || hasEdge(selectedEdges, edge.id)) {
           if (isNotNil(edge.source)) {
-            acc.push(edge.source)
+            acc.push(edge.source as ModelEncodedFQN)
           }
 
           if (isNotNil(edge.target)) {
-            acc.push(edge.target)
+            acc.push(edge.target as ModelEncodedFQN)
           }
         }
       }
@@ -563,7 +551,7 @@ function getActiveNodes(
   )
 }
 
-function getUpdatedEdges(
+export function getUpdatedEdges(
   edges: Edge[] = [],
   connections: Map<string, Connections>,
   activeEdges: ActiveEdges,
@@ -655,10 +643,10 @@ function getUpdatedEdges(
   return tempEdges
 }
 
-function getUpdatedNodes(
+export function getUpdatedNodes(
   nodes: Node[] = [],
   activeNodes: Set<string>,
-  mainNode: string,
+  mainNode: ModelEncodedFQN,
   connectedNodes: Set<string>,
   selectedNodes: Set<string>,
   connections: Map<string, Connections>,
@@ -696,7 +684,7 @@ function getUpdatedNodes(
   })
 }
 
-function hasActiveEdge(
+export function hasActiveEdge(
   activeEdges: ActiveEdges = new Map(),
   [leftConnect, rightConnect]: [
     string | undefined | null,
@@ -720,22 +708,30 @@ function hasActiveEdge(
   return inLeft || inRight
 }
 
-function hasActiveEdgeConnector(
+export function hasActiveEdgeConnector(
   activeEdges: ActiveEdges = new Map(),
   connector: string,
 ): boolean {
   return (activeEdges.get(connector) ?? []).length > 0
 }
 
-function getModelNodeTypeTitle(type: LineageNodeModelType): string {
-  if (type === EnumLineageNodeModelType.python) return 'PYTHON'
-  if (type === EnumLineageNodeModelType.sql) return 'SQL'
-  if (type === EnumLineageNodeModelType.seed) return 'SEED'
-  if (type === EnumLineageNodeModelType.cte) return 'CTE'
-  if (type === EnumLineageNodeModelType.external) return 'EXTERNAL'
-  if (type === EnumLineageNodeModelType.source) return 'SOURCE'
-
-  return 'UNKNOWN'
+export function getModelNodeTypeTitle(type: LineageNodeModelType): string {
+  switch (type) {
+    case EnumLineageNodeModelType.python:
+      return 'PYTHON'
+    case EnumLineageNodeModelType.sql:
+      return 'SQL'
+    case EnumLineageNodeModelType.seed:
+      return 'SEED'
+    case EnumLineageNodeModelType.cte:
+      return 'CTE'
+    case EnumLineageNodeModelType.external:
+      return 'EXTERNAL'
+    case EnumLineageNodeModelType.source:
+      return 'SOURCE'
+    default:
+      return 'UNKNOWN'
+  }
 }
 
 function hasEdge(nodes: ConnectedNode[], edge: string): boolean {

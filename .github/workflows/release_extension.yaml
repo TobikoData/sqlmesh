@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Check branch is main
         run: |
           if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
@@ -28,11 +28,11 @@ jobs:
           fi
           echo "Version format is valid: $version"
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
           version: 10
       - name: Install dependencies

@@ -35,7 +35,7 @@ def test_find_references_for_model_usages():
     )
 
     # Verify expected files are present
-    reference_files = {ref.uri for ref in references}
+    reference_files = {str(ref.path) for ref in references}
     expected_patterns = [
         "orders",
         "customers",
@@ -65,7 +65,7 @@ def test_find_references_for_model_usages():
     for ref in references:
         matched_pattern = None
         for pattern in expected_patterns:
-            if pattern in ref.uri:
+            if pattern in str(ref.path):
                 matched_pattern = pattern
                 break
 
@@ -136,7 +136,7 @@ def test_find_references_for_marketing_model():
     )
 
     # Verify files are present
-    reference_files = {ref.uri for ref in references}
+    reference_files = {str(ref.path) for ref in references}
     expected_patterns = ["marketing", "customers"]
     for pattern in expected_patterns:
         assert any(pattern in uri for uri in reference_files), (
@@ -169,7 +169,7 @@ def test_find_references_for_python_model():
     assert len(references) == 5
 
     # Verify expected files
-    reference_files = {ref.uri for ref in references}
+    reference_files = {str(ref.path) for ref in references}
 
     # Models and also the Audit which references it: assert_item_price_above_zero
     expected_patterns = [
@@ -222,13 +222,13 @@ def test_waiter_revenue_by_day_multiple_references():
     )
 
     # Count references in top_waiters file
-    top_waiters_refs = [ref for ref in references if "top_waiters" in ref.uri]
+    top_waiters_refs = [ref for ref in references if "top_waiters" in str(ref.path)]
     assert len(top_waiters_refs) == 3, (
         f"Expected exactly 3 references in top_waiters, found {len(top_waiters_refs)}"
     )
 
     # Verify model definition is included
-    assert any("waiter_revenue_by_day" in ref.uri for ref in references), (
+    assert any("waiter_revenue_by_day" in str(ref.path) for ref in references), (
         "Should include model definition"
     )
 
@@ -296,7 +296,7 @@ def test_audit_model_references():
 
             assert len(references) == 5, "Should find references from audit files as well"
 
-            reference_files = {ref.uri for ref in references}
+            reference_files = {str(ref.path) for ref in references}
 
             # Models and also the Audit which references it: assert_item_price_above_zero
             expected_patterns = [

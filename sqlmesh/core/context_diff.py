@@ -84,7 +84,7 @@ class ContextDiff(PydanticModel):
     """Python dependencies."""
     previous_environment_statements: t.List[EnvironmentStatements] = []
     """Previous environment statements."""
-    environment_statements: t.List[EnvironmentStatements] = []
+    environment_statements: t.List[EnvironmentStatements]
     """Environment statements."""
     diff_rendered: bool = False
     """Whether the diff should compare raw vs rendered models"""
@@ -222,7 +222,9 @@ class ContextDiff(PydanticModel):
             infer_python_dependencies=infer_python_dependencies,
         )
 
-        previous_environment_statements = state_reader.get_environment_statements(environment)
+        previous_environment_statements = (
+            state_reader.get_environment_statements(env.name) if env else []
+        )
 
         if existing_env and always_recreate_environment:
             previous_plan_id: t.Optional[str] = existing_env.plan_id
@@ -268,6 +270,7 @@ class ContextDiff(PydanticModel):
         if not env:
             raise SQLMeshError(f"Environment '{environment}' must exist for this operation.")
 
+        environment_statements = state_reader.get_environment_statements(environment)
         snapshots = state_reader.get_snapshots(env.snapshots)
 
         return ContextDiff(
@@ -287,7 +290,8 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots,
             previous_requirements=env.requirements,
             requirements=env.requirements,
-            previous_environment_statements=[],
+            previous_environment_statements=environment_statements,
+            environment_statements=environment_statements,
             previous_gateway_managed_virtual_layer=env.gateway_managed,
             gateway_managed_virtual_layer=env.gateway_managed,
         )
@@ -309,7 +313,9 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_environment_statements_changes(self) -> bool:
-        return self.environment_statements != self.previous_environment_statements
+        return sorted(self.environment_statements, key=lambda s: s.project or "") != sorted(
+            self.previous_environment_statements, key=lambda s: s.project or ""
+        )
 
     @property
     def has_snapshot_changes(self) -> bool:
@@ -429,7 +435,7 @@ class ContextDiff(PydanticModel):
             return False
 
         current, previous = self.modified_snapshots[name]
-        return current.fingerprint.data_hash != previous.fingerprint.data_hash
+        return current.is_directly_modified(previous)
 
     def indirectly_modified(self, name: str) -> bool:
         """Returns whether or not a node was indirectly modified in this context.
@@ -445,10 +451,7 @@ class ContextDiff(PydanticModel):
             return False
 
         current, previous = self.modified_snapshots[name]
-        return (
-            current.fingerprint.data_hash == previous.fingerprint.data_hash
-            and current.fingerprint.parent_data_hash != previous.fingerprint.parent_data_hash
-        )
+        return current.is_indirectly_modified(previous)
 
     def metadata_updated(self, name: str) -> bool:
         """Returns whether or not the given node's metadata has been updated.
@@ -464,7 +467,7 @@ class ContextDiff(PydanticModel):
             return False
 
         current, previous = self.modified_snapshots[name]
-        return current.fingerprint.metadata_hash != previous.fingerprint.metadata_hash
+        return current.is_metadata_updated(previous)
 
     def text_diff(self, name: str) -> str:
         """Finds the difference of a node between the current and remote environment.

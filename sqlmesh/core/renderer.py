@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
 
-from sqlglot import exp, parse
+from sqlglot import exp, Dialect
 from sqlglot.errors import SqlglotError
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.annotate_types import annotate_types
@@ -16,14 +16,21 @@ from sqlglot.optimizer.simplify import simplify
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
-from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
+from sqlmesh.utils.date import (
+    TimeLike,
+    date_dict,
+    make_inclusive,
+    to_datetime,
+    make_ts_exclusive,
+    to_tstz,
+)
 from sqlmesh.utils.errors import (
     ConfigError,
     ParsetimeAdapterCallError,
     SQLMeshError,
     raise_config_error,
 )
-from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_error_details
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
@@ -31,6 +38,7 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
 
     from sqlmesh.core.linter.rule import Rule
+    from sqlmesh.core.model.definition import _Model
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
 
@@ -43,16 +51,16 @@ class BaseExpressionRenderer:
         expression: exp.Expression,
         dialect: DialectType,
         macro_definitions: t.List[d.MacroDef],
-        path: Path = Path(),
+        path: t.Optional[Path] = None,
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         default_catalog: t.Optional[str] = None,
         quote_identifiers: bool = True,
-        model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
+        model: t.Optional[_Model] = None,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -66,8 +74,9 @@ class BaseExpressionRenderer:
         self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
         self._cache: t.List[t.Optional[exp.Expression]] = []
-        self._model_fqn = model_fqn
+        self._model_fqn = model.fqn if model else None
         self._optimize_query_flag = optimize_query is not False
+        self._model = model
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -179,7 +188,6 @@ class BaseExpressionRenderer:
         )
 
         render_kwargs = {
-            "dialect": self._dialect,
             **date_dict(
                 to_datetime(execution_time or c.EPOCH),
                 start_time,
@@ -188,49 +196,84 @@ class BaseExpressionRenderer:
             **kwargs,
         }
 
-        variables = kwargs.pop("variables", {})
-        jinja_env_kwargs = {
-            **{
-                **render_kwargs,
-                **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
-                **variables,
-            },
-            "snapshots": snapshots or {},
-            "table_mapping": table_mapping,
-            "deployability_index": deployability_index,
-            "default_catalog": self._default_catalog,
-            "runtime_stage": runtime_stage.value,
-            "resolve_table": _resolve_table,
-        }
         if this_model:
             render_kwargs["this_model"] = this_model
-            jinja_env_kwargs["this_model"] = this_model.sql(
-                dialect=self._dialect, identify=True, comments=False
-            )
 
-        jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
+        macro_evaluator.locals.update(render_kwargs)
+
+        variables = kwargs.pop("variables", {})
+        if variables:
+            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
 
         expressions = [self._expression]
         if isinstance(self._expression, d.Jinja):
             try:
+                jinja_env_kwargs = {
+                    **{
+                        **render_kwargs,
+                        **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
+                        **variables,
+                    },
+                    "snapshots": snapshots or {},
+                    "table_mapping": table_mapping,
+                    "deployability_index": deployability_index,
+                    "default_catalog": self._default_catalog,
+                    "runtime_stage": runtime_stage.value,
+                    "resolve_table": _resolve_table,
+                    "model_instance": self._model,
+                }
+
+                if this_model:
+                    jinja_env_kwargs["this_model"] = this_model.sql(
+                        dialect=self._dialect, identify=True, comments=False
+                    )
+
+                if self._model and self._model.kind.is_incremental_by_time_range:
+                    all_refs = list(
+                        self._jinja_macro_registry.global_objs.get("sources", {}).values()  # type: ignore
+                    ) + list(
+                        self._jinja_macro_registry.global_objs.get("refs", {}).values()  # type: ignore
+                    )
+                    for ref in all_refs:
+                        if ref.event_time_filter:
+                            ref.event_time_filter["start"] = render_kwargs["start_tstz"]
+                            ref.event_time_filter["end"] = to_tstz(
+                                make_ts_exclusive(render_kwargs["end_tstz"], dialect=self._dialect)
+                            )
+
+                jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
+
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
-                if rendered_expression.strip():
-                    expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
-
-                    if not expressions:
-                        raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
+                logger.debug(
+                    f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
+                )
             except ParsetimeAdapterCallError:
                 raise
             except Exception as ex:
                 raise ConfigError(
-                    f"Could not render or parse jinja at '{self._path}'.\n{ex}"
+                    f"Could not render jinja for '{self._path}'.\n" + extract_error_details(ex)
                 ) from ex
 
-        macro_evaluator.locals.update(render_kwargs)
+            if rendered_expression.strip():
+                # ensure there is actual SQL and not just comments and non-SQL jinja
+                dialect = Dialect.get_or_raise(self._dialect)
+                tokens = dialect.tokenize(rendered_expression)
 
-        if variables:
-            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
+                if tokens:
+                    try:
+                        expressions = [
+                            e for e in dialect.parser().parse(tokens, rendered_expression) if e
+                        ]
+
+                        if not expressions:
+                            raise ConfigError(
+                                f"Failed to parse an expression:\n{rendered_expression}"
+                            )
+                    except Exception as ex:
+                        raise ConfigError(
+                            f"Could not parse the rendered jinja at '{self._path}'.\n{ex}"
+                        ) from ex
 
         for definition in self._macro_definitions:
             try:
@@ -520,8 +563,6 @@ class QueryRenderer(BaseExpressionRenderer):
             runtime_stage, start, end, execution_time, *kwargs.values()
         )
 
-        needs_optimization = needs_optimization and self._optimize_query_flag
-
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
         else:
@@ -542,6 +583,11 @@ class QueryRenderer(BaseExpressionRenderer):
             expressions = [e for e in expressions if not isinstance(e, exp.Semicolon)]
 
             if not expressions:
+                # We assume that if there are no expressions, then the model contains dynamic Jinja SQL
+                # and we thus treat it similar to models with adapter calls to match dbt's behavior.
+                if isinstance(self._expression, d.JinjaQuery):
+                    return None
+
                 raise ConfigError(f"Failed to render query at '{self._path}':\n{self._expression}")
 
             if len(expressions) > 1:
@@ -557,7 +603,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
                 raise
 
-            if needs_optimization:
+            if needs_optimization and self._optimize_query_flag:
                 deps = d.find_tables(
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )

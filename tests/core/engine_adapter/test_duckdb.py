@@ -2,9 +2,9 @@ import typing as t
 
 import pandas as pd  # noqa: TID253
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
-
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter, EngineAdapter
 from tests.core.engine_adapter import to_sql_calls
 
@@ -77,8 +77,11 @@ def test_set_current_catalog(make_mocked_engine_adapter: t.Callable, duck_conn):
     ]
 
 
-def test_temporary_table(make_mocked_engine_adapter: t.Callable, duck_conn):
+def test_temporary_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(DuckDBEngineAdapter)
+
+    mocker.patch.object(adapter, "get_current_catalog", return_value="test_catalog")
+    mocker.patch.object(adapter, "fetchone", return_value=("test_catalog",))
 
     adapter.create_table(
         "test_table",
@@ -98,8 +101,56 @@ def test_create_catalog(make_mocked_engine_adapter: t.Callable) -> None:
     assert to_sql_calls(adapter) == ["ATTACH IF NOT EXISTS 'foo.db' AS \"foo\""]
 
 
+def test_create_catalog_motherduck(make_mocked_engine_adapter: t.Callable) -> None:
+    adapter: DuckDBEngineAdapter = make_mocked_engine_adapter(
+        DuckDBEngineAdapter, is_motherduck=True
+    )
+    adapter.create_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == ['CREATE DATABASE IF NOT EXISTS "foo"']
+
+
 def test_drop_catalog(make_mocked_engine_adapter: t.Callable) -> None:
     adapter: DuckDBEngineAdapter = make_mocked_engine_adapter(DuckDBEngineAdapter)
     adapter.drop_catalog(exp.to_identifier("foo"))
 
     assert to_sql_calls(adapter) == ['DETACH DATABASE IF EXISTS "foo"']
+
+
+def test_drop_catalog_motherduck(make_mocked_engine_adapter: t.Callable) -> None:
+    adapter: DuckDBEngineAdapter = make_mocked_engine_adapter(
+        DuckDBEngineAdapter, is_motherduck=True
+    )
+    adapter.drop_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == ['DROP DATABASE IF EXISTS "foo" CASCADE']
+
+
+def test_ducklake_partitioning(adapter: EngineAdapter, duck_conn, tmp_path):
+    catalog = "a_ducklake_db"
+
+    duck_conn.install_extension("ducklake")
+    duck_conn.load_extension("ducklake")
+    duck_conn.execute(
+        f"ATTACH 'ducklake:{tmp_path}/{catalog}.ducklake' AS {catalog} (DATA_PATH '{tmp_path}');"
+    )
+
+    # no partitions on catalog creation
+    partition_info = duck_conn.execute(
+        f"SELECT * FROM __ducklake_metadata_{catalog}.main.ducklake_partition_info"
+    ).fetchdf()
+    assert partition_info.empty
+
+    adapter.set_current_catalog(catalog)
+    adapter.create_schema("test_schema")
+    adapter.create_table(
+        "test_schema.test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        partitioned_by=[exp.to_column("a"), exp.to_column("b")],
+    )
+
+    # 1 partition after table creation
+    partition_info = duck_conn.execute(
+        f"SELECT * FROM __ducklake_metadata_{catalog}.main.ducklake_partition_info"
+    ).fetchdf()
+    assert partition_info.shape[0] == 1

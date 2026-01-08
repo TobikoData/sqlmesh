@@ -1,48 +1,46 @@
-import { test, expect } from '@playwright/test'
-import path from 'path'
+import { test, expect } from './fixtures'
 import fs from 'fs-extra'
-import os from 'os'
-import { runCommand, SUSHI_SOURCE_PATH } from './utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  openServerPage,
+  runCommand,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
+import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Format project works correctly', async ({ page }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Format project works correctly', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
-  const context = await startCodeServer({
-    tempDir,
-    placeFileWithPythonInterpreter: true,
-  })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
+  await openServerPage(page, tempDir, sharedCodeServer)
 
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+  //   Wait for the models folder to be visible
+  await page.waitForSelector('text=models')
 
-    //   Wait for the models folder to be visible
-    await page.waitForSelector('text=models')
+  // Click on the models folder, excluding external_models
+  await page
+    .getByRole('treeitem', { name: 'models', exact: true })
+    .locator('a')
+    .click()
 
-    // Click on the models folder, excluding external_models
-    await page
-      .getByRole('treeitem', { name: 'models', exact: true })
-      .locator('a')
-      .click()
+  // Open the customer_revenue_lifetime model
+  await page
+    .getByRole('treeitem', { name: 'customers.sql', exact: true })
+    .locator('a')
+    .click()
 
-    // Open the customer_revenue_lifetime model
-    await page
-      .getByRole('treeitem', { name: 'customers.sql', exact: true })
-      .locator('a')
-      .click()
+  await page.waitForSelector('text=grain')
+  await waitForLoadedSQLMesh(page)
 
-    await page.waitForSelector('text=grain')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+  // Format the project
+  await runCommand(page, 'SQLMesh: Format Project')
 
-    // Format the project
-    await runCommand(page, 'SQLMesh: Format Project')
-
-    // Check that the notification appears saying 'Project formatted successfully'
-    await expect(
-      page.getByText('Project formatted successfully', { exact: true }),
-    ).toBeVisible()
-  } finally {
-    await stopCodeServer(context)
-  }
+  // Check that the notification appears saying 'Project formatted successfully'
+  await expect(
+    page.getByText('Project formatted successfully', { exact: true }),
+  ).toBeVisible()
 })

@@ -100,8 +100,11 @@ class ModelTest(unittest.TestCase):
         self._validate_and_normalize_test()
 
         if self.engine_adapter.default_catalog:
-            self._fixture_catalog: t.Optional[exp.Identifier] = exp.parse_identifier(
-                self.engine_adapter.default_catalog, dialect=self._test_adapter_dialect
+            self._fixture_catalog: t.Optional[exp.Identifier] = normalize_identifiers(
+                exp.parse_identifier(
+                    self.engine_adapter.default_catalog, dialect=self._test_adapter_dialect
+                ),
+                dialect=self._test_adapter_dialect,
             )
         else:
             self._fixture_catalog = None
@@ -151,6 +154,9 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
+        import pandas as pd
+        import numpy as np
+
         self.engine_adapter.create_schema(self._qualified_fixture_schema)
 
         for name, values in self.body.get("inputs", {}).items():
@@ -200,6 +206,10 @@ class ModelTest(unittest.TestCase):
                     }
             else:
                 query_or_df = self._create_df(values, columns=columns_to_known_types)
+
+            # Convert NaN/NaT values to None if DataFrame
+            if isinstance(query_or_df, pd.DataFrame):
+                query_or_df = query_or_df.replace({np.nan: None})
 
             self.engine_adapter.create_view(
                 self._test_fixture_table(name), query_or_df, columns_to_known_types
@@ -310,6 +320,13 @@ class ModelTest(unittest.TestCase):
             #
             # This is a bit of a hack, but it's a way to get the best of both worlds.
             args: t.List[t.Any] = []
+
+            failed_subtest = ""
+
+            if subtest := getattr(self, "_subtest", None):
+                if cte := subtest.params.get("cte"):
+                    failed_subtest = f" (CTE {cte})"
+
             if expected.shape != actual.shape:
                 _raise_if_unexpected_columns(expected.columns, actual.columns)
 
@@ -318,13 +335,13 @@ class ModelTest(unittest.TestCase):
                 missing_rows = _row_difference(expected, actual)
                 if not missing_rows.empty:
                     args[0] += f"\n\nMissing rows:\n\n{missing_rows}"
-                    args.append(df_to_table("Missing rows", missing_rows))
+                    args.append(df_to_table(f"Missing rows{failed_subtest}", missing_rows))
 
                 unexpected_rows = _row_difference(actual, expected)
 
                 if not unexpected_rows.empty:
                     args[0] += f"\n\nUnexpected rows:\n\n{unexpected_rows}"
-                    args.append(df_to_table("Unexpected rows", unexpected_rows))
+                    args.append(df_to_table(f"Unexpected rows{failed_subtest}", unexpected_rows))
 
             else:
                 diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
@@ -334,17 +351,20 @@ class ModelTest(unittest.TestCase):
                 diff.rename(columns={"exp": "Expected", "act": "Actual"}, inplace=True)
                 if self.verbosity == Verbosity.DEFAULT:
                     args.extend(
-                        df_to_table("Data mismatch", df) for df in _split_df_by_column_pairs(diff)
+                        df_to_table(f"Data mismatch{failed_subtest}", df)
+                        for df in _split_df_by_column_pairs(diff)
                     )
                 else:
-                    from pandas import MultiIndex
+                    from pandas import DataFrame, MultiIndex
 
                     levels = t.cast(MultiIndex, diff.columns).levels[0]
                     for col in levels:
-                        col_diff = diff[col]
+                        # diff[col] returns a DataFrame when columns is a MultiIndex
+                        col_diff = t.cast(DataFrame, diff[col])
                         if not col_diff.empty:
                             table = df_to_table(
-                                f"[bold red]Column '{col}' mismatch[/bold red]", col_diff
+                                f"[bold red]Column '{col}' mismatch{failed_subtest}[/bold red]",
+                                col_diff,
                             )
                             args.append(table)
 
@@ -434,6 +454,9 @@ class ModelTest(unittest.TestCase):
         ctes = outputs.get("ctes")
         query = outputs.get("query")
         partial = outputs.pop("partial", None)
+
+        if ctes is None and query is None:
+            _raise_error("Incomplete test, outputs must contain 'query' or 'ctes'", self.path)
 
         def _normalize_rows(
             values: t.List[Row] | t.Dict,
@@ -625,14 +648,16 @@ class ModelTest(unittest.TestCase):
             return self._execute(query)
 
         rows = values["rows"]
+        columns_str: t.Optional[t.List[str]] = None
         if columns:
+            columns_str = [str(c) for c in columns]
             referenced_columns = list(dict.fromkeys(col for row in rows for col in row))
             _raise_if_unexpected_columns(columns, referenced_columns)
 
             if partial:
-                columns = referenced_columns
+                columns_str = [c for c in columns_str if c in referenced_columns]
 
-        return pd.DataFrame.from_records(rows, columns=columns)
+        return pd.DataFrame.from_records(rows, columns=columns_str)
 
     def _add_missing_columns(
         self, query: exp.Query, all_columns: t.Optional[t.Collection[str]] = None
@@ -783,7 +808,7 @@ class PythonModelTest(ModelTest):
             actual_df.reset_index(drop=True, inplace=True)
             expected = self._create_df(values, columns=self.model.columns_to_types, partial=partial)
 
-            self.assert_equal(expected, actual_df, sort=False, partial=partial)
+            self.assert_equal(expected, actual_df, sort=True, partial=partial)
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
@@ -792,7 +817,7 @@ class PythonModelTest(ModelTest):
         with self._concurrent_render_context():
             variables = self.body.get("vars", {}).copy()
             time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
-            df = next(self.model.render(context=self.context, **time_kwargs, **variables))
+            df = next(self.model.render(context=self.context, variables=variables, **time_kwargs))
 
         assert not isinstance(df, exp.Expression)
         return df if isinstance(df, pd.DataFrame) else df.toPandas()
@@ -901,8 +926,7 @@ def generate_test(
                 cte_output = test._execute(cte_query)
                 ctes[cte.alias] = (
                     pandas_timestamp_to_pydatetime(
-                        cte_output.apply(lambda col: col.map(_normalize_df_value)),
-                        cte_query.named_selects,
+                        df=cte_output.apply(lambda col: col.map(_normalize_df_value)),
                     )
                     .replace({np.nan: None})
                     .to_dict(orient="records")

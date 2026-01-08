@@ -2,3 +2,13 @@ version: 2
 
 seeds:
   - name: waiter_names
+  - name: waiter_revenue_semicolon
+    config:
+      delimiter: ";"
+    columns:
+      - name: waiter_id
+        data_type: int
+      - name: revenue
+        data_type: decimal
+      - name: quarter
+        data_type: text

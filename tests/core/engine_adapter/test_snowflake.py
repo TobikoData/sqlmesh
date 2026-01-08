@@ -4,12 +4,14 @@ import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import normalize_model_name
-from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObjectType
+from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
@@ -37,6 +39,38 @@ def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Cal
     )
 
     assert value.sql(dialect=adapter.dialect) == '"CATALOG"."DB"."__temp_TEST_TABLE_abcdefgh"'
+
+
+def test_get_data_objects_lowercases_columns(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+) -> None:
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter, patch_get_data_objects=False)
+
+    adapter.get_current_catalog = mocker.Mock(return_value="TEST_CATALOG")
+
+    adapter.fetchdf = mocker.Mock(
+        return_value=pd.DataFrame(  # type: ignore[assignment]
+            [
+                {
+                    "CATALOG": "TEST_CATALOG",
+                    "NAME": "MY_TABLE",
+                    "SCHEMA_NAME": "PUBLIC",
+                    "TYPE": "TABLE",
+                    "CLUSTERING_KEY": "ID",
+                }
+            ]
+        )
+    )
+
+    data_objects = adapter._get_data_objects("TEST_CATALOG.PUBLIC")
+
+    assert len(data_objects) == 1
+    data_object = data_objects[0]
+    assert data_object.catalog == "TEST_CATALOG"
+    assert data_object.schema_name == "PUBLIC"
+    assert data_object.name == "MY_TABLE"
+    assert data_object.type == DataObjectType.TABLE
+    assert data_object.clustering_key == "ID"
 
 
 @pytest.mark.parametrize(
@@ -212,6 +246,204 @@ def test_multiple_column_comments(make_mocked_engine_adapter: t.Callable, mocker
     ]
 
 
+def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    relation = normalize_identifiers(
+        exp.to_table("test_db.test_schema.test_table", dialect="snowflake"), dialect="snowflake"
+    )
+    new_grants_config = {"SELECT": ["ROLE role1", "ROLE role2"], "INSERT": ["ROLE role3"]}
+
+    current_grants = [
+        ("SELECT", "ROLE old_role"),
+        ("UPDATE", "ROLE legacy_role"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="snowflake")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM TEST_DB.INFORMATION_SCHEMA.TABLE_PRIVILEGES "
+        "WHERE table_catalog = 'TEST_DB' AND table_schema = 'TEST_SCHEMA' AND table_name = 'TEST_TABLE' "
+        "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert 'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "ROLE1"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "ROLE2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "ROLE3"' in sql_calls
+    assert (
+        'REVOKE SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE "OLD_ROLE"'
+        in sql_calls
+    )
+    assert (
+        'REVOKE UPDATE ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE "LEGACY_ROLE"'
+        in sql_calls
+    )
+
+
+def test_sync_grants_config_with_overlaps(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    relation = normalize_identifiers(
+        exp.to_table("test_db.test_schema.test_table", dialect="snowflake"), dialect="snowflake"
+    )
+    new_grants_config = {
+        "SELECT": ["ROLE shared", "ROLE new_role"],
+        "INSERT": ["ROLE shared", "ROLE writer"],
+    }
+
+    current_grants = [
+        ("SELECT", "ROLE shared"),
+        ("SELECT", "ROLE legacy"),
+        ("INSERT", "ROLE shared"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="snowflake")
+    expected_sql = (
+        """SELECT privilege_type, grantee FROM TEST_DB.INFORMATION_SCHEMA.TABLE_PRIVILEGES """
+        "WHERE table_catalog = 'TEST_DB' AND table_schema = 'TEST_SCHEMA' AND table_name = 'TEST_TABLE' "
+        "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 3
+
+    assert (
+        'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "NEW_ROLE"' in sql_calls
+    )
+    assert (
+        'GRANT INSERT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "WRITER"' in sql_calls
+    )
+    assert (
+        'REVOKE SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE "LEGACY"'
+        in sql_calls
+    )
+
+
+@pytest.mark.parametrize(
+    "table_type, expected_keyword",
+    [
+        (DataObjectType.TABLE, "TABLE"),
+        (DataObjectType.VIEW, "VIEW"),
+        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
+        (DataObjectType.MANAGED_TABLE, "DYNAMIC TABLE"),
+    ],
+)
+def test_sync_grants_config_object_kind(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+    table_type: DataObjectType,
+    expected_keyword: str,
+) -> None:
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    relation = normalize_identifiers(
+        exp.to_table("test_db.test_schema.test_object", dialect="snowflake"), dialect="snowflake"
+    )
+
+    mocker.patch.object(adapter, "fetchall", return_value=[])
+
+    adapter.sync_grants_config(relation, {"SELECT": ["ROLE test"]}, table_type)
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        f'GRANT SELECT ON {expected_keyword} "TEST_DB"."TEST_SCHEMA"."TEST_OBJECT" TO ROLE "TEST"'
+    ]
+
+
+def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    relation = normalize_identifiers(
+        exp.to_table('"test_db"."test_schema"."test_table"', dialect="snowflake"),
+        dialect="snowflake",
+    )
+    new_grants_config = {"SELECT": ["ROLE role1", "ROLE role2"], "INSERT": ["ROLE role3"]}
+
+    current_grants = [
+        ("SELECT", "ROLE old_role"),
+        ("UPDATE", "ROLE legacy_role"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="snowflake")
+    expected_sql = (
+        """SELECT privilege_type, grantee FROM "test_db".INFORMATION_SCHEMA.TABLE_PRIVILEGES """
+        "WHERE table_catalog = 'test_db' AND table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert 'GRANT SELECT ON TABLE "test_db"."test_schema"."test_table" TO ROLE "ROLE1"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_db"."test_schema"."test_table" TO ROLE "ROLE2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_db"."test_schema"."test_table" TO ROLE "ROLE3"' in sql_calls
+    assert (
+        'REVOKE SELECT ON TABLE "test_db"."test_schema"."test_table" FROM ROLE "OLD_ROLE"'
+        in sql_calls
+    )
+    assert (
+        'REVOKE UPDATE ON TABLE "test_db"."test_schema"."test_table" FROM ROLE "LEGACY_ROLE"'
+        in sql_calls
+    )
+
+
+def test_sync_grants_config_no_catalog_or_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    relation = normalize_identifiers(
+        exp.to_table('"TesT_Table"', dialect="snowflake"), dialect="snowflake"
+    )
+    new_grants_config = {"SELECT": ["ROLE role1", "ROLE role2"], "INSERT": ["ROLE role3"]}
+
+    current_grants = [
+        ("SELECT", "ROLE old_role"),
+        ("UPDATE", "ROLE legacy_role"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    mocker.patch.object(adapter, "get_current_catalog", return_value="caTalog")
+    mocker.patch.object(adapter, "_get_current_schema", return_value="sChema")
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="snowflake")
+    expected_sql = (
+        """SELECT privilege_type, grantee FROM "caTalog".INFORMATION_SCHEMA.TABLE_PRIVILEGES """
+        "WHERE table_catalog = 'caTalog' AND table_schema = 'sChema' AND table_name = 'TesT_Table' "
+        "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert 'GRANT SELECT ON TABLE "TesT_Table" TO ROLE "ROLE1"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TesT_Table" TO ROLE "ROLE2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "TesT_Table" TO ROLE "ROLE3"' in sql_calls
+    assert 'REVOKE SELECT ON TABLE "TesT_Table" FROM ROLE "OLD_ROLE"' in sql_calls
+    assert 'REVOKE UPDATE ON TABLE "TesT_Table" FROM ROLE "LEGACY_ROLE"' in sql_calls
+
+
 def test_df_to_source_queries_use_schema(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
 ):
@@ -254,14 +486,14 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
         adapter.create_managed_table(
             table_name="test_table",
             query=query,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
         )
 
     # warehouse not specified, should default to current_warehouse()
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={"target_lag": exp.Literal.string("20 minutes")},
     )
 
@@ -269,7 +501,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
             "warehouse": exp.to_identifier("foo"),
@@ -280,7 +512,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
         },
@@ -292,7 +524,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
             "refresh_mode": exp.Literal.string("auto"),
@@ -304,7 +536,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
             "catalog": exp.Literal.string("snowflake"),
@@ -325,12 +557,12 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
 def test_drop_managed_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
 
-    adapter.drop_managed_table(table_name=exp.parse_identifier("foo"), exists=False)
-    adapter.drop_managed_table(table_name=exp.parse_identifier("foo"), exists=True)
+    adapter.drop_managed_table(table_name="foo.bar", exists=False)
+    adapter.drop_managed_table(table_name="foo.bar", exists=True)
 
     assert to_sql_calls(adapter) == [
-        'DROP DYNAMIC TABLE "foo"',
-        'DROP DYNAMIC TABLE IF EXISTS "foo"',
+        'DROP DYNAMIC TABLE "foo"."bar"',
+        'DROP DYNAMIC TABLE IF EXISTS "foo"."bar"',
     ]
 
 
@@ -343,7 +575,7 @@ def test_ctas_skips_dynamic_table_properties(make_mocked_engine_adapter: t.Calla
     adapter.ctas(
         table_name="test_table",
         query_or_df=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "warehouse": exp.to_identifier("foo"),
             "target_lag": exp.Literal.string("20 minutes"),
@@ -463,7 +695,10 @@ def test_replace_query_snowpark_dataframe(
     adapter.replace_query(
         table_name="foo",
         query_or_df=df,
-        columns_to_types={"ID": exp.DataType.build("INT"), "NAME": exp.DataType.build("VARCHAR")},
+        target_columns_to_types={
+            "ID": exp.DataType.build("INT"),
+            "NAME": exp.DataType.build("VARCHAR"),
+        },
     )
 
     # verify that DROP VIEW is called instead of DROP TABLE
@@ -622,7 +857,7 @@ SELECT a::INT;
     )
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 
@@ -657,7 +892,7 @@ SELECT a::INT;
     )
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 
@@ -685,7 +920,7 @@ def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callab
     adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter, default_catalog="test_catalog")
     adapter.clone_table("target_table", "source_table")
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE "target_table" CLONE "source_table"'
+        'CREATE TABLE IF NOT EXISTS "target_table" CLONE "source_table"'
     )
 
     # Validate with transient type we create the clone table accordingly
@@ -697,7 +932,7 @@ def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callab
         "target_table", "source_table", rendered_physical_properties=rendered_physical_properties
     )
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TRANSIENT TABLE "target_table" CLONE "source_table"'
+        'CREATE TRANSIENT TABLE IF NOT EXISTS "target_table" CLONE "source_table"'
     )
 
     # Validate other engine adapters would work as usual even when we pass the properties
@@ -707,7 +942,7 @@ def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callab
         "target_table", "source_table", rendered_physical_properties=rendered_physical_properties
     )
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE "target_table" CLONE "source_table"'
+        'CREATE TABLE IF NOT EXISTS "target_table" CLONE "source_table"'
     )
 
 
@@ -733,7 +968,7 @@ def test_table_format_iceberg(snowflake_mocked_engine_adapter: SnowflakeEngineAd
 
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         table_properties=model.physical_properties,
     )
@@ -741,7 +976,7 @@ def test_table_format_iceberg(snowflake_mocked_engine_adapter: SnowflakeEngineAd
     adapter.ctas(
         table_name=model.name,
         query_or_df=model.render_query_or_raise(),
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         table_properties=model.physical_properties,
     )

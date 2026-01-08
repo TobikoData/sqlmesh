@@ -93,9 +93,13 @@ jobs:
       - run:
           name: Run linters and code style checks
           command: make py-style
-      - run:
-          name: Exercise the benchmarks
-          command: make benchmark-ci
+      - unless:
+          condition:
+            equal: ["3.9", << parameters.python_version >>]
+          steps:
+            - run:
+                name: Exercise the benchmarks
+                command: make benchmark-ci
       - run:
           name: Run cicd tests
           command: make cicd-test
@@ -144,8 +148,11 @@ jobs:
       - halt_unless_core
       - checkout
       - run:
-          name: Run the migration test
-          command: ./.circleci/test_migration.sh
+          name: Run the migration test - sushi
+          command: ./.circleci/test_migration.sh sushi "--gateway duckdb_persistent"
+      - run:
+          name: Run the migration test - sushi_dbt
+          command: ./.circleci/test_migration.sh sushi_dbt "--config migration_test_config"
 
   ui_style:
     docker:
@@ -172,7 +179,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.52.0-jammy
+      - image: mcr.microsoft.com/playwright:v1.54.1-jammy
     resource_class: medium
     steps:
       - halt_unless_client
@@ -200,39 +207,6 @@ jobs:
       - run:
           name: Run tests
           command: npm --prefix web/client run test
-
-  trigger_private_tests:
-    docker:
-      - image: cimg/python:3.12.0
-    resource_class: small
-    steps:
-      - checkout
-      - run:
-          name: Install setuptools scm
-          command: pip install setuptools_scm
-      - run:
-          name: Trigger private tests
-          command: |
-            export COMMIT_MESSAGE="$(git log --format=%s -n 1 $CIRCLE_SHA1)"
-            export FORMATTED_COMMIT_MESSAGE="${COMMIT_MESSAGE//\"/\\\"}"
-            # returns a version string like 0.1.0.dev11
-            export PACKAGE_VERSION="$(python ./.circleci/get_scm_version.py)"
-            curl --request POST \
-              --url $TOBIKO_PRIVATE_CIRCLECI_URL \
-              --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
-              --header "content-type: application/json" \
-              --data '{
-                "branch":"main",
-                "parameters":{
-                  "run_main_pr":false,
-                  "run_sqlmesh_commit":true,
-                  "sqlmesh_branch":"'$CIRCLE_BRANCH'",
-                  "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
-                  "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
-                  "sqlmesh_commit_message":"'"$FORMATTED_COMMIT_MESSAGE"'",
-                  "sqlmesh_package_version":"'$PACKAGE_VERSION'"
-                  }
-              }'
 
   engine_tests_docker:
     parameters:
@@ -271,6 +245,9 @@ jobs:
       - halt_unless_core
       - checkout
       - run:
+          name: Install OS-level dependencies
+          command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"
+      - run:
           name: Generate database name
           command: |
             UUID=`cat /proc/sys/kernel/random/uuid`
@@ -279,6 +256,8 @@ jobs:
             echo "export SNOWFLAKE_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
             echo "export DATABRICKS_CATALOG='$TEST_DB_NAME'" >> "$BASH_ENV"
             echo "export REDSHIFT_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
+            echo "export GCP_POSTGRES_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
+            echo "export FABRIC_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
       - run:
           name: Create test database
           command: ./.circleci/manage-test-db.sh << parameters.engine >> "$TEST_DB_NAME" up
@@ -306,6 +285,7 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
+                - "3.13"
       - cicd_tests_windows
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
@@ -329,19 +309,14 @@ workflows:
           matrix:
             parameters:
               engine:
-                - snowflake
+                #- snowflake
                 - databricks
                 - redshift
                 - bigquery
                 - clickhouse-cloud
                 - athena
-          filters:
-            branches:
-              only:
-                - main
-      - trigger_private_tests:
-          requires:
-            - style_and_cicd_tests
+                - fabric
+                - gcp-postgres
           filters:
             branches:
               only:

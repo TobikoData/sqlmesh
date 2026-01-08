@@ -7,8 +7,11 @@ import typing as t
 import zlib
 from collections import defaultdict
 from enum import Enum
+from sys import exc_info
+from traceback import walk_tb
 
-from jinja2 import Environment, Template, nodes
+from jinja2 import Environment, Template, nodes, UndefinedError
+from jinja2.runtime import Macro
 from sqlglot import Dialect, Expression, Parser, TokenType
 
 from sqlmesh.core import constants as c
@@ -22,7 +25,6 @@ if t.TYPE_CHECKING:
     CallNames = t.Tuple[t.Tuple[str, ...], t.Union[nodes.Call, nodes.Getattr]]
 
 SQLMESH_JINJA_PACKAGE = "sqlmesh.utils.jinja"
-SQLMESH_DBT_COMPATIBILITY_PACKAGE = "sqlmesh.dbt.converter.jinja_builtins"
 
 
 def environment(**kwargs: t.Any) -> Environment:
@@ -75,7 +77,7 @@ class MacroExtractor(Parser):
         """
         self.reset()
         self.sql = jinja
-        self._tokens = Dialect.get_or_raise(dialect).tokenizer.tokenize(jinja)
+        self._tokens = Dialect.get_or_raise(dialect).tokenize(jinja)
         self._index = -1
         self._advance()
 
@@ -95,11 +97,7 @@ class MacroExtractor(Parser):
                 macro_str = self._find_sql(macro_start, self._next)
                 macros[name] = MacroInfo(
                     definition=macro_str,
-                    depends_on=list(
-                        extract_macro_references_and_variables(macro_str, dbt_target_name=dialect)[
-                            0
-                        ]
-                    ),
+                    depends_on=list(extract_macro_references_and_variables(macro_str)[0]),
                 )
 
             self._advance()
@@ -135,6 +133,12 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[C
     vars_in_scope = vars_in_scope.copy()
     for child_node in node.iter_child_nodes():
         if "target" in child_node.fields:
+            # For nodes with assignment targets (Assign, AssignBlock, For, Import),
+            # the target name could shadow a reference in the right hand side.
+            # So we need to process the RHS before adding the target to scope.
+            # For example: {% set model = model.path %} should track model.path.
+            yield from find_call_names(child_node, vars_in_scope)
+
             target = getattr(child_node, "target")
             if isinstance(target, nodes.Name):
                 vars_in_scope.add(target.name)
@@ -151,7 +155,9 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[C
             name = call_name(child_node)
             if name[0][0] != "'" and name[0] not in vars_in_scope:
                 yield (name, child_node)
-        yield from find_call_names(child_node, vars_in_scope)
+
+        if "target" not in child_node.fields:
+            yield from find_call_names(child_node, vars_in_scope)
 
 
 def extract_call_names(
@@ -171,86 +177,34 @@ def extract_call_names(
     return parse()
 
 
-def extract_dbt_adapter_dispatch_targets(jinja_str: str) -> t.List[t.Tuple[str, t.Optional[str]]]:
-    """
-    Given a jinja string, identify {{ adapter.dispatch('foo','bar') }} calls and extract the (foo, bar) part as a tuple
-    """
-    ast = ENVIRONMENT.parse(jinja_str)
-
-    extracted = []
-
-    def _extract(node: nodes.Node, parent: t.Optional[nodes.Node] = None) -> None:
-        if (
-            isinstance(node, nodes.Getattr)
-            and isinstance(parent, nodes.Call)
-            and (node_name := node.find(nodes.Name))
-        ):
-            if node_name.name == "adapter" and node.attr == "dispatch":
-                call_args = [arg.value for arg in parent.args if isinstance(arg, nodes.Const)][0:2]
-                if len(call_args) == 1:
-                    call_args.append(None)
-                macro_name, package = call_args
-                extracted.append((macro_name, package))
-
-        for child_node in node.iter_child_nodes():
-            _extract(child_node, parent=node)
-
-    _extract(ast)
-
-    return extracted
+def is_variable_node(n: nodes.Node) -> bool:
+    return (
+        isinstance(n, nodes.Call)
+        and isinstance(n.node, nodes.Name)
+        and n.node.name in (c.VAR, c.BLUEPRINT_VAR)
+    )
 
 
 def extract_macro_references_and_variables(
-    *jinja_strs: str, dbt_target_name: t.Optional[str] = None
+    *jinja_strs: str,
 ) -> t.Tuple[t.Set[MacroReference], t.Set[str]]:
     macro_references = set()
     variables = set()
     for jinja_str in jinja_strs:
-        if dbt_target_name and "adapter.dispatch" in jinja_str:
-            for dispatch_target_name, package in extract_dbt_adapter_dispatch_targets(jinja_str):
-                # here we are guessing at the macro names that the {{ adapter.dispatch() }} call will invoke
-                # there is a defined resolution order: https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch
-                # we rely on JinjaMacroRegistry.trim() to tune the dependencies down into just the ones that actually exist
-                macro_references.add(
-                    MacroReference(package=package, name=f"default__{dispatch_target_name}")
-                )
-                macro_references.add(
-                    MacroReference(
-                        package=package, name=f"{dbt_target_name}__{dispatch_target_name}"
-                    )
-                )
-                if package and package.startswith("dbt"):
-                    # handle the case where macros like `current_timestamp()` in the `dbt` package expect an implementation in eg the `dbt_bigquery` package
-                    macro_references.add(
-                        MacroReference(
-                            package=f"dbt_{dbt_target_name}",
-                            name=f"{dbt_target_name}__{dispatch_target_name}",
-                        )
-                    )
-
         for call_name, node in extract_call_names(jinja_str):
-            if call_name[0] == c.VAR:
-                assert isinstance(node, nodes.Call)
+            if call_name[0] in (c.VAR, c.BLUEPRINT_VAR):
+                if not is_variable_node(node):
+                    # Find the variable node which could be nested
+                    for n in node.find_all(nodes.Call):
+                        if is_variable_node(n):
+                            node = n
+                            break
+                    else:
+                        raise ValueError(f"Could not find variable name in {jinja_str}")
+                node = t.cast(nodes.Call, node)
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
-                    variable_name = args[0].lower()
-
-                    # check if this {{ var() }} reference is from a migrated DBT package
-                    # if it is, there will be a __dbt_package=<package> kwarg
-                    dbt_package = next(
-                        (
-                            kwarg.value
-                            for kwarg in node.kwargs
-                            if isinstance(kwarg, nodes.Keyword) and kwarg.key == "__dbt_package"
-                        ),
-                        None,
-                    )
-                    if dbt_package and isinstance(dbt_package, nodes.Const):
-                        dbt_package = dbt_package.value
-                        # this convention is a flat way of referencing the nested values under `__dbt_packages__` in the SQLMesh project variables
-                        variable_name = f"{c.MIGRATED_DBT_PACKAGES}.{dbt_package}.{variable_name}"
-
-                    variables.add(variable_name)
+                    variables.add(args[0].lower())
             elif call_name[0] == c.GATEWAY:
                 variables.add(c.GATEWAY)
             elif len(call_name) == 1:
@@ -258,6 +212,20 @@ def extract_macro_references_and_variables(
             elif len(call_name) == 2:
                 macro_references.add(MacroReference(package=call_name[0], name=call_name[1]))
     return macro_references, variables
+
+
+def sort_dict_recursive(
+    item: t.Dict[str, t.Any],
+) -> t.Dict[str, t.Any]:
+    sorted_dict: t.Dict[str, t.Any] = {}
+    for k, v in sorted(item.items()):
+        if isinstance(v, list):
+            sorted_dict[k] = sorted(v)
+        elif isinstance(v, dict):
+            sorted_dict[k] = sort_dict_recursive(v)
+        else:
+            sorted_dict[k] = v
+    return sorted_dict
 
 
 JinjaGlobalAttribute = t.Union[str, int, float, bool, AttributeDict]
@@ -328,19 +296,6 @@ class JinjaMacroRegistry(PydanticModel):
     def trimmed(self) -> bool:
         return self._trimmed
 
-    @property
-    def all_macros(self) -> t.Iterable[t.Tuple[t.Optional[str], str, MacroInfo]]:
-        """
-        Returns (package, macro_name, MacroInfo) tuples for every macro in this registry
-        Root macros will have package=None
-        """
-        for name, macro in self.root_macros.items():
-            yield None, name, macro
-
-        for package, macros in self.packages.items():
-            for name, macro in macros.items():
-                yield (package, name, macro)
-
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
         """Adds macros to the target package.
 
@@ -363,6 +318,9 @@ class JinjaMacroRegistry(PydanticModel):
         Args:
             globals: The global objects that should be added.
         """
+        # Keep the registry lightweight when the graph is not needed
+        if not "graph" in self.packages:
+            globals.pop("flat_graph", None)
         self.global_objs.update(**self._validate_global_objs(globals))
 
     def build_macro(self, reference: MacroReference, **kwargs: t.Any) -> t.Optional[t.Callable]:
@@ -397,13 +355,16 @@ class JinjaMacroRegistry(PydanticModel):
                 if macro.is_top_level and macro_name not in root_macros:
                     root_macros[macro_name] = macro_wrapper
 
+        top_level_packages = self.top_level_packages.copy()
+
         if self.root_package_name is not None:
             package_macros[self.root_package_name].update(root_macros)
+            top_level_packages.append(self.root_package_name)
 
         env = environment()
 
         builtin_globals = self._create_builtin_globals(kwargs)
-        for top_level_package_name in self.top_level_packages:
+        for top_level_package_name in top_level_packages:
             # Make sure that the top-level package doesn't fully override the same builtin package.
             package_macros[top_level_package_name] = AttributeDict(
                 {
@@ -416,6 +377,7 @@ class JinjaMacroRegistry(PydanticModel):
         context.update(builtin_globals)
         context.update(root_macros)
         context.update(package_macros)
+        context["render"] = lambda input: env.from_string(input).render()
 
         env.globals.update(context)
         env.filters.update(self._environment.filters)
@@ -501,7 +463,7 @@ class JinjaMacroRegistry(PydanticModel):
                 d.PythonCode(
                     expressions=[
                         f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                        for k, v in sorted(filtered_objs.items())
+                        for k, v in sort_dict_recursive(filtered_objs).items()
                     ]
                 )
             )
@@ -679,12 +641,7 @@ def jinja_call_arg_name(node: nodes.Node) -> str:
 
 
 def create_var(variables: t.Dict[str, t.Any]) -> t.Callable:
-    def _var(
-        var_name: str, default: t.Optional[t.Any] = None, **kwargs: t.Any
-    ) -> t.Optional[t.Any]:
-        if dbt_package := kwargs.get("__dbt_package"):
-            var_name = f"{c.MIGRATED_DBT_PACKAGES}.{dbt_package}.{var_name}"
-
+    def _var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         value = variables.get(var_name.lower(), default)
         if isinstance(value, SqlValue):
             return value.sql
@@ -733,3 +690,24 @@ def make_jinja_registry(
     jinja_registry = jinja_registry.trim(jinja_references)
 
     return jinja_registry
+
+
+def extract_error_details(ex: Exception) -> str:
+    """Extracts a readable message from a Jinja2 error, to include missing name and macro."""
+
+    error_details = ""
+    if isinstance(ex, UndefinedError):
+        if match := re.search(r"'(\w+)'", str(ex)):
+            error_details += f"\nUndefined macro/variable: '{match.group(1)}'"
+        try:
+            _, _, exc_traceback = exc_info()
+            for frame, _ in walk_tb(exc_traceback):
+                if frame.f_code.co_name == "_invoke":
+                    macro = frame.f_locals.get("self")
+                    if isinstance(macro, Macro):
+                        error_details += f" in macro: '{macro.name}'\n"
+                        break
+        except:
+            # to fall back to the generic error message if frame analysis fails
+            pass
+    return error_details or str(ex)

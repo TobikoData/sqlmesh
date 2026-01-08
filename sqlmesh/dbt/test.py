@@ -8,11 +8,11 @@ from pathlib import Path
 from pydantic import Field
 import sqlmesh.core.dialect as d
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
+from sqlmesh.core.node import DbtNodeInfo
 from sqlmesh.dbt.common import (
     Dependencies,
     GeneralConfig,
     SqlStr,
-    extract_jinja_config,
     sql_str_validator,
 )
 from sqlmesh.utils import AttributeDict
@@ -61,6 +61,10 @@ class TestConfig(GeneralConfig):
         error_if: Conditional expression (default "!=0") to detect if error condition met (Not supported).
     """
 
+    __test__ = (
+        False  # prevent pytest trying to collect this as a test class when it's imported in a test
+    )
+
     # SQLMesh fields
     path: Path = Path()
     name: str
@@ -76,14 +80,16 @@ class TestConfig(GeneralConfig):
     dialect_: t.Optional[str] = Field(None, alias="dialect")
 
     # dbt fields
+    unique_id: str = ""
     package_name: str = ""
     alias: t.Optional[str] = None
+    fqn: t.List[str] = []
     schema_: t.Optional[str] = Field("", alias="schema")
     database: t.Optional[str] = None
     severity: Severity = Severity.ERROR
     store_failures: t.Optional[bool] = None
     where: t.Optional[str] = None
-    limit: t.Optional[str] = None
+    limit: t.Optional[int] = None
     fail_calc: str = "count(*)"
     warn_if: str = "!=0"
     error_if: str = "!=0"
@@ -104,8 +110,27 @@ class TestConfig(GeneralConfig):
         return v.lower()
 
     @property
+    def canonical_name(self) -> str:
+        return f"{self.package_name}.{self.name}".lower() if self.package_name else self.name
+
+    @property
     def is_standalone(self) -> bool:
-        return not self.model_name
+        # A test is standalone if:
+        # 1. It has no model_name (already standalone), OR
+        # 2. It references other models besides its own model
+        if not self.model_name:
+            return True
+
+        # Check if test has references to other models
+        # For versioned models, refs include version (e.g., "model_name_v1") but model_name may not
+        self_refs = {self.model_name}
+        for ref in self.dependencies.refs:
+            # versioned models end in _vX
+            if ref.startswith(f"{self.model_name}_v"):
+                self_refs.add(ref)
+
+        other_refs = {ref for ref in self.dependencies.refs if ref not in self_refs}
+        return bool(other_refs)
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
@@ -134,9 +159,7 @@ class TestConfig(GeneralConfig):
             }
         )
 
-        sql_no_config, _sql_config_only = extract_jinja_config(self.sql)
-        sql_no_config = sql_no_config.replace("**_dbt_generic_test_kwargs", self._kwargs())
-        query = d.jinja_query(sql_no_config)
+        query = d.jinja_query(self.sql.replace("**_dbt_generic_test_kwargs", self._kwargs()))
 
         skip = not self.enabled
         blocking = self.severity == Severity.ERROR
@@ -146,6 +169,7 @@ class TestConfig(GeneralConfig):
             jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
                 name=self.name,
+                dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
                 query=query,
@@ -162,6 +186,7 @@ class TestConfig(GeneralConfig):
         else:
             audit = ModelAudit(
                 name=self.name,
+                dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
                 blocking=blocking,
@@ -203,6 +228,12 @@ class TestConfig(GeneralConfig):
                 "type": None,
                 "quote_policy": AttributeDict(),
             }
+        )
+
+    @property
+    def node_info(self) -> DbtNodeInfo:
+        return DbtNodeInfo(
+            unique_id=self.unique_id, name=self.name, fqn=".".join(self.fqn), alias=self.alias
         )
 
 
