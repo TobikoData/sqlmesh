@@ -2743,8 +2743,12 @@ def test_dialect_pattern():
 
     def assert_match(test_sql: str, expected_value: t.Optional[str] = "duckdb"):
         match = d.DIALECT_PATTERN.search(test_sql)
-        assert match
-        dialect_str = match.group("d_quoted") or match.group("d_unquoted")
+
+        dialect_str: t.Optional[str] = None
+        if expected_value is not None:
+            assert match
+            dialect_str = match.group("dialect")
+
         assert dialect_str == expected_value
 
     # single-quoted dialect
@@ -2762,6 +2766,16 @@ def test_dialect_pattern():
         make_test_sql(
             """
             dialect duckdb,
+            description 'there's a dialect foo in here too!'
+            """
+        )
+    )
+
+    # double-quoted dialect (allowed in BQ)
+    assert_match(
+        make_test_sql(
+            """
+            dialect "duckdb",
             description 'there's a dialect foo in here too!'
             """
         )
@@ -2802,6 +2816,17 @@ def test_dialect_pattern():
         make_test_sql(
             """
             dialect '',
+            tag my_tag
+            """
+        ),
+        None,
+    )
+
+    # double-quoted empty dialect
+    assert_match(
+        make_test_sql(
+            """
+            dialect "",
             tag my_tag
             """
         ),

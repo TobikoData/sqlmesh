@@ -806,7 +806,7 @@ def text_diff(
 WS_OR_COMMENT = r"(?:\s|--[^\n]*\n|/\*.*?\*/)"
 HEADER = r"\b(?:model|audit)\b(?=\s*\()"
 KEY_BOUNDARY = r"(?:\(|,)"  # key is preceded by either '(' or ','
-DIALECT_VALUE = r"(?:'(?P<d_quoted>[a-z_][a-z0-9_]*)?'|(?P<d_unquoted>[a-z_][a-z0-9_]*))"  # value is single-quoted (maybe empty) or unquoted
+DIALECT_VALUE = r"['\"]?(?P<dialect>[a-z][a-z0-9]*)['\"]?"
 VALUE_BOUNDARY = r"(?=,|\))"  # value is followed by comma or closing paren
 
 DIALECT_PATTERN = re.compile(
@@ -902,7 +902,7 @@ def parse(
         A list of the parsed expressions: [Model, *Statements, Query, *Statements]
     """
     match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
-    dialect_str = (match.group("d_quoted") or match.group("d_unquoted")) if match else None
+    dialect_str = match.group("dialect") if match else None
     dialect = Dialect.get_or_raise(dialect_str or default_dialect)
 
     tokens = dialect.tokenize(sql)
