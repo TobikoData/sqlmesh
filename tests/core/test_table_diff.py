@@ -10,6 +10,7 @@ from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, DuckDBConnectionConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.table_diff import TableDiff, SchemaDiff
 import numpy as np  # noqa: TID253
 from sqlmesh.utils.errors import SQLMeshError
@@ -48,8 +49,14 @@ def capture_console_output(method_name: str, **kwargs) -> str:
 def test_data_diff(sushi_context_fixed_date, capsys, caplog):
     model = sushi_context_fixed_date.models['"memory"."sushi"."customer_revenue_by_day"']
 
-    model.query.select(exp.cast("'1'", "VARCHAR").as_("modified_col"), "1 AS y", copy=False)
-    sushi_context_fixed_date.upsert_model(model)
+    sushi_context_fixed_date.upsert_model(
+        model,
+        query_=ParsableSql(
+            sql=model.query.select(exp.cast("'1'", "VARCHAR").as_("modified_col"), "1 AS y").sql(
+                model.dialect
+            )
+        ),
+    )
 
     sushi_context_fixed_date.plan(
         "source_dev",
@@ -137,7 +144,7 @@ def test_data_diff(sushi_context_fixed_date, capsys, caplog):
     assert row_diff.t_sample.shape == (1, 6)
 
 
-def test_data_diff_decimals(sushi_context_fixed_date):
+def test_data_diff_decimals_on_float(sushi_context_fixed_date):
     engine_adapter = sushi_context_fixed_date.engine_adapter
 
     engine_adapter.ctas(
@@ -223,6 +230,49 @@ Column: value
     assert stripped_output == stripped_expected
 
 
+def test_data_diff_decimals_on_numeric():
+    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
+
+    columns_to_types = {
+        "key": exp.DataType.build("int"),
+        "value": exp.DataType.build("decimal(10,5)"),
+    }
+
+    engine_adapter.create_table("src", columns_to_types)
+    engine_adapter.create_table("target", columns_to_types)
+
+    src_records = [
+        (1, "25.12344"),
+        (2, "25.1234"),
+        (3, "25.124"),
+        (4, "25.14"),
+        (5, "25.4"),
+    ]
+
+    target_records = [
+        (1, "25.12343"),
+        (2, "25.1233"),
+        (3, "25.123"),
+        (4, "25.13"),
+        (5, "25.3"),
+    ]
+
+    src_df = pd.DataFrame(data=src_records, columns=columns_to_types.keys())
+    target_df = pd.DataFrame(data=target_records, columns=columns_to_types.keys())
+
+    engine_adapter.insert_append("src", src_df)
+    engine_adapter.insert_append("target", target_df)
+
+    for decimals in range(5, 0, -1):
+        table_diff = TableDiff(
+            adapter=engine_adapter, source="src", target="target", on=["key"], decimals=decimals
+        )
+        diff = table_diff.row_diff()
+
+        assert diff.full_match_count == 5 - decimals
+        assert diff.partial_match_count + diff.full_match_count == 5
+
+
 def test_grain_check(sushi_context_fixed_date):
     expressions = d.parse(
         """
@@ -290,16 +340,24 @@ def test_grain_check(sushi_context_fixed_date):
     )[0]
 
     row_diff = diff.row_diff()
+    assert row_diff.source_count == 7
+    assert row_diff.target_count == 10
     assert row_diff.full_match_count == 7
-    assert row_diff.full_match_pct == 93.33
-    assert row_diff.s_only_count == 2
-    assert row_diff.t_only_count == 5
-    assert row_diff.stats["join_count"] == 4
-    assert row_diff.stats["null_grain_count"] == 4
-    assert row_diff.stats["s_count"] != row_diff.stats["distinct_count_s"]
+    assert row_diff.partial_match_count == 0
+    assert row_diff.s_only_count == 0
+    assert row_diff.t_only_count == 3
+    assert row_diff.full_match_pct == 82.35
+    assert row_diff.partial_match_pct == 0
+    assert row_diff.s_only_pct == 0
+    assert row_diff.t_only_pct == 17.65
+    assert row_diff.stats["join_count"] == 7
+    assert (
+        row_diff.stats["null_grain_count"] == 4
+    )  # null grain currently (2025-07-24) means "any key column is null" as opposed to "all key columns are null"
     assert row_diff.stats["distinct_count_s"] == 7
-    assert row_diff.stats["t_count"] != row_diff.stats["distinct_count_t"]
     assert row_diff.stats["distinct_count_t"] == 10
+    assert row_diff.stats["s_count"] == row_diff.stats["distinct_count_s"]
+    assert row_diff.stats["t_count"] == row_diff.stats["distinct_count_t"]
     assert row_diff.s_sample.shape == (row_diff.s_only_count, 3)
     assert row_diff.t_sample.shape == (row_diff.t_only_count, 3)
 
@@ -329,17 +387,17 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
         ),
     )
 
-    query_sql = 'CREATE TABLE IF NOT EXISTS "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "s"."key", "s"."value", "s"."key" AS "__sqlmesh_join_key" FROM "table_diff_source" AS "s"), "__target" AS (SELECT "t"."key", "t"."value", "t"."key" AS "__sqlmesh_join_key" FROM "table_diff_target" AS "t"), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "s"."__sqlmesh_join_key" AS "s____sqlmesh_join_key", "t"."key" AS "t__key", "t"."value" AS "t__value", "t"."__sqlmesh_join_key" AS "t____sqlmesh_join_key", CASE WHEN NOT "s"."key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key" AND (NOT "s"."key" IS NULL AND NOT "t"."key" IS NULL) THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key") SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
+    query_sql = 'CREATE TABLE IF NOT EXISTS "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "s"."key", "s"."value", "s"."key" AS "__sqlmesh_join_key" FROM "table_diff_source" AS "s"), "__target" AS (SELECT "t"."key", "t"."value", "t"."key" AS "__sqlmesh_join_key" FROM "table_diff_target" AS "t"), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "s"."__sqlmesh_join_key" AS "s____sqlmesh_join_key", "t"."key" AS "t__key", "t"."value" AS "t__value", "t"."__sqlmesh_join_key" AS "t____sqlmesh_join_key", CASE WHEN NOT "s"."__sqlmesh_join_key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."__sqlmesh_join_key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key" THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN CAST(CAST("s"."value" AS DOUBLE) AS DECIMAL(38, 3)) = CAST(CAST("t"."value" AS DOUBLE) AS DECIMAL(38, 3)) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key") SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
     summary_query_sql = 'SELECT SUM("s_exists") AS "s_count", SUM("t_exists") AS "t_count", SUM("row_joined") AS "join_count", SUM("null_grain") AS "null_grain_count", SUM("row_full_match") AS "full_match_count", SUM("key_matches") AS "key_matches", SUM("value_matches") AS "value_matches", COUNT(DISTINCT ("s____sqlmesh_join_key")) AS "distinct_count_s", COUNT(DISTINCT ("t____sqlmesh_join_key")) AS "distinct_count_t" FROM "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh"'
     compare_sql = 'SELECT ROUND(100 * (CAST(SUM("key_matches") AS DECIMAL) / COUNT("key_matches")), 9) AS "key_matches", ROUND(100 * (CAST(SUM("value_matches") AS DECIMAL) / COUNT("value_matches")), 9) AS "value_matches" FROM "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh" WHERE "row_joined" = 1'
     sample_query_sql = 'WITH "source_only" AS (SELECT \'source_only\' AS "__sqlmesh_sample_type", "s__key", "s__value", "s____sqlmesh_join_key", "t__key", "t__value", "t____sqlmesh_join_key" FROM "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh" WHERE "s_exists" = 1 AND "row_joined" = 0 ORDER BY "s__key" NULLS FIRST LIMIT 20), "target_only" AS (SELECT \'target_only\' AS "__sqlmesh_sample_type", "s__key", "s__value", "s____sqlmesh_join_key", "t__key", "t__value", "t____sqlmesh_join_key" FROM "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh" WHERE "t_exists" = 1 AND "row_joined" = 0 ORDER BY "t__key" NULLS FIRST LIMIT 20), "common_rows" AS (SELECT \'common_rows\' AS "__sqlmesh_sample_type", "s__key", "s__value", "s____sqlmesh_join_key", "t__key", "t__value", "t____sqlmesh_join_key" FROM "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh" WHERE "row_joined" = 1 AND "row_full_match" = 0 ORDER BY "s__key" NULLS FIRST, "t__key" NULLS FIRST LIMIT 20) SELECT "__sqlmesh_sample_type", "s__key", "s__value", "s____sqlmesh_join_key", "t__key", "t__value", "t____sqlmesh_join_key" FROM "source_only" UNION ALL SELECT "__sqlmesh_sample_type", "s__key", "s__value", "s____sqlmesh_join_key", "t__key", "t__value", "t____sqlmesh_join_key" FROM "target_only" UNION ALL SELECT "__sqlmesh_sample_type", "s__key", "s__value", "s____sqlmesh_join_key", "t__key", "t__value", "t____sqlmesh_join_key" FROM "common_rows"'
     drop_sql = 'DROP TABLE IF EXISTS "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh"'
 
-    # make with_log_level() return the current instance of engine_adapter so we can still spy on _execute
+    # make with_settings() return the current instance of engine_adapter so we can still spy on _execute
     mocker.patch.object(
-        engine_adapter, "with_log_level", new_callable=lambda: lambda _: engine_adapter
+        engine_adapter, "with_settings", new_callable=lambda: lambda **kwargs: engine_adapter
     )
-    assert engine_adapter.with_log_level(1) == engine_adapter
+    assert engine_adapter.with_settings() == engine_adapter
 
     spy_execute = mocker.spy(engine_adapter, "_execute")
     mocker.patch("sqlmesh.core.engine_adapter.base.random_id", return_value="abcdefgh")
@@ -352,11 +410,11 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
         temp_schema="sqlmesh_temp_test",
     )
 
-    spy_execute.assert_any_call(query_sql)
-    spy_execute.assert_any_call(summary_query_sql)
-    spy_execute.assert_any_call(compare_sql)
-    spy_execute.assert_any_call(sample_query_sql)
-    spy_execute.assert_any_call(drop_sql)
+    spy_execute.assert_any_call(query_sql, False)
+    spy_execute.assert_any_call(summary_query_sql, False)
+    spy_execute.assert_any_call(compare_sql, False)
+    spy_execute.assert_any_call(sample_query_sql, False)
+    spy_execute.assert_any_call(drop_sql, False)
 
     spy_execute.reset_mock()
 
@@ -369,8 +427,8 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
         where="key = 2",
     )
 
-    query_sql_where = 'CREATE TABLE IF NOT EXISTS "memory"."sqlmesh_temp"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "s"."key", "s"."value", "s"."key" AS "__sqlmesh_join_key" FROM "table_diff_source" AS "s" WHERE "s"."key" = 2), "__target" AS (SELECT "t"."key", "t"."value", "t"."key" AS "__sqlmesh_join_key" FROM "table_diff_target" AS "t" WHERE "t"."key" = 2), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "s"."__sqlmesh_join_key" AS "s____sqlmesh_join_key", "t"."key" AS "t__key", "t"."value" AS "t__value", "t"."__sqlmesh_join_key" AS "t____sqlmesh_join_key", CASE WHEN NOT "s"."key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key" AND (NOT "s"."key" IS NULL AND NOT "t"."key" IS NULL) THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key") SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
-    spy_execute.assert_any_call(query_sql_where)
+    query_sql_where = 'CREATE TABLE IF NOT EXISTS "memory"."sqlmesh_temp"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "s"."key", "s"."value", "s"."key" AS "__sqlmesh_join_key" FROM "table_diff_source" AS "s" WHERE "s"."key" = 2), "__target" AS (SELECT "t"."key", "t"."value", "t"."key" AS "__sqlmesh_join_key" FROM "table_diff_target" AS "t" WHERE "t"."key" = 2), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "s"."__sqlmesh_join_key" AS "s____sqlmesh_join_key", "t"."key" AS "t__key", "t"."value" AS "t__value", "t"."__sqlmesh_join_key" AS "t____sqlmesh_join_key", CASE WHEN NOT "s"."__sqlmesh_join_key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."__sqlmesh_join_key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key" THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN CAST(CAST("s"."value" AS DOUBLE) AS DECIMAL(38, 3)) = CAST(CAST("t"."value" AS DOUBLE) AS DECIMAL(38, 3)) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key") SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
+    spy_execute.assert_any_call(query_sql_where, False)
 
 
 def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context):
@@ -502,6 +560,69 @@ Column: dict
     stripped_output = strip_ansi_codes(output)
     stripped_expected = expected_output.strip()
     assert stripped_output == stripped_expected
+
+
+def test_data_diff_array_struct_query():
+    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
+
+    columns_to_types = {"key": exp.DataType.build("int"), "value": exp.DataType.build("int")}
+
+    engine_adapter.create_table("table_diff_source", columns_to_types)
+    engine_adapter.create_table("table_diff_target", columns_to_types)
+
+    engine_adapter.execute(
+        "insert into table_diff_source (key, value) values (1, 1), (1, 2), (1, 3)"
+    )
+    engine_adapter.execute(
+        "insert into table_diff_target (key, value) values (1, 1), (1, 3), (1, 2)"
+    )
+
+    engine_adapter.execute(
+        "create view src_view as select key, array_agg(value) as val_arr, map(['k','v'], [10,11]) as val_map from table_diff_source group by 1"
+    )
+    engine_adapter.execute(
+        "create view target_view as select key, array_agg(value) as val_arr, map(['k','v'],[11,10]) as val_map from table_diff_target group by 1"
+    )
+
+    table_diff = TableDiff(
+        adapter=engine_adapter,
+        source="src_view",
+        target="target_view",
+        source_alias="dev",
+        target_alias="prod",
+        on=["key"],
+    )
+
+    diff = table_diff.row_diff()
+
+    output = capture_console_output("show_row_diff", row_diff=diff)
+
+    assert (
+        strip_ansi_codes(output)
+        == """Row Counts:
+└──  PARTIAL MATCH: 1 rows (100.0%)
+
+COMMON ROWS column comparison stats:
+         pct_match
+val_arr        0.0
+val_map        0.0
+
+
+COMMON ROWS sample data differences:
+Column: val_arr
+┏━━━━━┳━━━━━━━━━┳━━━━━━━━━┓
+┃ key ┃ DEV     ┃ PROD    ┃
+┡━━━━━╇━━━━━━━━━╇━━━━━━━━━┩
+│ 1   │ [1 2 3] │ [1 3 2] │
+└─────┴─────────┴─────────┘
+Column: val_map
+┏━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ key ┃ DEV                ┃ PROD               ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ 1   │ {'k': 10, 'v': 11} │ {'k': 11, 'v': 10} │
+└─────┴────────────────────┴────────────────────┘
+""".strip()
+    )
 
 
 def test_data_diff_nullable_booleans():
@@ -1074,3 +1195,54 @@ def test_data_diff_sample_limit():
     assert len(diff.s_sample) == 3
     assert len(diff.t_sample) == 3
     assert len(diff.joined_sample) == 3
+
+
+def test_data_diff_nulls_in_some_grain_columns():
+    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
+
+    columns_to_types = {
+        "key1": exp.DataType.build("int"),
+        "key2": exp.DataType.build("varchar"),
+        "key3": exp.DataType.build("int"),
+        "value": exp.DataType.build("varchar"),
+    }
+
+    engine_adapter.create_table("src", columns_to_types)
+    engine_adapter.create_table("target", columns_to_types)
+
+    src_records = [
+        (1, None, 1, "value"),  # full match
+        (None, None, None, "null value"),  # join, partial match
+        (2, None, None, "source only"),  # source only
+    ]
+
+    target_records = [
+        (1, None, 1, "value"),  # full match
+        (None, None, None, "null value modified"),  # join, partial match
+        (None, "three", 2, "target only"),  # target only
+    ]
+
+    src_df = pd.DataFrame(data=src_records, columns=columns_to_types.keys())
+    target_df = pd.DataFrame(data=target_records, columns=columns_to_types.keys())
+
+    engine_adapter.insert_append("src", src_df)
+    engine_adapter.insert_append("target", target_df)
+
+    table_diff = TableDiff(
+        adapter=engine_adapter, source="src", target="target", on=["key1", "key2", "key3"]
+    )
+
+    diff = table_diff.row_diff()
+
+    assert diff.join_count == 2
+    assert diff.s_only_count == 1
+    assert diff.t_only_count == 1
+    assert diff.full_match_count == 1
+    assert diff.partial_match_count == 1
+
+    assert diff.s_sample["value"].tolist() == ["source only"]
+    assert diff.t_sample["value"].tolist() == ["target only"]
+    assert diff.joined_sample[["s__value", "t__value"]].values.flatten().tolist() == [
+        "null value",
+        "null value modified",
+    ]

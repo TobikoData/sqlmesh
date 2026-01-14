@@ -10,6 +10,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 import sqlmesh.core.dialect as d
@@ -65,14 +66,15 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         )
 
 
+@pytest.mark.parametrize("wap_enabled", [True, False])
 def test_replace_query_table_properties_not_exists(
-    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable, wap_enabled: bool
 ):
     mocker.patch(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         return_value=False,
     )
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, wap_enabled=wap_enabled)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -82,16 +84,19 @@ def test_replace_query_table_properties_not_exists(
     adapter.replace_query(
         "test_table",
         parse_one("SELECT 1 AS cola, '2' AS colb, '3' AS colc"),
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         partitioned_by=[exp.to_column("colb")],
         storage_format="ICEBERG",
         table_properties={"a": exp.convert(1)},
     )
 
-    assert to_sql_calls(adapter) == [
+    expected_sql_calls = [
         "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG PARTITIONED BY (`colb`) TBLPROPERTIES ('a'=1) AS SELECT CAST(`cola` AS INT) AS `cola`, CAST(`colb` AS STRING) AS `colb`, CAST(`colc` AS STRING) AS `colc` FROM (SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`) AS `_subquery`",
-        "INSERT INTO `test_table` SELECT * FROM `test_table`",
     ]
+    if wap_enabled:
+        expected_sql_calls.append("INSERT INTO `test_table` SELECT * FROM `test_table`")
+
+    assert to_sql_calls(adapter) == expected_sql_calls
 
 
 def test_replace_query_table_properties_exists(
@@ -102,6 +107,11 @@ def test_replace_query_table_properties_exists(
         return_value=True,
     )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -111,7 +121,7 @@ def test_replace_query_table_properties_exists(
     adapter.replace_query(
         "test_table",
         parse_one("SELECT 1 AS cola, '2' AS colb, '3' AS colc"),
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         partitioned_by=[exp.to_column("colb")],
         storage_format="ICEBERG",
         table_properties={"a": exp.convert(1)},
@@ -156,7 +166,7 @@ def test_alter_table(make_mocked_engine_adapter: t.Callable):
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
 
     adapter.cursor.execute.assert_has_calls(
         [
@@ -194,6 +204,11 @@ def test_replace_query_exists(mocker: MockerFixture, make_mocked_engine_adapter:
         return_value=True,
     )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
@@ -209,7 +224,7 @@ def test_replace_query_self_ref_not_exists(
         lambda self: "spark_catalog",
     )
     mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_database",
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._get_current_schema",
         side_effect=lambda: "default",
     )
 
@@ -239,6 +254,12 @@ def test_replace_query_self_ref_not_exists(
         side_effect=check_table_exists,
     )
 
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="db", name="table", type="table")],
+    )
+
     adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
 
     assert to_sql_calls(adapter) == [
@@ -262,12 +283,17 @@ def test_replace_query_self_ref_exists(
         return_value="spark_catalog",
     )
     mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_database",
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._get_current_schema",
         return_value="default",
     )
 
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter.cursor.fetchone.return_value = (1,)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="db", name="table", type="table")],
+    )
 
     table_name = "db.table"
     temp_table_id = "abcdefgh"
@@ -525,11 +551,6 @@ def test_spark_struct_complex_to_col_to_types(type_name, spark_type):
 def test_scd_type_2_by_time(
     make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
 ):
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
-        return_value=False,
-    )
-
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter._default_catalog = "spark_catalog"
     adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
@@ -550,6 +571,11 @@ def test_scd_type_2_by_time(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         side_effect=check_table_exists,
     )
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="db", name="target", type="table")],
+    )
 
     adapter.scd_type_2_by_time(
         target_table="db.target",
@@ -560,7 +586,7 @@ def test_scd_type_2_by_time(
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_updated_at", quoted=True),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -803,13 +829,16 @@ def test_wap_publish(make_mocked_engine_adapter: t.Callable, mocker: MockerFixtu
     )
 
 
-def test_create_table_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+@pytest.mark.parametrize("wap_enabled", [True, False])
+def test_create_table_iceberg(
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable, wap_enabled: bool
+):
     mocker.patch(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         return_value=False,
     )
 
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, wap_enabled=wap_enabled)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -824,10 +853,13 @@ def test_create_table_iceberg(mocker: MockerFixture, make_mocked_engine_adapter:
         storage_format="ICEBERG",
     )
 
-    assert to_sql_calls(adapter) == [
+    expected_sql_calls = [
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`)",
-        "INSERT INTO `test_table` SELECT * FROM `test_table`",
     ]
+    if wap_enabled:
+        expected_sql_calls.append("INSERT INTO `test_table` SELECT * FROM `test_table`")
+
+    assert to_sql_calls(adapter) == expected_sql_calls
 
 
 def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
@@ -951,7 +983,7 @@ def test_create_table_with_wap(make_mocked_engine_adapter: t.Callable, mocker: M
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         return_value=False,
     )
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, wap_enabled=True)
 
     adapter.create_table(
         "catalog.schema.table.branch_wap_12345",
@@ -979,11 +1011,16 @@ def test_replace_query_with_wap_self_reference(
     )
 
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="schema", name="table", type="table")],
+    )
 
     adapter.replace_query(
         "catalog.schema.table.branch_wap_12345",
         parse_one("SELECT 1 as a FROM catalog.schema.table.branch_wap_12345"),
-        columns_to_types={"a": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT")},
         storage_format="ICEBERG",
     )
 
@@ -1020,7 +1057,7 @@ def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
     # both table_format and storage_format
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         storage_format=model.storage_format,
     )
@@ -1028,21 +1065,21 @@ def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
     # just table_format
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
     )
 
     # just storage_format set to a table format (test for backwards compatibility)
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         storage_format=model.table_format,
     )
 
     adapter.ctas(
         table_name=model.name,
         query_or_df=model.query,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         storage_format=model.storage_format,
     )
@@ -1053,3 +1090,19 @@ def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG",
         "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG TBLPROPERTIES ('write.format.default'='orc') AS SELECT CAST(`cola` AS TIMESTAMP) AS `cola`, CAST(`colb` AS STRING) AS `colb`, CAST(`colc` AS STRING) AS `colc` FROM (SELECT CAST(1 AS TIMESTAMP) AS `cola`, CAST(2 AS STRING) AS `colb`, 'foo' AS `colc`) AS `_subquery`",
     ]
+
+
+def test_get_data_object_wap_branch(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, patch_get_data_objects=False)
+    mocker.patch.object(adapter, "_get_data_objects", return_value=[])
+
+    table = exp.to_table(
+        "`catalog`.`sqlmesh__test`.`test__test_view__630979748`.`branch_wap_472234d7`",
+        dialect="spark",
+    )
+    adapter.get_data_object(table)
+
+    adapter._get_data_objects.assert_called_once_with(
+        d.schema_("sqlmesh__test", "catalog"),
+        {"test__test_view__630979748"},
+    )

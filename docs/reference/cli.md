@@ -149,7 +149,7 @@ Options:
 ```
 Usage: sqlmesh destroy
 
-  Removes all project resources, including warehouse objects, state tables, the SQLMesh cache and any build artifacts.
+  Removes all state tables, the SQLMesh cache and all project resources, including warehouse objects. This includes all tables, views and schemas managed by SQLMesh, as well as any external resources that may have been created by other tools within those schemas.
 
 Options:
   --help               Show this message and exit.
@@ -366,6 +366,8 @@ Options:
                                   as if they were backfilled.
   --forward-only                  Create a plan for forward-only changes.
   --allow-destructive-model TEXT  Allow destructive forward-only changes to
+                                  models whose names match the expression.
+  --allow-additive-model TEXT     Allow additive forward-only changes to
                                   models whose names match the expression.
   --effective-from TEXT           The effective date from which to apply
                                   forward-only changes on production.

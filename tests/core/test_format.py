@@ -28,7 +28,7 @@ def test_format_files(tmp_path: pathlib.Path, mocker: MockerFixture):
     f3 = create_temp_file(
         tmp_path,
         pathlib.Path(audits_dir, "audit_1.sql"),
-        "AUDIT(name assert_positive_id, dialect 'duckdb'); SELECT  * FROM @this_model WHERE  \"CaseSensitive\"_item_id < 0;",
+        "AUDIT(name assert_positive_id, dialect 'duckdb'); SELECT  * FROM @this_model WHERE  \"CaseSensitive_item_id\" < 0;",
     )
     f4 = create_temp_file(
         tmp_path,

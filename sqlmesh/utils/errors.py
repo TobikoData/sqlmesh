@@ -11,6 +11,7 @@ if t.TYPE_CHECKING:
     from requests.models import Response
 
     from sqlmesh.core.model import Model
+    from sqlmesh.core.schema_diff import TableAlterOperation
 
 
 class ErrorLevel(AutoName):
@@ -24,7 +25,25 @@ class SQLMeshError(Exception):
 
 
 class ConfigError(SQLMeshError):
-    pass
+    location: t.Optional[Path] = None
+
+    def __init__(self, message: str | Exception, location: t.Optional[Path] = None) -> None:
+        super().__init__(message)
+        if location:
+            self.location = Path(location) if isinstance(location, str) else location
+
+
+class BaseMissingReferenceError(ConfigError):
+    def __init__(self, ref: str) -> None:
+        self.ref = ref
+
+
+class MissingModelError(BaseMissingReferenceError):
+    """Raised when a model that is referenced is missing."""
+
+
+class MissingSourceError(BaseMissingReferenceError):
+    """Raised when a source that is referenced is missing."""
 
 
 class MissingDependencyError(SQLMeshError):
@@ -64,6 +83,10 @@ class MagicError(SQLMeshError):
 
 
 class AuditConfigError(ConfigError):
+    pass
+
+
+class StateMigrationError(SQLMeshError):
     pass
 
 
@@ -121,6 +144,14 @@ class TestError(SQLMeshError):
 
 
 class DestructiveChangeError(SQLMeshError):
+    pass
+
+
+class AdditiveChangeError(SQLMeshError):
+    pass
+
+
+class MigrationNotSupportedError(SQLMeshError):
     pass
 
 
@@ -188,12 +219,12 @@ class SignalEvalError(SQLMeshError):
 
 def raise_config_error(
     msg: str,
-    location: t.Optional[str | Path] = None,
+    location: t.Optional[Path] = None,
     error_type: t.Type[ConfigError] = ConfigError,
 ) -> None:
     if location:
-        raise error_type(f"{msg} at '{location}'")
-    raise error_type(msg)
+        raise error_type(f"{msg} at '{location}'", location)
+    raise error_type(msg, location=location)
 
 
 def raise_for_status(response: Response) -> None:
@@ -205,27 +236,87 @@ def raise_for_status(response: Response) -> None:
         raise ApiServerError(response.text, response.status_code)
 
 
-def format_destructive_change_msg(
+def _format_schema_change_msg(
     snapshot_name: str,
-    dropped_column_names: t.List[str],
-    alter_expressions: t.List[exp.Alter],
+    is_destructive: bool,
+    alter_operations: t.List[TableAlterOperation],
     dialect: str,
     error: bool = True,
 ) -> str:
-    dropped_column_str = "', '".join(dropped_column_names)
-    dropped_column_msg = (
-        f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
-        if dropped_column_str
+    """
+    Common function to format schema change messages.
+
+    Args:
+        snapshot_name: Name of the model/snapshot
+        is_destructive: if change is destructive else it would be additive
+        alter_operations: List of table alter operations
+        dialect: SQL dialect for formatting
+        error: Whether this is an error or warning
+    """
+    from sqlmesh.core.schema_diff import get_dropped_column_names, get_additive_column_names
+
+    change_type = "destructive" if is_destructive else "additive"
+    setting_name = "on_destructive_change" if is_destructive else "on_additive_change"
+    action_verb = "drops" if is_destructive else "adds"
+    cli_flag = "--allow-destructive-model" if is_destructive else "--allow-additive-model"
+
+    column_names = (
+        get_dropped_column_names(alter_operations)
+        if is_destructive
+        else get_additive_column_names(alter_operations)
+    )
+    column_str = "', '".join(column_names)
+    column_msg = (
+        f" that {action_verb} column{'s' if column_names and len(column_names) > 1 else ''} '{column_str}'"
+        if column_str
         else ""
     )
 
+    # Format ALTER expressions
     alter_expr_msg = "\n\nSchema changes:\n  " + "\n  ".join(
-        [alter.sql(dialect) for alter in alter_expressions]
+        [alter.expression.sql(dialect) for alter in alter_operations]
     )
 
+    # Main warning message
     warning_msg = (
-        f"Plan requires a destructive change to forward-only model '{snapshot_name}'s schema"
+        f"Plan requires {change_type} change to forward-only model '{snapshot_name}'s schema"
     )
-    err_msg = "\n\nTo allow the destructive change, set the model's `on_destructive_change` setting to `warn` or `allow` or include the model in the plan's `--allow-destructive-model` option.\n"
 
-    return f"\n{warning_msg}{dropped_column_msg}.{alter_expr_msg}{err_msg if error else ''}"
+    if error:
+        permissive_values = "`warn`, `allow`, or `ignore`"
+        cli_part = f" or include the model in the plan's `{cli_flag}` option"
+        err_msg = f"\n\nTo allow the {change_type} change, set the model's `{setting_name}` setting to {permissive_values}{cli_part}.\n"
+    else:
+        err_msg = ""
+
+    return f"\n{warning_msg}{column_msg}.{alter_expr_msg}{err_msg}"
+
+
+def format_destructive_change_msg(
+    snapshot_name: str,
+    alter_expressions: t.List[TableAlterOperation],
+    dialect: str,
+    error: bool = True,
+) -> str:
+    return _format_schema_change_msg(
+        snapshot_name=snapshot_name,
+        is_destructive=True,
+        alter_operations=alter_expressions,
+        dialect=dialect,
+        error=error,
+    )
+
+
+def format_additive_change_msg(
+    snapshot_name: str,
+    alter_operations: t.List[TableAlterOperation],
+    dialect: str,
+    error: bool = True,
+) -> str:
+    return _format_schema_change_msg(
+        snapshot_name=snapshot_name,
+        is_destructive=False,
+        alter_operations=alter_operations,
+        dialect=dialect,
+        error=error,
+    )

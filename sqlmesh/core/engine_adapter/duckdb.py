@@ -18,7 +18,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -29,14 +28,15 @@ if t.TYPE_CHECKING:
 class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin, RowDiffMixin):
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 3), (0,)],
         },
-    )
+    }
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
     SUPPORTS_CREATE_DROP_CATALOG = True
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA", "TABLE", "VIEW"]
 
     @property
     def catalog_support(self) -> CatalogSupport:
@@ -47,34 +47,51 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
         self.execute(exp.Use(this=exp.to_identifier(catalog)))
 
     def _create_catalog(self, catalog_name: exp.Identifier) -> None:
-        db_filename = f"{catalog_name.output_name}.db"
-        self.execute(
-            exp.Attach(this=exp.alias_(exp.Literal.string(db_filename), catalog_name), exists=True)
-        )
+        if not self._is_motherduck:
+            db_filename = f"{catalog_name.output_name}.db"
+            self.execute(
+                exp.Attach(
+                    this=exp.alias_(exp.Literal.string(db_filename), catalog_name), exists=True
+                )
+            )
+        else:
+            self.execute(
+                exp.Create(this=exp.Table(this=catalog_name), kind="DATABASE", exists=True)
+            )
 
     def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
-        db_file_path = Path(f"{catalog_name.output_name}.db")
-        self.execute(exp.Detach(this=catalog_name, exists=True))
-        if db_file_path.exists():
-            db_file_path.unlink()
+        if not self._is_motherduck:
+            db_file_path = Path(f"{catalog_name.output_name}.db")
+            self.execute(exp.Detach(this=catalog_name, exists=True))
+            if db_file_path.exists():
+                db_file_path.unlink()
+        else:
+            self.execute(
+                exp.Drop(
+                    this=exp.Table(this=catalog_name), kind="DATABASE", cascade=True, exists=True
+                )
+            )
 
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         temp_table = self._get_temp_table(target_table)
         temp_table_sql = (
-            exp.select(*self._casted_columns(columns_to_types))
+            exp.select(*self._casted_columns(target_columns_to_types, source_columns))
             .from_("df")
             .sql(dialect=self.dialect)
         )
         self.cursor.sql(f"CREATE TABLE {temp_table} AS {temp_table_sql}")
         return [
             SourceQuery(
-                query_factory=lambda: self._select_columns(columns_to_types).from_(temp_table),  # type: ignore
+                query_factory=lambda: self._select_columns(target_columns_to_types).from_(
+                    temp_table
+                ),  # type: ignore
                 cleanup_func=lambda: self.drop_table(temp_table),
             )
         ]
@@ -142,3 +159,62 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
             exp.cast(col, "DOUBLE"),
             f"DECIMAL(38, {precision})",
         )
+
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
+        track_rows_processed: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        catalog = self.get_current_catalog()
+        catalog_type_tuple = self.fetchone(
+            exp.select("type")
+            .from_("duckdb_databases()")
+            .where(exp.column("database_name").eq(catalog))
+        )
+        catalog_type = catalog_type_tuple[0] if catalog_type_tuple else None
+
+        partitioned_by_exps = None
+        if catalog_type == "ducklake":
+            partitioned_by_exps = kwargs.pop("partitioned_by", None)
+
+        super()._create_table(
+            table_name_or_schema,
+            expression,
+            exists,
+            replace,
+            target_columns_to_types,
+            table_description,
+            column_descriptions,
+            table_kind,
+            track_rows_processed=track_rows_processed,
+            **kwargs,
+        )
+
+        if partitioned_by_exps:
+            # Schema object contains column definitions, so we extract Table
+            table_name = (
+                table_name_or_schema.this
+                if isinstance(table_name_or_schema, exp.Schema)
+                else table_name_or_schema
+            )
+            table_name_str = (
+                table_name.sql(dialect=self.dialect)
+                if isinstance(table_name, exp.Table)
+                else table_name
+            )
+            partitioned_by_str = ", ".join(
+                expr.sql(dialect=self.dialect) for expr in partitioned_by_exps
+            )
+            self.execute(f"ALTER TABLE {table_name_str} SET PARTITIONED BY ({partitioned_by_str});")
+
+    @property
+    def _is_motherduck(self) -> bool:
+        return self._extra_config.get("is_motherduck", False)

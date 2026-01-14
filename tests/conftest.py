@@ -32,7 +32,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core import lineage
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
-from sqlmesh.core.model.kind import OnDestructiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan, stages as plan_stages
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -202,7 +202,15 @@ class SushiDataValidator:
 
 
 def pytest_collection_modifyitems(items, *args, **kwargs):
-    test_type_markers = {"fast", "slow", "docker", "remote", "isolated", "registry_isolation"}
+    test_type_markers = {
+        "fast",
+        "slow",
+        "docker",
+        "remote",
+        "isolated",
+        "registry_isolation",
+        "dialect_isolated",
+    }
     for item in items:
         for marker in item.iter_markers():
             if marker.name in test_type_markers:
@@ -239,7 +247,7 @@ def rescope_duckdb_classvar(request):
     yield
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def rescope_log_handlers():
     logging.getLogger().handlers.clear()
     yield
@@ -253,9 +261,12 @@ def rescope_lineage_cache(request):
 
 @pytest.fixture(autouse=True)
 def reset_console():
-    from sqlmesh.core.console import set_console, NoopConsole
+    from sqlmesh.core.console import set_console, NoopConsole, get_console
 
+    orig_console = get_console()
     set_console(NoopConsole())
+    yield
+    set_console(orig_console)
 
 
 @pytest.fixture
@@ -271,13 +282,16 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.default_catalog,
     )
     deployability_index = DeployabilityIndex.create(context.snapshots.values())
-    evaluatable_plan = plan.to_evaluatable()
+    evaluatable_plan = plan.to_evaluatable().copy(update={"skip_backfill": True})
     stages = plan_stages.build_plan_stages(
         evaluatable_plan, context.state_sync, context.default_catalog
     )
     for stage in stages:
         if isinstance(stage, plan_stages.CreateSnapshotRecordsStage):
             plan_evaluator.visit_create_snapshot_records_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.PhysicalLayerSchemaCreationStage):
+            stage.deployability_index = deployability_index
+            plan_evaluator.visit_physical_layer_schema_creation_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.PhysicalLayerUpdateStage):
             stage.deployability_index = deployability_index
             plan_evaluator.visit_physical_layer_update_stage(stage, evaluatable_plan)
@@ -438,7 +452,53 @@ def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable
                     metadata_hash="test_metadata_hash",
                 ),
                 version="test_version",
-                change_category=SnapshotChangeCategory.FORWARD_ONLY,
+                change_category=SnapshotChangeCategory.NON_BREAKING,
+                dev_table_suffix="dev",
+            ),
+        )
+
+        return snapshot_old, snapshot
+
+    return _make_function
+
+
+@pytest.fixture
+def make_snapshot_on_additive_change(make_snapshot: t.Callable) -> t.Callable:
+    def _make_function(
+        name: str = "a",
+        old_query: str = "select '1' as one, '2' as two, '2022-01-01' ds",
+        new_query: str = "select '1' as one, '2' as two, '3' as three, '2022-01-01' ds",
+        on_additive_change: OnAdditiveChange = OnAdditiveChange.ERROR,
+    ) -> t.Tuple[Snapshot, Snapshot]:
+        snapshot_old = make_snapshot(
+            SqlModel(
+                name=name,
+                dialect="duckdb",
+                query=parse_one(old_query),
+                kind=IncrementalByTimeRangeKind(
+                    time_column="ds", forward_only=True, on_additive_change=on_additive_change
+                ),
+            )
+        )
+
+        snapshot = make_snapshot(
+            SqlModel(
+                name=name,
+                dialect="duckdb",
+                query=parse_one(new_query),
+                kind=IncrementalByTimeRangeKind(
+                    time_column="ds", forward_only=True, on_additive_change=on_additive_change
+                ),
+            )
+        )
+        snapshot.previous_versions = (
+            SnapshotDataVersion(
+                fingerprint=SnapshotFingerprint(
+                    data_hash="test_data_hash",
+                    metadata_hash="test_metadata_hash",
+                ),
+                version="test_version",
+                change_category=SnapshotChangeCategory.NON_BREAKING,
                 dev_table_suffix="dev",
             ),
         )
@@ -470,6 +530,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         dialect: t.Optional[str] = None,
         register_comments: bool = True,
         default_catalog: t.Optional[str] = None,
+        patch_get_data_objects: bool = True,
         **kwargs: t.Any,
     ) -> T:
         connection_mock = mocker.NonCallableMock()
@@ -477,7 +538,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         connection_mock.cursor.return_value = cursor_mock
         cursor_mock.connection.return_value = connection_mock
         adapter = klass(
-            lambda: connection_mock,
+            lambda *args, **kwargs: connection_mock,
             dialect=dialect or klass.DIALECT,
             register_comments=register_comments,
             default_catalog=default_catalog,
@@ -493,6 +554,8 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
                 "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.catalog_support",
                 new_callable=PropertyMock(return_value=CatalogSupport.REQUIRES_SET_CATALOG),
             )
+        if patch_get_data_objects:
+            mocker.patch.object(adapter, "_get_data_objects", return_value=[])
         return adapter
 
     return _make_function
@@ -520,7 +583,19 @@ def copy_to_temp_path(tmp_path: Path) -> t.Callable:
                 # shutil.copytree just doesnt work properly with the symlinks on Windows, regardless of the `symlinks` setting
                 src = str(path.absolute())
                 dst = str(temp_dir.absolute())
-                os.system(f"robocopy {src} {dst} /E /COPYALL")
+
+                # Robocopy flag reference: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#copy-options
+                # /E:      Copy subdirectories, including empty directories
+                # /COPY:D  Copy "data" only. In particular, this avoids copying auditing information, which can throw
+                #          an error like "ERROR : You do not have the Manage Auditing user right"
+                robocopy_cmd = f"robocopy {src} {dst} /E /COPY:D"
+                exit_code = os.system(robocopy_cmd)
+
+                # exit code reference: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#exit-return-codes
+                if exit_code > 8:
+                    raise Exception(
+                        f"robocopy command: '{robocopy_cmd}' failed with exit code: {exit_code}"
+                    )
 
                 # after copying, delete the files that would have been ignored
                 for root, dirs, _ in os.walk(temp_dir):

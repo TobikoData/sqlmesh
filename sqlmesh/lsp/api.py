@@ -13,7 +13,7 @@ from sqlmesh.lsp.custom import (
     CustomMethodRequestBaseClass,
     CustomMethodResponseBaseClass,
 )
-from web.server.models import LineageColumn, Model
+from web.server.models import LineageColumn, Model, TableDiff
 
 API_FEATURE = "sqlmesh/api"
 
@@ -74,3 +74,11 @@ class ApiResponseGetColumnLineage(BaseAPIResponse):
     """
 
     data: t.Dict[str, t.Dict[str, LineageColumn]]
+
+
+class ApiResponseGetTableDiff(BaseAPIResponse):
+    """
+    Response from the SQLMesh API for the get_table_diff endpoint.
+    """
+
+    data: t.Optional[TableDiff]

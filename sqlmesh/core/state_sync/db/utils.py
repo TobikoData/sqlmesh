@@ -22,6 +22,21 @@ except ImportError:
 T = t.TypeVar("T")
 
 
+def snapshot_name_filter(
+    snapshot_names: t.Iterable[str],
+    batch_size: int,
+    alias: t.Optional[str] = None,
+) -> t.Iterator[exp.Condition]:
+    names = sorted(snapshot_names)
+
+    if not names:
+        yield exp.false()
+    else:
+        batches = create_batches(names, batch_size=batch_size)
+        for names in batches:
+            yield exp.column("name", table=alias).isin(*names)
+
+
 def snapshot_id_filter(
     engine_adapter: EngineAdapter,
     snapshot_ids: t.Iterable[SnapshotIdLike],

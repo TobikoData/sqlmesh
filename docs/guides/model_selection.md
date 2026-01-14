@@ -2,7 +2,7 @@
 
 This guide describes how to select specific models to include in a SQLMesh plan, which can be useful when modifying a subset of the models in a SQLMesh project.
 
-Note: the selector syntax described below is also used for the SQLMesh `plan` [`--allow-destructive-model` selector](../concepts/plans.md#destructive-changes) and for the `table_diff` command to [diff a selection of models](./tablediff.md#diffing-multiple-models-across-environments).
+Note: the selector syntax described below is also used for the SQLMesh `plan` [`--allow-destructive-model` and `--allow-additive-model` selectors](../concepts/plans.md#destructive-changes) and for the `table_diff` command to [diff a selection of models](./tablediff.md#diffing-multiple-models-across-environments).
 
 ## Background
 
@@ -242,8 +242,9 @@ Models:
 #### Select with git changes
 
 The git-based selector allows you to select models whose files have changed compared to a target branch (default: main). This includes:
+
 - Untracked files (new files not in git)
-- Uncommitted changes in working directory
+- Uncommitted changes in working directory (both staged and unstaged)
 - Committed changes different from the target branch
 
 For example:

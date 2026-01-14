@@ -66,6 +66,7 @@ def lineage(
         scope=scope,
         trim_selects=trim_selects,
         dialect=model.dialect,
+        copy=False,
     )
 
 

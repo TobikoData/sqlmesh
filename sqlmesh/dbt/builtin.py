@@ -14,15 +14,18 @@ from dbt.adapters.base import BaseRelation, Column
 from ruamel.yaml import YAMLError
 from sqlglot import Dialect
 
+from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
+from sqlmesh.dbt.common import RAW_CODE_KEY
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
-from sqlmesh.utils import AttributeDict, yaml
+from sqlmesh.utils import AttributeDict, debug_mode_enabled, yaml
 from sqlmesh.utils.date import now
-from sqlmesh.utils.errors import ConfigError, MacroEvalError
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
 
 logger = logging.getLogger(__name__)
@@ -45,6 +48,22 @@ class Exceptions:
     def warn(self, msg: str) -> str:
         logger.warning(msg)
         return ""
+
+
+def try_or_compiler_error(
+    message_if_exception: str, func: t.Callable, *args: t.Any, **kwargs: t.Any
+) -> t.Any:
+    try:
+        return func(*args, **kwargs)
+    except Exception:
+        if DBT_VERSION >= (1, 4, 0):
+            from dbt.exceptions import CompilationError
+
+            raise CompilationError(message_if_exception)
+        else:
+            from dbt.exceptions import CompilationException  # type: ignore
+
+            raise CompilationException(message_if_exception)
 
 
 class Api:
@@ -156,11 +175,79 @@ class Var:
     def __init__(self, variables: t.Dict[str, t.Any]) -> None:
         self.variables = variables
 
-    def __call__(self, name: str, default: t.Optional[t.Any] = None, **kwargs: t.Any) -> t.Any:
+    def __call__(self, name: str, default: t.Optional[t.Any] = None) -> t.Any:
         return self.variables.get(name, default)
 
     def has_var(self, name: str) -> bool:
         return name in self.variables
+
+
+class Config:
+    def __init__(self, config_dict: t.Dict[str, t.Any]) -> None:
+        self._config = config_dict
+
+    def __call__(self, *args: t.Any, **kwargs: t.Any) -> str:
+        if args and kwargs:
+            raise ConfigError(
+                "Invalid inline model config: cannot mix positional and keyword arguments"
+            )
+
+        if args:
+            if len(args) == 1 and isinstance(args[0], dict):
+                # Single dict argument: config({"materialized": "table"})
+                self._config.update(args[0])
+            else:
+                raise ConfigError(
+                    f"Invalid inline model config: expected a single dictionary, got {len(args)} arguments"
+                )
+        elif kwargs:
+            # Keyword arguments: config(materialized="table")
+            self._config.update(kwargs)
+
+        return ""
+
+    def set(self, name: str, value: t.Any) -> str:
+        self._config.update({name: value})
+        return ""
+
+    def _validate(self, name: str, validator: t.Callable, value: t.Optional[t.Any] = None) -> None:
+        try:
+            validator(value)
+        except Exception as e:
+            raise ConfigError(f"Config validation failed for '{name}': {e}")
+
+    def require(self, name: str, validator: t.Optional[t.Callable] = None) -> t.Any:
+        if name not in self._config:
+            raise ConfigError(f"Missing required config: {name}")
+
+        value = self._config[name]
+
+        if validator is not None:
+            self._validate(name, validator, value)
+
+        return value
+
+    def get(
+        self, name: str, default: t.Any = None, validator: t.Optional[t.Callable] = None
+    ) -> t.Any:
+        value = self._config.get(name, default)
+
+        if validator is not None and value is not None:
+            self._validate(name, validator, value)
+
+        return value
+
+    def persist_relation_docs(self) -> bool:
+        persist_docs = self.get("persist_docs", default={})
+        if not isinstance(persist_docs, dict):
+            return False
+        return persist_docs.get("relation", False)
+
+    def persist_column_docs(self) -> bool:
+        persist_docs = self.get("persist_docs", default={})
+        if not isinstance(persist_docs, dict):
+            return False
+        return persist_docs.get("columns", False)
 
 
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
@@ -170,7 +257,13 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
 
 
 def log(msg: str, info: bool = False) -> str:
-    logger.debug(msg)
+    if info:
+        # Write to both log file and stdout
+        logger.info(msg)
+        get_console().log_status_update(msg)
+    else:
+        logger.debug(msg)
+
     return ""
 
 
@@ -288,18 +381,16 @@ def do_zip(*args: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]
         return default
 
 
-def as_bool(value: str) -> bool:
-    result = _try_literal_eval(value)
-    if isinstance(result, bool):
-        return result
-    raise MacroEvalError(f"Failed to convert '{value}' into boolean.")
+def as_bool(value: t.Any) -> t.Any:
+    # dbt's jinja TEXT_FILTERS just return the input value as is
+    # https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/clients/jinja.py#L559
+    return value
 
 
 def as_number(value: str) -> t.Any:
-    result = _try_literal_eval(value)
-    if isinstance(value, (int, float)) and not isinstance(result, bool):
-        return result
-    raise MacroEvalError(f"Failed to convert '{value}' into number.")
+    # dbt's jinja TEXT_FILTERS just return the input value as is
+    # https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/clients/jinja.py#L559
+    return value
 
 
 def _try_literal_eval(value: str) -> t.Any:
@@ -307,6 +398,15 @@ def _try_literal_eval(value: str) -> t.Any:
         return literal_eval(value)
     except (ValueError, SyntaxError, MemoryError):
         return value
+
+
+def debug() -> str:
+    import sys
+    import ipdb  # type: ignore
+
+    frame = sys._getframe(3)
+    ipdb.set_trace(frame)
+    return ""
 
 
 BUILTIN_GLOBALS = {
@@ -325,9 +425,14 @@ BUILTIN_GLOBALS = {
     "sqlmesh_incremental": True,
     "tojson": to_json,
     "toyaml": to_yaml,
+    "try_or_compiler_error": try_or_compiler_error,
     "zip": do_zip,
     "zip_strict": lambda *args: list(zip(*args)),
 }
+
+# Add debug function conditionally both with dbt or sqlmesh equivalent flag
+if os.environ.get("DBT_MACRO_DEBUGGING") or debug_mode_enabled():
+    BUILTIN_GLOBALS["debug"] = debug
 
 BUILTIN_FILTERS = {
     "as_bool": as_bool,
@@ -375,6 +480,8 @@ def create_builtin_globals(
     if variables is not None:
         builtin_globals["var"] = Var(variables)
 
+    builtin_globals["config"] = Config(jinja_globals.pop("config", {"tags": []}))
+
     deployability_index = (
         jinja_globals.get("deployability_index") or DeployabilityIndex.all_deployable()
     )
@@ -387,16 +494,37 @@ def create_builtin_globals(
             else snapshot.dev_intervals
         )
         is_incremental = bool(intervals)
+
+        snapshot_table_exists = jinja_globals.get("snapshot_table_exists")
+        if is_incremental and snapshot_table_exists is not None:
+            # If we know the information about table existence, we can use it to correctly
+            # set the flag
+            is_incremental &= snapshot_table_exists
     else:
         is_incremental = False
+
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config", "var")}
     )
 
+    if (model := jinja_globals.pop("model", None)) is not None:
+        if isinstance(model_instance := jinja_globals.pop("model_instance", None), SqlModel):
+            builtin_globals["model"] = AttributeDict(
+                {**model, RAW_CODE_KEY: model_instance.query.name}
+            )
+        else:
+            builtin_globals["model"] = AttributeDict(model.copy())
+
+    builtin_globals["flags"] = (
+        Flags(which="run") if engine_adapter is not None else Flags(which="parse")
+    )
+    builtin_globals["invocation_args_dict"] = {
+        k.lower(): v for k, v in builtin_globals["flags"].__dict__.items()
+    }
+
     if engine_adapter is not None:
-        builtin_globals["flags"] = Flags(which="run")
         adapter: BaseAdapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
@@ -414,7 +542,6 @@ def create_builtin_globals(
             project_dialect=project_dialect,
         )
     else:
-        builtin_globals["flags"] = Flags(which="parse")
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
@@ -432,11 +559,15 @@ def create_builtin_globals(
             "load_result": sql_execution.load_result,
             "run_query": sql_execution.run_query,
             "statement": sql_execution.statement,
+            "graph": adapter.graph,
+            "selected_resources": list(jinja_globals.get("selected_models") or []),
+            "write": lambda input: None,  # We don't support writing yet
         }
     )
 
     builtin_globals["run_started_at"] = jinja_globals.get("execution_dt") or now()
     builtin_globals["dbt"] = AttributeDict(builtin_globals)
+    builtin_globals["context"] = builtin_globals["dbt"]
 
     return {**builtin_globals, **jinja_globals}
 

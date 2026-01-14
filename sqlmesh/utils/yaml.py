@@ -8,6 +8,7 @@ from os import getenv
 from pathlib import Path
 
 from ruamel import yaml
+from ruamel.yaml.constructor import SafeConstructor
 
 from sqlmesh.core.constants import VAR
 from sqlmesh.utils.errors import SQLMeshError
@@ -32,12 +33,30 @@ def YAML(typ: t.Optional[str] = "safe") -> yaml.YAML:
     return yaml_obj
 
 
+class SafeConstructorOverride(SafeConstructor):
+    def check_mapping_key(
+        self,
+        node: t.Any,
+        key_node: t.Any,
+        mapping: t.Any,
+        key: t.Any,
+        value: t.Any,
+    ) -> bool:
+        """This function normally returns True if key is unique.
+
+        It is only used by the construct_mapping function. By always returning True,
+        keys will always be updated and so the last value will be kept for mappings.
+        """
+        return True
+
+
 def load(
     source: str | Path,
     raise_if_empty: bool = True,
     render_jinja: bool = True,
     allow_duplicate_keys: bool = False,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    keep_last_duplicate_key: bool = False,
 ) -> t.Dict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
@@ -56,6 +75,8 @@ def load(
         )
 
     yaml = YAML()
+    if allow_duplicate_keys and keep_last_duplicate_key:
+        yaml.Constructor = SafeConstructorOverride
     yaml.allow_duplicate_keys = allow_duplicate_keys
     contents = yaml.load(source)
     if contents is None:

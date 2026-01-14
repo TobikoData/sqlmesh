@@ -22,7 +22,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
-from sqlmesh.core.snapshot.definition import Interval, to_view_mapping
+from sqlmesh.core.snapshot.definition import to_view_mapping, SnapshotTableInfo
 from sqlmesh.core.plan import stages
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
@@ -33,15 +33,15 @@ from sqlmesh.core.snapshot import (
     SnapshotIntervals,
     SnapshotId,
     SnapshotInfoLike,
-    SnapshotTableInfo,
     SnapshotCreationFailedError,
 )
 from sqlmesh.utils import to_snake_case
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core.plan.common import identify_restatement_intervals_across_snapshot_versions
+from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
-from sqlmesh.utils.errors import PlanError, SQLMeshError
-from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import now
+from sqlmesh.utils.errors import PlanError, ConflictingPlanError, SQLMeshError
+from sqlmesh.utils.date import now, to_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,9 @@ logger = logging.getLogger(__name__)
 class PlanEvaluator(abc.ABC):
     @abc.abstractmethod
     def evaluate(
-        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+        self,
+        plan: EvaluatablePlan,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         """Evaluates a plan by pushing snapshots and backfilling data.
 
@@ -60,6 +62,7 @@ class PlanEvaluator(abc.ABC):
 
         Args:
             plan: The plan to evaluate.
+            circuit_breaker: The circuit breaker to use.
         """
 
 
@@ -68,7 +71,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self,
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
-        create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
+        create_scheduler: t.Callable[[t.Iterable[Snapshot], SnapshotEvaluator], Scheduler],
         default_catalog: t.Optional[str],
         console: t.Optional[Console] = None,
     ):
@@ -85,6 +88,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         self._circuit_breaker = circuit_breaker
+        self.snapshot_evaluator = self.snapshot_evaluator.set_correlation_id(
+            CorrelationId.from_plan_id(plan.plan_id)
+        )
+
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
             plan=plan,
@@ -102,6 +109,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         else:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
         finally:
+            self.snapshot_evaluator.recycle()
             self.console.stop_plan_evaluation()
 
     def _evaluate_stages(
@@ -127,6 +135,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             start=plan.start,
             end=plan.end,
             execution_time=plan.execution_time,
+            selected_models=plan.selected_models,
         )
 
     def visit_after_all_stage(self, stage: stages.AfterAllStage, plan: EvaluatablePlan) -> None:
@@ -140,6 +149,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             start=plan.start,
             end=plan.end,
             execution_time=plan.execution_time,
+            selected_models=plan.selected_models,
         )
 
     def visit_create_snapshot_records_stage(
@@ -169,6 +179,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 snapshots_to_create,
                 stage.all_snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
+                allow_additive_snapshots=plan.allow_additive_models,
                 deployability_index=stage.deployability_index,
                 on_start=lambda x: self.console.start_creation_progress(
                     x, plan.environment, self.default_catalog
@@ -194,6 +205,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 self.console.stop_creation_progress(
                     success=completion_status is not None and completion_status.is_success
                 )
+
+    def visit_physical_layer_schema_creation_stage(
+        self, stage: stages.PhysicalLayerSchemaCreationStage, plan: EvaluatablePlan
+    ) -> None:
+        try:
+            self.snapshot_evaluator.create_physical_schemas(
+                stage.snapshots, stage.deployability_index
+            )
+        except Exception as ex:
+            raise PlanError("Plan application failed.") from ex
 
     def visit_backfill_stage(self, stage: stages.BackfillStage, plan: EvaluatablePlan) -> None:
         if plan.empty_backfill:
@@ -224,7 +245,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_success("SKIP: No model batches to execute")
             return
 
-        scheduler = self.create_scheduler(stage.all_snapshots.values())
+        scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -233,6 +254,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             circuit_breaker=self._circuit_breaker,
             start=plan.start,
             end=plan.end,
+            allow_destructive_snapshots=plan.allow_destructive_models,
+            allow_additive_snapshots=plan.allow_additive_models,
+            selected_snapshot_ids=stage.selected_snapshot_ids,
+            selected_models=plan.selected_models,
+            is_restatement=bool(plan.restatements),
         )
         if errors:
             raise PlanError("Plan application failed.")
@@ -245,14 +271,15 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
-        scheduler = self.create_scheduler(audit_snapshots)
+        scheduler = self.create_scheduler(audit_snapshots, self.snapshot_evaluator)
         completion_status = scheduler.audit(
             plan.environment,
             plan.start,
             plan.end,
             execution_time=plan.execution_time,
             end_bounded=plan.end_bounded,
-            interval_end_per_model=plan.interval_end_per_model,
+            start_override_per_model=plan.start_override_per_model,
+            end_override_per_model=plan.end_override_per_model,
         )
 
         if completion_status.is_failure:
@@ -261,26 +288,77 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def visit_restatement_stage(
         self, stage: stages.RestatementStage, plan: EvaluatablePlan
     ) -> None:
-        snapshot_intervals_to_restate = {(s, i) for s, i in stage.snapshot_intervals.items()}
-
-        # Restating intervals on prod plans should mean that the intervals are cleared across
-        # all environments, not just the version currently in prod
-        # This ensures that work done in dev environments can still be promoted to prod
-        # by forcing dev environments to re-run intervals that changed in prod
+        # Restating intervals on prod plans means that once the data for the intervals being restated has been backfilled
+        # (which happens in the backfill stage) then we need to clear those intervals *from state* across all other environments.
+        #
+        # This ensures that work done in dev environments can still be promoted to prod by forcing dev environments to
+        # re-run intervals that changed in prod (because after this stage runs they are cleared from state and thus show as missing)
+        #
+        # It also means that any new dev environments created while this restatement plan was running also get the
+        # correct intervals cleared because we look up matching snapshots as at right now and not as at the time the plan
+        # was created, which could have been several hours ago if there was a lot of data to restate.
         #
         # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
-        snapshot_intervals_to_restate.update(
-            self._restatement_intervals_across_all_environments(
-                prod_restatements=plan.restatements,
-                disable_restatement_models=plan.disabled_restatement_models,
-                loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
-            )
+
+        intervals_to_clear = identify_restatement_intervals_across_snapshot_versions(
+            state_reader=self.state_sync,
+            prod_restatements=plan.restatements,
+            disable_restatement_models=plan.disabled_restatement_models,
+            loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
+            current_ts=to_timestamp(plan.execution_time or now()),
         )
 
-        self.state_sync.remove_intervals(
-            snapshot_intervals=list(snapshot_intervals_to_restate),
-            remove_shared_versions=plan.is_prod,
-        )
+        if not intervals_to_clear:
+            # Nothing to do
+            return
+
+        # While the restatements were being processed, did any of the snapshots being restated get new versions deployed?
+        # If they did, they will not reflect the data that just got restated, so we need to notify the user
+        deployed_during_restatement: t.Dict[
+            str, t.Tuple[SnapshotTableInfo, SnapshotTableInfo]
+        ] = {}  # tuple of (restated_snapshot, current_prod_snapshot)
+
+        if deployed_env := self.state_sync.get_environment(plan.environment.name):
+            promoted_snapshots_by_name = {s.name: s for s in deployed_env.snapshots}
+
+            for name in plan.restatements:
+                snapshot = stage.all_snapshots[name]
+                version = snapshot.table_info.version
+                if (
+                    prod_snapshot := promoted_snapshots_by_name.get(name)
+                ) and prod_snapshot.version != version:
+                    deployed_during_restatement[name] = (
+                        snapshot.table_info,
+                        prod_snapshot.table_info,
+                    )
+
+        # we need to *not* clear the intervals on the snapshots where new versions were deployed while the restatement was running in order to prevent
+        # subsequent plans from having unexpected intervals to backfill.
+        # we instead list the affected models and abort the plan with an error so the user can decide what to do
+        # (either re-attempt the restatement plan or leave things as they are)
+        filtered_intervals_to_clear = [
+            (s.snapshot, s.interval)
+            for s in intervals_to_clear.values()
+            if s.snapshot.name not in deployed_during_restatement
+        ]
+
+        if filtered_intervals_to_clear:
+            # We still clear intervals in other envs for models that were successfully restated without having new versions promoted during restatement
+            self.state_sync.remove_intervals(
+                snapshot_intervals=filtered_intervals_to_clear,
+                remove_shared_versions=plan.is_prod,
+            )
+
+        if deployed_env and deployed_during_restatement:
+            self.console.log_models_updated_during_restatement(
+                list(deployed_during_restatement.values()),
+                plan.environment.naming_info,
+                self.default_catalog,
+            )
+            raise ConflictingPlanError(
+                f"Another plan ({deployed_env.summary.plan_id}) deployed new versions of {len(deployed_during_restatement)} models in the target environment '{plan.environment.name}' while they were being restated by this plan.\n"
+                "Please re-apply your plan if these new versions should be restated."
+            )
 
     def visit_environment_record_update_stage(
         self, stage: stages.EnvironmentRecordUpdateStage, plan: EvaluatablePlan
@@ -299,6 +377,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 stage.snapshots,
                 stage.all_snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
+                allow_additive_snapshots=plan.allow_additive_models,
                 deployability_index=stage.deployability_index,
             )
         except NodeExecutionFailedError as ex:
@@ -330,9 +409,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             )
             if stage.demoted_environment_naming_info:
                 self._demote_snapshots(
-                    stage.demoted_snapshots,
+                    [stage.all_snapshots[s.snapshot_id] for s in stage.demoted_snapshots],
                     stage.demoted_environment_naming_info,
+                    deployability_index=stage.deployability_index,
                     on_complete=lambda s: self.console.update_promotion_progress(s, False),
+                    snapshots=stage.all_snapshots,
                 )
 
             completed = True
@@ -372,98 +453,24 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def _demote_snapshots(
         self,
-        target_snapshots: t.Iterable[SnapshotTableInfo],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         self.snapshot_evaluator.demote(
-            target_snapshots, environment_naming_info, on_complete=on_complete
+            target_snapshots,
+            environment_naming_info,
+            table_mapping=to_view_mapping(
+                snapshots.values(),
+                environment_naming_info,
+                default_catalog=self.default_catalog,
+                dialect=self.snapshot_evaluator.adapter.dialect,
+            ),
+            deployability_index=deployability_index,
+            on_complete=on_complete,
         )
-
-    def _restatement_intervals_across_all_environments(
-        self,
-        prod_restatements: t.Dict[str, Interval],
-        disable_restatement_models: t.Set[str],
-        loaded_snapshots: t.Dict[SnapshotId, Snapshot],
-    ) -> t.Set[t.Tuple[SnapshotTableInfo, Interval]]:
-        """
-        Given a map of snapshot names + intervals to restate in prod:
-         - Look up matching snapshots across all environments (match based on name - regardless of version)
-         - For each match, also match downstream snapshots while filtering out models that have restatement disabled
-         - Return all matches mapped to the intervals of the prod snapshot being restated
-
-        The goal here is to produce a list of intervals to invalidate across all environments so that a cadence
-        run in those environments causes the intervals to be repopulated
-        """
-        if not prod_restatements:
-            return set()
-
-        snapshots_to_restate: t.Dict[SnapshotId, t.Tuple[SnapshotTableInfo, Interval]] = {}
-
-        for env_summary in self.state_sync.get_environments_summary():
-            # Fetch the full environment object one at a time to avoid loading all environments into memory at once
-            env = self.state_sync.get_environment(env_summary.name)
-            if not env:
-                logger.warning("Environment %s not found", env_summary.name)
-                continue
-
-            keyed_snapshots = {s.name: s.table_info for s in env.snapshots}
-
-            # We dont just restate matching snapshots, we also have to restate anything downstream of them
-            # so that if A gets restated in prod and dev has A <- B <- C, B and C get restated in dev
-            env_dag = DAG({s.name: {p.name for p in s.parents} for s in env.snapshots})
-
-            for restatement, intervals in prod_restatements.items():
-                if restatement not in keyed_snapshots:
-                    continue
-                affected_snapshot_names = [
-                    x
-                    for x in ([restatement] + env_dag.downstream(restatement))
-                    if x not in disable_restatement_models
-                ]
-                snapshots_to_restate.update(
-                    {
-                        keyed_snapshots[a].snapshot_id: (keyed_snapshots[a], intervals)
-                        for a in affected_snapshot_names
-                    }
-                )
-
-        # for any affected full_history_restatement_only snapshots, we need to widen the intervals being restated to
-        # include the whole time range for that snapshot. This requires a call to state to load the full snapshot record,
-        # so we only do it if necessary
-        full_history_restatement_snapshot_ids = [
-            # FIXME: full_history_restatement_only is just one indicator that the snapshot can only be fully refreshed, the other one is Model.depends_on_self
-            # however, to figure out depends_on_self, we have to render all the model queries which, alongside having to fetch full snapshots from state,
-            # is problematic in secure environments that are deliberately isolated from arbitrary user code (since rendering a query may require user macros to be present)
-            # So for now, these are not considered
-            s_id
-            for s_id, s in snapshots_to_restate.items()
-            if s[0].full_history_restatement_only
-        ]
-        if full_history_restatement_snapshot_ids:
-            # only load full snapshot records that we havent already loaded
-            additional_snapshots = self.state_sync.get_snapshots(
-                [
-                    s.snapshot_id
-                    for s in full_history_restatement_snapshot_ids
-                    if s.snapshot_id not in loaded_snapshots
-                ]
-            )
-
-            all_snapshots = loaded_snapshots | additional_snapshots
-
-            for full_snapshot_id in full_history_restatement_snapshot_ids:
-                full_snapshot = all_snapshots[full_snapshot_id]
-                _, original_intervals = snapshots_to_restate[full_snapshot_id]
-                original_start, original_end = original_intervals
-
-                # get_removal_interval() widens intervals if necessary
-                new_intervals = full_snapshot.get_removal_interval(
-                    start=original_start, end=original_end
-                )
-                snapshots_to_restate[full_snapshot_id] = (full_snapshot.table_info, new_intervals)
-
-        return set(snapshots_to_restate.values())
 
     def _update_intervals_for_new_snapshots(self, snapshots: t.Collection[Snapshot]) -> None:
         snapshots_intervals: t.List[SnapshotIntervals] = []

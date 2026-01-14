@@ -141,7 +141,6 @@ select @do_something() as a
     result = invoke_cli(["plan", "--no-prompts", "--auto-apply", "--skip-tests"])
 
     assert result.returncode == 0
-    assert "Physical layer updated" in result.stdout
     assert "Virtual layer updated" in result.stdout
 
     # render the query to ensure our macro is being invoked
@@ -175,7 +174,6 @@ def do_something(evaluator):
         ]
     )
     assert result.returncode == 0
-    assert "Physical layer updated" in result.stdout
     assert "Virtual layer updated" in result.stdout
 
     log_file_contents = last_log_file_contents()
@@ -236,7 +234,6 @@ select @do_something() as a
     result = invoke_cli(["plan", "--no-prompts", "--auto-apply", "--skip-tests"])
 
     assert result.returncode == 0
-    assert "Physical layer updated" in result.stdout
     assert "Virtual layer updated" in result.stdout
 
     # clear cache to ensure we are forced to reload everything
@@ -266,7 +263,6 @@ def do_something(evaluator):
     )
     assert result.returncode == 0
     assert "Apply - Backfill Tables [y/n]:" in result.stdout
-    assert "Physical layer updated" not in result.stdout
 
     # the invalid snapshot in state should not prevent a plan if --select-model is used on it (since the local version can be rendered)
     result = invoke_cli(
@@ -343,7 +339,6 @@ def test_model_selector_tags_picks_up_both_remote_and_local(
     result = invoke_cli(["plan", "--no-prompts", "--auto-apply", "--skip-tests"])
 
     assert result.returncode == 0
-    assert "Physical layer updated" in result.stdout
     assert "Virtual layer updated" in result.stdout
 
     # add a new model locally with tag:a

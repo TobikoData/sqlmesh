@@ -25,10 +25,21 @@ logger = logging.getLogger(__name__)
     envvar="GITHUB_TOKEN",
     help="The Github Token to be used. Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions",
 )
+@click.option(
+    "--full-logs",
+    is_flag=True,
+    help="Whether to print all logs in the Github Actions output or only in their relevant GA check",
+)
 @click.pass_context
-def github(ctx: click.Context, token: str) -> None:
+def github(ctx: click.Context, token: str, full_logs: bool = False) -> None:
     """Github Action CI/CD Bot. See https://sqlmesh.readthedocs.io/en/stable/integrations/github/ for details"""
-    set_console(MarkdownConsole())
+    # set a larger width because if none is specified, it auto-detects 80 characters when running in GitHub Actions
+    # which can result in surprise newlines when outputting dates to backfill
+    set_console(
+        MarkdownConsole(
+            width=1000, warning_capture_only=not full_logs, error_capture_only=not full_logs
+        )
+    )
     ctx.obj["github"] = GithubController(
         paths=ctx.obj["paths"],
         token=token,
@@ -44,7 +55,7 @@ def _check_required_approvers(controller: GithubController) -> bool:
         )
         return True
     controller.update_required_approval_check(
-        status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.NEUTRAL
+        status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.FAILURE
     )
     return False
 
@@ -115,8 +126,9 @@ def _update_pr_environment(controller: GithubController) -> bool:
         conclusion = controller.update_pr_environment_check(status=GithubCheckStatus.COMPLETED)
         return conclusion is not None and conclusion.is_success
     except Exception as e:
+        logger.exception("Error occurred when updating PR environment")
         conclusion = controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED, exception=e, plan=controller.pr_plan_or_none
+            status=GithubCheckStatus.COMPLETED, exception=e
         )
         return (
             conclusion is not None
@@ -147,6 +159,7 @@ def _gen_prod_plan(controller: GithubController) -> bool:
         )
         return bool(plan_summary)
     except Exception as e:
+        logger.exception("Error occurred generating prod plan")
         controller.update_prod_plan_preview_check(
             status=GithubCheckStatus.COMPLETED,
             conclusion=GithubCheckConclusion.FAILURE,
@@ -211,6 +224,8 @@ def deploy_production(ctx: click.Context) -> None:
 
 
 def _run_all(controller: GithubController) -> None:
+    click.echo(f"SQLMesh Version: {controller.version_info}")
+
     has_required_approval = False
     is_auto_deploying_prod = (
         controller.deploy_command_enabled or controller.do_required_approval_check

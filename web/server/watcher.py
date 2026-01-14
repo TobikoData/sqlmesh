@@ -30,7 +30,10 @@ async def watch_project() -> None:
         (settings.project_path / c.SEEDS).resolve(),
     ]
     ignore_dirs = [".env"]
-    ignore_paths: t.List[t.Union[str, Path]] = [(settings.project_path / c.CACHE).resolve()]
+    cache_path = (
+        context.cache_dir.resolve() if context else (settings.project_path / c.CACHE).resolve()
+    )
+    ignore_paths: t.List[t.Union[str, Path]] = [cache_path]
     ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
     ignore_entity_patterns.append("^.*\\.db(\\.wal)?$")
 

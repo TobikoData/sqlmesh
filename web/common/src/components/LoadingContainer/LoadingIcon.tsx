@@ -1,0 +1,247 @@
+import { cn } from '@sqlmesh-common/utils'
+import React from 'react'
+
+export const LoadingIcon = React.forwardRef<
+  SVGSVGElement,
+  React.SVGProps<SVGSVGElement>
+>(
+  (
+    {
+      className,
+      ...props
+    }: {
+      className?: string
+    },
+    ref,
+  ) => {
+    return (
+      <svg
+        ref={ref}
+        data-component="LoadingIcon"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 100 100"
+        className={cn('h-4 w-4', className)}
+        {...props}
+      >
+        <g>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(0 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(30 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.083s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(60 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.167s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(90 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.25s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(120 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.333s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(150 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.417s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(180 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.5s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(210 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.583s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(240 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.667s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(270 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.75s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(300 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.833s"
+            />
+          </rect>
+          <rect
+            x="45"
+            y="8"
+            width="10"
+            height="24"
+            rx="2"
+            ry="2"
+            transform="rotate(330 50 50)"
+          >
+            <animate
+              attributeName="opacity"
+              from="1"
+              to="0.1"
+              dur="1s"
+              repeatCount="indefinite"
+              begin="0.917s"
+            />
+          </rect>
+        </g>
+      </svg>
+    )
+  },
+)

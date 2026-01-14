@@ -1,20 +1,29 @@
 from __future__ import annotations
 
+import abc
 import logging
 import typing as t
+from dataclasses import dataclass
 
 from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
+from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.dialect import schema_
+from sqlmesh.core.schema_diff import TableAlterOperation
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import (
+        DCL,
+        DF,
+        GrantsConfig,
+        QueryOrDF,
+    )
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -28,19 +37,22 @@ class LogicalMergeMixin(EngineAdapter):
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+        **kwargs: t.Any,
     ) -> None:
         logical_merge(
             self,
             target_table,
             source_table,
-            columns_to_types,
+            target_columns_to_types,
             unique_key,
             when_matched=when_matched,
             merge_filter=merge_filter,
+            source_columns=source_columns,
         )
 
 
@@ -67,50 +79,6 @@ class PandasNativeFetchDFSupportMixin(EngineAdapter):
             )
             df = read_sql_query(sql, self._connection_pool.get())
         return df
-
-
-class InsertOverwriteWithMergeMixin(EngineAdapter):
-    def _insert_overwrite_by_condition(
-        self,
-        table_name: TableName,
-        source_queries: t.List[SourceQuery],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        where: t.Optional[exp.Condition] = None,
-        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Some engines do not support `INSERT OVERWRITE` but instead support
-        doing an "INSERT OVERWRITE" using a Merge expression but with the
-        predicate being `False`.
-        """
-        columns_to_types = columns_to_types or self.columns(table_name)
-        for source_query in source_queries:
-            with source_query as query:
-                query = self._order_projections_and_filter(query, columns_to_types, where=where)
-                columns = [exp.column(col) for col in columns_to_types]
-                when_not_matched_by_source = exp.When(
-                    matched=False,
-                    source=True,
-                    condition=where,
-                    then=exp.Delete(),
-                )
-                when_not_matched_by_target = exp.When(
-                    matched=False,
-                    source=False,
-                    then=exp.Insert(
-                        this=exp.Tuple(expressions=columns),
-                        expression=exp.Tuple(expressions=columns),
-                    ),
-                )
-                self._merge(
-                    target_table=table_name,
-                    query=query,
-                    on=exp.false(),
-                    whens=exp.Whens(
-                        expressions=[when_not_matched_by_source, when_not_matched_by_target]
-                    ),
-                )
 
 
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
@@ -156,7 +124,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -220,7 +188,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
 
     def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
         # iceberg and delta do not have a comment length limit
-        if self.current_catalog_type in ("iceberg", "delta"):
+        if self.current_catalog_type in ("iceberg", "delta_lake"):
             return comment
         return super()._truncate_comment(comment, length)
 
@@ -251,9 +219,9 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
     ) -> t.Dict[str, exp.DataType]:
         # get default lengths for types that support "max" length
         types_with_max_default_param = {
-            k: [self.SCHEMA_DIFFER.parameterized_type_defaults[k][0][0]]
-            for k in self.SCHEMA_DIFFER.max_parameter_length
-            if k in self.SCHEMA_DIFFER.parameterized_type_defaults
+            k: [self.schema_differ.parameterized_type_defaults[k][0][0]]
+            for k in self.schema_differ.max_parameter_length
+            if k in self.schema_differ.parameterized_type_defaults
         }
 
         # Redshift and MSSQL have a bug where CTAS statements have non-deterministic types. If a LIMIT
@@ -262,7 +230,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         # and supports "max" length, we convert it to "max" length to prevent inadvertent data truncation.
         for col_name, col_type in columns_to_types.items():
             if col_type.this in types_with_max_default_param and col_type.expressions:
-                parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
+                parameter = self.schema_differ.get_type_parameters(col_type)
                 type_default = types_with_max_default_param[col_type.this]
                 if parameter == type_default:
                     col_type.set("expressions", [exp.DataTypeParam(this=exp.var("max"))])
@@ -275,7 +243,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -285,7 +253,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
             expression=expression,
             exists=exists,
             replace=replace,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             table_kind=table_kind,
             **kwargs,
@@ -325,7 +293,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                     None,
                     exists=exists,
                     replace=replace,
-                    columns_to_types=columns_to_types_from_view,
+                    target_columns_to_types=columns_to_types_from_view,
                     table_description=table_description,
                     **kwargs,
                 )
@@ -333,6 +301,53 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 self.drop_view(temp_view_name)
 
         return statement
+
+
+@dataclass(frozen=True)
+class TableAlterClusterByOperation(TableAlterOperation, abc.ABC):
+    pass
+
+
+@dataclass(frozen=True)
+class TableAlterChangeClusterKeyOperation(TableAlterClusterByOperation):
+    clustering_key: str
+    dialect: str
+
+    @property
+    def is_additive(self) -> bool:
+        return False
+
+    @property
+    def is_destructive(self) -> bool:
+        return False
+
+    @property
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        return [exp.Cluster(expressions=self.cluster_key_expressions)]
+
+    @property
+    def cluster_key_expressions(self) -> t.List[exp.Expression]:
+        # Note: Assumes `clustering_key` as a string like:
+        # - "(col_a)"
+        # - "(col_a, col_b)"
+        # - "func(col_a, transform(col_b))"
+        parsed_cluster_key = parse_one(self.clustering_key, dialect=self.dialect)
+        return parsed_cluster_key.expressions or [parsed_cluster_key.this]
+
+
+@dataclass(frozen=True)
+class TableAlterDropClusterKeyOperation(TableAlterClusterByOperation):
+    @property
+    def is_additive(self) -> bool:
+        return False
+
+    @property
+    def is_destructive(self) -> bool:
+        return False
+
+    @property
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        return [exp.Command(this="DROP", expression="CLUSTERING KEY")]
 
 
 class ClusteredByMixin(EngineAdapter):
@@ -343,22 +358,20 @@ class ClusteredByMixin(EngineAdapter):
     ) -> t.Optional[exp.Cluster]:
         return exp.Cluster(expressions=[c.copy() for c in clustered_by])
 
-    def _parse_clustering_key(self, clustering_key: t.Optional[str]) -> t.List[exp.Expression]:
-        if not clustering_key:
-            return []
-
-        # Note: Assumes `clustering_key` as a string like:
-        # - "(col_a)"
-        # - "(col_a, col_b)"
-        # - "func(col_a, transform(col_b))"
-        parsed_cluster_key = parse_one(clustering_key, dialect=self.dialect)
-
-        return parsed_cluster_key.expressions or [parsed_cluster_key.this]
-
-    def get_alter_expressions(
-        self, current_table_name: TableName, target_table_name: TableName
-    ) -> t.List[exp.Alter]:
-        expressions = super().get_alter_expressions(current_table_name, target_table_name)
+    def get_alter_operations(
+        self,
+        current_table_name: TableName,
+        target_table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterOperation]:
+        operations = super().get_alter_operations(
+            current_table_name,
+            target_table_name,
+            ignore_destructive=ignore_destructive,
+            ignore_additive=ignore_additive,
+        )
 
         # check for a change in clustering
         current_table = exp.to_table(current_table_name)
@@ -379,42 +392,28 @@ class ClusteredByMixin(EngineAdapter):
                 if target_table_info.clustering_key and (
                     current_table_info.clustering_key != target_table_info.clustering_key
                 ):
-                    expressions.append(
-                        self._change_clustering_key_expr(
-                            current_table,
-                            self._parse_clustering_key(target_table_info.clustering_key),
+                    operations.append(
+                        TableAlterChangeClusterKeyOperation(
+                            target_table=current_table,
+                            clustering_key=target_table_info.clustering_key,
+                            dialect=self.dialect,
                         )
                     )
             elif current_table_info.is_clustered:
-                expressions.append(self._drop_clustering_key_expr(current_table))
+                operations.append(TableAlterDropClusterKeyOperation(target_table=current_table))
 
-        return expressions
-
-    def _change_clustering_key_expr(
-        self, table: exp.Table, cluster_by: t.List[exp.Expression]
-    ) -> exp.Alter:
-        return exp.Alter(
-            this=table,
-            kind="TABLE",
-            actions=[exp.Cluster(expressions=cluster_by)],
-        )
-
-    def _drop_clustering_key_expr(self, table: exp.Table) -> exp.Alter:
-        return exp.Alter(
-            this=table,
-            kind="TABLE",
-            actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
-        )
+        return operations
 
 
 def logical_merge(
     engine_adapter: EngineAdapter,
     target_table: TableName,
     source_table: QueryOrDF,
-    columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+    target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     unique_key: t.Sequence[exp.Expression],
     when_matched: t.Optional[exp.Whens] = None,
     merge_filter: t.Optional[exp.Expression] = None,
+    source_columns: t.Optional[t.List[str]] = None,
 ) -> None:
     """
     Merge implementation for engine adapters that do not support merge natively.
@@ -433,7 +432,12 @@ def logical_merge(
         )
 
     engine_adapter._replace_by_key(
-        target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+        target_table,
+        source_table,
+        target_columns_to_types,
+        unique_key,
+        is_unique_key=True,
+        source_columns=source_columns,
     )
 
 
@@ -551,3 +555,137 @@ class RowDiffMixin(EngineAdapter):
 
     def _normalize_boolean_value(self, expr: exp.Expression) -> exp.Expression:
         return exp.cast(expr, "INT")
+
+
+class GrantsFromInfoSchemaMixin(EngineAdapter):
+    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expression = exp.func("current_user")
+    SUPPORTS_MULTIPLE_GRANT_PRINCIPALS = False
+    USE_CATALOG_IN_GRANTS = False
+    GRANT_INFORMATION_SCHEMA_TABLE_NAME = "table_privileges"
+
+    @staticmethod
+    @abc.abstractmethod
+    def _grant_object_kind(table_type: DataObjectType) -> t.Optional[str]:
+        pass
+
+    @abc.abstractmethod
+    def _get_current_schema(self) -> str:
+        pass
+
+    def _dcl_grants_config_expr(
+        self,
+        dcl_cmd: t.Type[DCL],
+        table: exp.Table,
+        grants_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        expressions: t.List[exp.Expression] = []
+        if not grants_config:
+            return expressions
+
+        object_kind = self._grant_object_kind(table_type)
+        for privilege, principals in grants_config.items():
+            args: t.Dict[str, t.Any] = {
+                "privileges": [exp.GrantPrivilege(this=exp.Var(this=privilege))],
+                "securable": table.copy(),
+            }
+            if object_kind:
+                args["kind"] = exp.Var(this=object_kind)
+            if self.SUPPORTS_MULTIPLE_GRANT_PRINCIPALS:
+                args["principals"] = [
+                    normalize_identifiers(
+                        parse_one(principal, into=exp.GrantPrincipal, dialect=self.dialect),
+                        dialect=self.dialect,
+                    )
+                    for principal in principals
+                ]
+                expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+            else:
+                for principal in principals:
+                    args["principals"] = [
+                        normalize_identifiers(
+                            parse_one(principal, into=exp.GrantPrincipal, dialect=self.dialect),
+                            dialect=self.dialect,
+                        )
+                    ]
+                    expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+
+        return expressions
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grants_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Grant, table, grants_config, table_type)
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grants_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Revoke, table, grants_config, table_type)
+
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        schema_identifier = table.args.get("db") or normalize_identifiers(
+            exp.to_identifier(self._get_current_schema(), quoted=True), dialect=self.dialect
+        )
+        schema_name = schema_identifier.this
+        table_name = table.args.get("this").this  # type: ignore
+
+        grant_conditions = [
+            exp.column("table_schema").eq(exp.Literal.string(schema_name)),
+            exp.column("table_name").eq(exp.Literal.string(table_name)),
+            exp.column("grantor").eq(self.CURRENT_USER_OR_ROLE_EXPRESSION),
+            exp.column("grantee").neq(self.CURRENT_USER_OR_ROLE_EXPRESSION),
+        ]
+
+        info_schema_table = normalize_identifiers(
+            exp.table_(self.GRANT_INFORMATION_SCHEMA_TABLE_NAME, db="information_schema"),
+            dialect=self.dialect,
+        )
+        if self.USE_CATALOG_IN_GRANTS:
+            catalog_identifier = table.args.get("catalog")
+            if not catalog_identifier:
+                catalog_name = self.get_current_catalog()
+                if not catalog_name:
+                    raise SQLMeshError(
+                        "Current catalog could not be determined for fetching grants. This is unexpected."
+                    )
+                catalog_identifier = normalize_identifiers(
+                    exp.to_identifier(catalog_name, quoted=True), dialect=self.dialect
+                )
+            catalog_name = catalog_identifier.this
+            info_schema_table.set("catalog", catalog_identifier.copy())
+            grant_conditions.insert(
+                0, exp.column("table_catalog").eq(exp.Literal.string(catalog_name))
+            )
+
+        return (
+            exp.select("privilege_type", "grantee")
+            .from_(info_schema_table)
+            .where(exp.and_(*grant_conditions))
+        )
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        grant_expr = self._get_grant_expression(table)
+
+        results = self.fetchall(grant_expr)
+
+        grants_dict: GrantsConfig = {}
+        for privilege_raw, grantee_raw in results:
+            if privilege_raw is None or grantee_raw is None:
+                continue
+
+            privilege = str(privilege_raw)
+            grantee = str(grantee_raw)
+            if not privilege or not grantee:
+                continue
+
+            grantees = grants_dict.setdefault(privilege, [])
+            if grantee not in grantees:
+                grantees.append(grantee)
+
+        return grants_dict

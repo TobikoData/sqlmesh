@@ -136,6 +136,42 @@ You can also use the `@model_kind_name` variable to fine-tune control over `phys
     )
     ```
 
+You can aso define `pre_statements`, `post_statements` and `on_virtual_update` statements at the project level that will be applied to all models. These default statements are merged with any model-specific statements, with default statements executing first, followed by model-specific statements.
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    model_defaults:
+      dialect: duckdb
+      pre_statements:
+        - "SET timeout = 300000"
+      post_statements:
+        - "@IF(@runtime_stage = 'evaluating', ANALYZE @this_model)"
+      on_virtual_update:
+        - "GRANT SELECT ON @this_model TO ROLE analyst_role"
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+      model_defaults=ModelDefaultsConfig(
+        dialect="duckdb",
+        pre_statements=[
+          "SET query_timeout = 300000",
+        ],
+        post_statements=[
+          "@IF(@runtime_stage = 'evaluating', ANALYZE @this_model)",
+        ],
+        on_virtual_update=[
+          "GRANT SELECT ON @this_model TO ROLE analyst_role",
+        ],
+      ),
+    )
+    ```
+
 
 The SQLMesh project-level `model_defaults` key supports the following options, described in the [general model properties](#general-model-properties) table above:
 
@@ -150,11 +186,15 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - virtual_properties
 - session_properties (on per key basis)
 - on_destructive_change (described [below](#incremental-models))
+- on_additive_change (described [below](#incremental-models))
 - audits (described [here](../concepts/audits.md#generic-audits))
 - optimize_query
 - allow_partials
 - enabled
 - interval_unit
+- pre_statements (described [here](../concepts/models/sql_models.md#pre--and-post-statements))
+- post_statements (described [here](../concepts/models/sql_models.md#pre--and-post-statements))
+- on_virtual_update (described [here](../concepts/models/sql_models.md#on-virtual-update-statements))
 
 
 ### Model Naming
@@ -192,11 +232,12 @@ Python model kind `name` enum value: [ModelKindName.FULL](https://sqlmesh.readth
 
 Configuration options for all incremental models (in addition to [general model properties](#general-model-properties)).
 
-| Option                  | Description                                                                                                                                                                                                                                                                                                            | Type | Required |
-|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `forward_only`          | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`)                                                                                                                                                                                | bool | N        |
-| `on_destructive_change` | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes a destructive modification to the model schema. Valid values: `allow`, `warn`, `error`. (Default: `error`) | str  | N        |
-| `disable_restatement`   | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                                                                                                                                                                                                    | bool | N        |
+| Option                  | Description                                                                                                                                                                                                                                                                                                                                              | Type | Required |
+|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `forward_only`          | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`)                                                                                                                                                                                                                  | bool |    N     |
+| `on_destructive_change` | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes a destructive modification to the model schema. Valid values: `allow`, `warn`, `error`, `ignore`. (Default: `error`)                         | str  |    N     |
+| `on_additive_change`    | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes an additive modification to the model schema (like adding new columns). Valid values: `allow`, `warn`, `error`, `ignore`. (Default: `allow`) | str  |    N     |
+| `disable_restatement`   | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                                                                                                                                                                                                                                      | bool |    N     |
 
 #### Incremental by time range
 
@@ -241,7 +282,7 @@ Configuration options for [`SCD_TYPE_2` models](../concepts/models/model_kinds.m
 | `unique_key`              | The model column(s) containing each row's unique key                                                                                                                                        | array[str] |    Y     |
 | `valid_from_name`         | The model column containing each row's valid from date. (Default: `valid_from`)                                                                                                             |    str     |    N     |
 | `valid_to_name`           | The model column containing each row's valid to date. (Default: `valid_to`)                                                                                                                 |    str     |    N     |
-| `invalidate_hard_deletes` | If set to true, when a record is missing from the source table it will be marked as invalid - see [here](../concepts/models/model_kinds.md#deletes) for more information. (Default: `True`) |    bool    |    N     |
+| `invalidate_hard_deletes` | If set to true, when a record is missing from the source table it will be marked as invalid - see [here](../concepts/models/model_kinds.md#deletes) for more information. (Default: `False`) |    bool    |    N     |
 
 ##### SCD Type 2 By Time
 

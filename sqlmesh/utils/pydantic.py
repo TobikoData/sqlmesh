@@ -16,6 +16,8 @@ from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
 
 if t.TYPE_CHECKING:
+    from sqlglot._typing import E
+
     Model = t.TypeVar("Model", bound="PydanticModel")
 
 
@@ -193,6 +195,12 @@ def validate_string(v: t.Any) -> str:
     return str(v)
 
 
+def validate_expression(expression: E, dialect: str) -> E:
+    # this normalizes and quotes identifiers in the given expression according the specified dialect
+    # it also sets expression.meta["dialect"] so that when we serialize for state, the expression is serialized in the correct dialect
+    return _get_field(expression, {"dialect": dialect})  # type: ignore
+
+
 def bool_validator(v: t.Any) -> bool:
     if isinstance(v, exp.Boolean):
         return v.this
@@ -281,13 +289,13 @@ def column_validator(v: t.Any, values: t.Any) -> exp.Column:
     return expression
 
 
-def list_of_columns_or_star_validator(
+def list_of_fields_or_star_validator(
     v: t.Any, values: t.Any
-) -> t.Union[exp.Star, t.List[exp.Column]]:
+) -> t.Union[exp.Star, t.List[exp.Expression]]:
     expressions = _get_fields(v, values)
     if len(expressions) == 1 and isinstance(expressions[0], exp.Star):
         return t.cast(exp.Star, expressions[0])
-    return t.cast(t.List[exp.Column], expressions)
+    return t.cast(t.List[exp.Expression], expressions)
 
 
 def cron_validator(v: t.Any) -> str:
@@ -331,7 +339,7 @@ if t.TYPE_CHECKING:
     SQLGlotPositiveInt = int
     SQLGlotColumn = exp.Column
     SQLGlotListOfFields = t.List[exp.Expression]
-    SQLGlotListOfColumnsOrStar = t.Union[t.List[exp.Column], exp.Star]
+    SQLGlotListOfFieldsOrStar = t.Union[SQLGlotListOfFields, exp.Star]
     SQLGlotCron = str
 else:
     from pydantic.functional_validators import BeforeValidator
@@ -344,7 +352,7 @@ else:
     SQLGlotListOfFields = t.Annotated[
         t.List[exp.Expression], BeforeValidator(list_of_fields_validator)
     ]
-    SQLGlotListOfColumnsOrStar = t.Annotated[
-        t.Union[t.List[exp.Column], exp.Star], BeforeValidator(list_of_columns_or_star_validator)
+    SQLGlotListOfFieldsOrStar = t.Annotated[
+        t.Union[SQLGlotListOfFields, exp.Star], BeforeValidator(list_of_fields_or_star_validator)
     ]
     SQLGlotCron = t.Annotated[str, BeforeValidator(cron_validator)]

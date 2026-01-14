@@ -7,6 +7,7 @@ import pandas as pd  # noqa: TID253
 from sqlglot import exp, parse_one
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.utils.errors import SQLMeshError
@@ -132,7 +133,7 @@ def test_create_table_hive(adapter: AthenaEngineAdapter) -> None:
 
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
         partitioned_by=model.partitioned_by,
         storage_format=model.storage_format,
@@ -164,7 +165,7 @@ def test_create_table_iceberg(adapter: AthenaEngineAdapter) -> None:
 
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
         partitioned_by=model.partitioned_by,
         table_format=model.table_format,
@@ -192,14 +193,14 @@ def test_create_table_no_location(adapter: AthenaEngineAdapter) -> None:
     with pytest.raises(SQLMeshError, match=r"Cannot figure out location.*"):
         adapter.create_table(
             model.name,
-            columns_to_types=model.columns_to_types_or_raise,
+            target_columns_to_types=model.columns_to_types_or_raise,
             table_properties=model.physical_properties,
         )
 
     adapter.s3_warehouse_location = "s3://bucket/prefix"
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 
@@ -213,7 +214,7 @@ def test_ctas_hive(adapter: AthenaEngineAdapter):
 
     adapter.ctas(
         table_name="foo.bar",
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         query_or_df=parse_one("select 1", into=exp.Select),
     )
 
@@ -227,7 +228,7 @@ def test_ctas_iceberg(adapter: AthenaEngineAdapter):
 
     adapter.ctas(
         table_name="foo.bar",
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         query_or_df=parse_one("select 1", into=exp.Select),
         table_format="iceberg",
     )
@@ -241,7 +242,7 @@ def test_ctas_iceberg_no_specific_location(adapter: AthenaEngineAdapter):
     with pytest.raises(SQLMeshError, match=r"Cannot figure out location.*"):
         adapter.ctas(
             table_name="foo.bar",
-            columns_to_types={"a": exp.DataType.build("int")},
+            target_columns_to_types={"a": exp.DataType.build("int")},
             query_or_df=parse_one("select 1", into=exp.Select),
             table_properties={"table_type": exp.Literal.string("iceberg")},
         )
@@ -269,7 +270,7 @@ def test_ctas_iceberg_partitioned(adapter: AthenaEngineAdapter):
     adapter.s3_warehouse_location = "s3://bucket/prefix/"
     adapter.ctas(
         table_name=model.name,
-        columns_to_types=model.columns_to_types,
+        target_columns_to_types=model.columns_to_types,
         partitioned_by=model.partitioned_by,
         query_or_df=model.ctas_query(),
         table_format=model.table_format,
@@ -288,11 +289,16 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
         "sqlmesh.core.engine_adapter.athena.AthenaEngineAdapter._query_table_type",
         return_value="iceberg",
     )
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test", type="table")],
+    )
 
     adapter.replace_query(
         table_name="test",
         query_or_df=parse_one("select 1 as a", into=exp.Select),
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         table_properties={},
     )
 
@@ -304,13 +310,15 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
     mocker.patch(
         "sqlmesh.core.engine_adapter.athena.AthenaEngineAdapter.table_exists", return_value=False
     )
+    mocker.patch.object(adapter, "_get_data_objects", return_value=[])
     adapter.cursor.execute.reset_mock()
+    adapter._clear_data_object_cache()
 
     adapter.s3_warehouse_location = "s3://foo"
     adapter.replace_query(
         table_name="test",
         query_or_df=parse_one("select 1 as a", into=exp.Select),
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         table_properties={},
     )
 
@@ -475,14 +483,14 @@ def test_iceberg_partition_transforms(adapter: AthenaEngineAdapter):
 
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         partitioned_by=model.partitioned_by,
         table_format=model.table_format,
     )
 
     adapter.ctas(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         partitioned_by=model.partitioned_by,
         query_or_df=model.ctas_query(),
         table_format=model.table_format,

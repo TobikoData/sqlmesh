@@ -15,10 +15,10 @@ from sqlmesh.core.state_sync.db.utils import (
 from sqlmesh.core.snapshot import (
     SnapshotIntervals,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotNameVersionLike,
     SnapshotTableCleanupTask,
     SnapshotNameVersion,
-    SnapshotInfoLike,
     Snapshot,
 )
 from sqlmesh.core.snapshot.definition import Interval
@@ -60,6 +60,7 @@ class IntervalState:
             "is_removed": exp.DataType.build("boolean"),
             "is_compacted": exp.DataType.build("boolean"),
             "is_pending_restatement": exp.DataType.build("boolean"),
+            "last_altered_ts": exp.DataType.build("bigint"),
         }
 
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
@@ -68,11 +69,11 @@ class IntervalState:
 
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         intervals_to_remove: t.Sequence[
-            t.Tuple[t.Union[SnapshotInfoLike, SnapshotIntervals], Interval]
+            t.Tuple[t.Union[SnapshotIdAndVersionLike, SnapshotIntervals], Interval]
         ] = snapshot_intervals
         if remove_shared_versions:
             name_version_mapping = {s.name_version: interval for s, interval in snapshot_intervals}
@@ -111,12 +112,12 @@ class IntervalState:
             snapshot_ids = ", ".join(str(s.snapshot_id) for s, _ in intervals_to_remove)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
 
-        for is_dev in (True, False):
-            self.engine_adapter.insert_append(
-                self.intervals_table,
-                _intervals_to_df(intervals_to_remove, is_dev=is_dev, is_removed=True),
-                columns_to_types=self._interval_columns_to_types,
-            )
+        self.engine_adapter.insert_append(
+            self.intervals_table,
+            _intervals_to_df(intervals_to_remove, is_dev=False, is_removed=True),
+            target_columns_to_types=self._interval_columns_to_types,
+            track_rows_processed=False,
+        )
 
     def get_snapshot_intervals(
         self, snapshots: t.Collection[SnapshotNameVersionLike]
@@ -215,13 +216,23 @@ class IntervalState:
             for start_ts, end_ts in snapshot.intervals:
                 new_intervals.append(
                     _interval_to_df(
-                        snapshot, start_ts, end_ts, is_dev=False, is_compacted=is_compacted
+                        snapshot,
+                        start_ts,
+                        end_ts,
+                        is_dev=False,
+                        is_compacted=is_compacted,
+                        last_altered_ts=snapshot.last_altered_ts,
                     )
                 )
             for start_ts, end_ts in snapshot.dev_intervals:
                 new_intervals.append(
                     _interval_to_df(
-                        snapshot, start_ts, end_ts, is_dev=True, is_compacted=is_compacted
+                        snapshot,
+                        start_ts,
+                        end_ts,
+                        is_dev=True,
+                        is_compacted=is_compacted,
+                        last_altered_ts=snapshot.dev_last_altered_ts,
                     )
                 )
 
@@ -236,6 +247,7 @@ class IntervalState:
                         is_dev=False,
                         is_compacted=is_compacted,
                         is_pending_restatement=True,
+                        last_altered_ts=snapshot.last_altered_ts,
                     )
                 )
 
@@ -243,7 +255,8 @@ class IntervalState:
             self.engine_adapter.insert_append(
                 self.intervals_table,
                 pd.DataFrame(new_intervals),
-                columns_to_types=self._interval_columns_to_types,
+                target_columns_to_types=self._interval_columns_to_types,
+                track_rows_processed=False,
             )
 
     def _get_snapshot_intervals(
@@ -283,6 +296,7 @@ class IntervalState:
                 is_dev,
                 is_removed,
                 is_pending_restatement,
+                last_altered_ts,
             ) in rows:
                 interval_ids.add(interval_id)
                 merge_key = (name, version, dev_version, identifier)
@@ -317,8 +331,10 @@ class IntervalState:
                 else:
                     if is_dev:
                         intervals[merge_key].add_dev_interval(start, end)
+                        intervals[merge_key].update_dev_last_altered_ts(last_altered_ts)
                     else:
                         intervals[merge_key].add_interval(start, end)
+                        intervals[merge_key].update_last_altered_ts(last_altered_ts)
                         # Remove all pending restatement intervals recorded before the current interval has been added
                         intervals[
                             pending_restatement_interval_merge_key
@@ -339,6 +355,7 @@ class IntervalState:
                 "is_dev",
                 "is_removed",
                 "is_pending_restatement",
+                "last_altered_ts",
             )
             .from_(exp.to_table(self.intervals_table).as_("intervals"))
             .order_by(
@@ -430,7 +447,9 @@ class IntervalState:
 
 
 def _intervals_to_df(
-    snapshot_intervals: t.Sequence[t.Tuple[t.Union[SnapshotInfoLike, SnapshotIntervals], Interval]],
+    snapshot_intervals: t.Sequence[
+        t.Tuple[t.Union[SnapshotIdAndVersionLike, SnapshotIntervals], Interval]
+    ],
     is_dev: bool,
     is_removed: bool,
 ) -> pd.DataFrame:
@@ -450,13 +469,14 @@ def _intervals_to_df(
 
 
 def _interval_to_df(
-    snapshot: t.Union[SnapshotInfoLike, SnapshotIntervals],
+    snapshot: t.Union[SnapshotIdAndVersionLike, SnapshotIntervals],
     start_ts: int,
     end_ts: int,
     is_dev: bool = False,
     is_removed: bool = False,
     is_compacted: bool = False,
     is_pending_restatement: bool = False,
+    last_altered_ts: t.Optional[int] = None,
 ) -> t.Dict[str, t.Any]:
     return {
         "id": random_id(),
@@ -471,4 +491,5 @@ def _interval_to_df(
         "is_removed": is_removed,
         "is_compacted": is_compacted,
         "is_pending_restatement": is_pending_restatement,
+        "last_altered_ts": last_altered_ts,
     }

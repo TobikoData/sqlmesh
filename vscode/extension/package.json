@@ -18,7 +18,8 @@
   ],
   "activationEvents": [
     "onLanguage:sql",
-    "onLanguage:python"
+    "onLanguage:python",
+    "onLanguage:yaml"
   ],
   "extensionKind": [
     "workspace"
@@ -31,10 +32,18 @@
       "type": "object",
       "title": "SQLMesh",
       "properties": {
-        "sqlmesh.projectPath": {
+        "sqlmesh.projectPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "The path to the SQLMesh project. If not set, the extension will try to find the project root automatically. If set, the extension will use the project root as the workspace path, e.g. it will run `sqlmesh` and `sqlmesh_lsp` in the project root. The path can be absolute `/Users/sqlmesh_user/sqlmesh_project/sushi` or relative `./project_folder/sushi` to the workspace root. Multiple paths can be used for multi-project setups."
+        },
+        "sqlmesh.lspEntrypoint": {
           "type": "string",
           "default": "",
-          "markdownDescription": "The path to the SQLMesh project. If not set, the extension will try to find the project root automatically. If set, the extension will use the project root as the workspace path, e.g. it will run `sqlmesh` and `sqlmesh_lsp` in the project root. The path can be absolute `/Users/sqlmesh_user/sqlmesh_project/sushi` or relative `./project_folder/sushi` to the workspace root."
+          "markdownDescription": "The entry point for the SQLMesh LSP server. If not set the extension looks for the default lsp. If set, the extension will use the entry point as the LSP path,  The path can be absolute `/Users/sqlmesh_user/sqlmesh_project/sushi/sqlmesh_lsp` or relative `./project_folder/sushi/sqlmesh_lsp` to the workspace root. It can also have arguments, e.g. `./project_folder/sushi/sqlmesh_lsp --port 5000`."
         }
       }
     },
@@ -52,7 +61,8 @@
         {
           "id": "sqlmesh.lineage",
           "name": "",
-          "type": "webview"
+          "type": "webview",
+          "icon": "./assets/images/dag.svg"
         }
       ]
     },
@@ -103,6 +113,12 @@
         "command": "sqlmesh.stop",
         "title": "SQLMesh: Stop Server",
         "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.showTableDiff",
+        "title": "SQLMesh: Show Table Diff",
+        "description": "SQLMesh",
+        "icon": "$(diff)"
       }
     ],
     "menus": {
@@ -111,19 +127,24 @@
           "command": "sqlmesh.renderModel",
           "when": "resourceExtname == .sql",
           "group": "navigation"
+        },
+        {
+          "command": "sqlmesh.showTableDiff",
+          "when": "resourceExtname == .sql",
+          "group": "navigation"
         }
       ]
     }
   },
   "scripts": {
     "ci": "pnpm run lint && pnpm run compile && pnpm run test:unit",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
+    "lint": "eslint src tests",
+    "lint:fix": "eslint src tests --fix",
     "test:unit": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "fetch-vscode": "tsx scripts/fetch-vscode.ts",
+    "code-server": "code-server",
+    "test:e2e": "pnpm run vscode:package && playwright test",
+    "test:e2e:ui": "pnpm run vscode:package && playwright test --ui",
+    "test:e2e:headed": "pnpm run vscode:package && playwright test --headed",
     "compile": "pnpm run check-types && node esbuild.js",
     "check-types": "tsc --noEmit -p ./tsconfig.build.json",
     "watch": "node esbuild.js --watch",
@@ -133,29 +154,32 @@
     "package": "rm -rf ./src_react && mkdir -p ./src_react && cd ../react && pnpm run build && cd ../extension && cp -r ../react/dist/* ./src_react && pnpm run check-types && node esbuild.js --production"
   },
   "dependencies": {
+    "@duckdb/node-api": "1.3.2-alpha.25",
     "@types/fs-extra": "^11.0.4",
+    "@types/shell-quote": "^1.7.5",
     "@vscode/python-extension": "^1.0.5",
     "fs-extra": "^11.3.0",
+    "shell-quote": "^1.8.3",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
-    "zod": "^3.25.55"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@eslint/js": "^9.28.0",
-    "@playwright/test": "^1.52.0",
+    "@eslint/js": "^9.31.0",
+    "@playwright/test": "^1.54.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.11.25",
     "@types/vscode": "1.96.0",
-    "@vitest/ui": "^3.2.3",
+    "@vitest/ui": "^3.2.4",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.5.0",
-    "esbuild": "^0.25.5",
-    "eslint": "^9.29.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.8",
+    "eslint": "^9.31.0",
     "ts-loader": "^9.5.2",
-    "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.34.0",
-    "vitest": "^3.2.3"
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^3.2.4",
+    "yaml": "^2.8.0"
   }
 }

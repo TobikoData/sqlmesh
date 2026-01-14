@@ -13,6 +13,7 @@ import traceback
 import types
 import typing as t
 import uuid
+from dataclasses import dataclass
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
@@ -20,6 +21,7 @@ from enum import IntEnum, Enum
 from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
+import unicodedata
 from sqlglot import exp
 from sqlglot.dialects.dialect import Dialects
 
@@ -290,8 +292,14 @@ def sqlglot_dialects() -> str:
 
 NON_ALNUM = re.compile(r"[^a-zA-Z0-9_]")
 
+NON_ALUM_INCLUDE_UNICODE = re.compile(r"\W", flags=re.UNICODE)
 
-def sanitize_name(name: str) -> str:
+
+def sanitize_name(name: str, *, include_unicode: bool = False) -> str:
+    if include_unicode:
+        s = unicodedata.normalize("NFC", name)
+        s = NON_ALUM_INCLUDE_UNICODE.sub("_", s)
+        return s
     return NON_ALNUM.sub("_", name)
 
 
@@ -382,3 +390,35 @@ def to_snake_case(name: str) -> str:
     return "".join(
         f"_{c.lower()}" if c.isupper() and idx != 0 else c.lower() for idx, c in enumerate(name)
     )
+
+
+class JobType(Enum):
+    PLAN = "SQLMESH_PLAN"
+    RUN = "SQLMESH_RUN"
+
+
+@dataclass(frozen=True)
+class CorrelationId:
+    """ID that is added to each query in order to identify the job that created it."""
+
+    job_type: JobType
+    job_id: str
+
+    def __str__(self) -> str:
+        return f"{self.job_type.value}: {self.job_id}"
+
+    @classmethod
+    def from_plan_id(cls, plan_id: str) -> CorrelationId:
+        return CorrelationId(JobType.PLAN, plan_id)
+
+
+def get_source_columns_to_types(
+    columns_to_types: t.Dict[str, exp.DataType],
+    source_columns: t.Optional[t.List[str]],
+) -> t.Dict[str, exp.DataType]:
+    source_column_lookup = set(source_columns) if source_columns else None
+    return {
+        k: v
+        for k, v in columns_to_types.items()
+        if not source_column_lookup or k in source_column_lookup
+    }

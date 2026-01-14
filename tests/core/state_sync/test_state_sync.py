@@ -13,19 +13,17 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
-from sqlmesh.core.dialect import parse_one, schema_
+from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
-    ModelKindName,
     Seed,
     SeedKind,
     SeedModel,
     SqlModel,
 )
-from sqlmesh.core.model.definition import ExternalModel
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -38,26 +36,45 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.state_sync import (
     CachingStateSync,
     EngineAdapterStateSync,
-    cleanup_expired_views,
 )
 from sqlmesh.core.state_sync.base import (
     SCHEMA_VERSION,
     SQLGLOT_VERSION,
-    PromotionResult,
     Versions,
 )
+from sqlmesh.core.state_sync.common import (
+    ExpiredBatchRange,
+    LimitBoundary,
+    PromotionResult,
+    RowBoundary,
+)
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import SQLMeshError, StateMigrationError
 
 pytestmark = pytest.mark.slow
+
+
+def _get_cleanup_tasks(
+    state_sync: EngineAdapterStateSync,
+    *,
+    limit: int = 1000,
+    ignore_ttl: bool = False,
+) -> t.List[SnapshotTableCleanupTask]:
+    batch = state_sync.get_expired_snapshots(
+        ignore_ttl=ignore_ttl,
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=limit),
+    )
+    return [] if batch is None else batch.cleanup_tasks
 
 
 @pytest.fixture
 def state_sync(duck_conn, tmp_path):
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(lambda: duck_conn, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     return state_sync
 
 
@@ -137,7 +154,7 @@ def test_push_snapshots(
         state_sync.push_snapshots([snapshot_a, snapshot_b])
 
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.version = "2"
 
     state_sync.push_snapshots([snapshot_a, snapshot_b])
@@ -256,7 +273,8 @@ def test_add_interval(
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
 
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
     state_sync.add_interval(snapshot, to_datetime("2020-01-16"), "2020-01-20", is_dev=True)
     intervals = get_snapshot_intervals(snapshot)
     assert intervals.intervals == [
@@ -324,9 +342,7 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     remove_records_count = state_sync.engine_adapter.fetchone(
         "SELECT COUNT(*) FROM sqlmesh._intervals WHERE name = '\"a\"' AND version = 'a' AND is_removed"
     )[0]  # type: ignore
-    assert (
-        remove_records_count == num_of_removals * 4
-    )  # (1 dev record + 1 prod record) * 2 snapshots
+    assert remove_records_count == num_of_removals * 2  # 2 * snapshots
 
     snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
 
@@ -1144,7 +1160,7 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 11000
 
@@ -1155,12 +1171,354 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
         new_snapshot.snapshot_id,
     }
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not state_sync.get_snapshots(all_snapshots)
+
+
+def test_get_expired_snapshot_batch(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    now_ts = now_timestamp()
+
+    snapshots = []
+    for idx in range(3):
+        snapshot = make_snapshot(
+            SqlModel(
+                name=f"model_{idx}",
+                query=parse_one("select 1 as a, ds"),
+            ),
+        )
+        snapshot.ttl = "in 10 seconds"
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        snapshot.updated_ts = now_ts - (20000 + idx * 1000)
+        snapshots.append(snapshot)
+
+    state_sync.push_snapshots(snapshots)
+
+    batch = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=2),
+    )
+    assert batch is not None
+    assert len(batch.expired_snapshot_ids) == 2
+    assert len(batch.cleanup_tasks) == 2
+
+    state_sync.delete_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=RowBoundary.lowest_boundary(),
+            end=batch.batch_range.end,
+        ),
+    )
+
+    next_batch = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
+    )
+    assert next_batch is not None
+    assert len(next_batch.expired_snapshot_ids) == 1
+
+    state_sync.delete_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=next_batch.batch_range.start,
+            end=next_batch.batch_range.end,
+        ),
+    )
+
+    assert (
+        state_sync.get_expired_snapshots(
+            batch_range=ExpiredBatchRange(
+                start=next_batch.batch_range.end,
+                end=LimitBoundary(batch_size=2),
+            ),
+        )
+        is None
+    )
+
+
+def test_get_expired_snapshot_batch_same_timestamp(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    """Test that pagination works correctly when multiple snapshots have the same updated_ts."""
+    now_ts = now_timestamp()
+    same_timestamp = now_ts - 20000
+
+    snapshots = []
+    for idx in range(5):
+        snapshot = make_snapshot(
+            SqlModel(
+                name=f"model_{idx:02d}",  # Zero-padded to ensure deterministic name ordering
+                query=parse_one("select 1 as a, ds"),
+            ),
+        )
+        snapshot.ttl = "in 10 seconds"
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        # All snapshots have the same updated_ts
+        snapshot.updated_ts = same_timestamp
+        snapshots.append(snapshot)
+
+    state_sync.push_snapshots(snapshots)
+
+    # Fetch first batch of 2
+    batch1 = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=2),
+    )
+    assert batch1 is not None
+    assert len(batch1.expired_snapshot_ids) == 2
+    assert sorted([x.name for x in batch1.expired_snapshot_ids]) == [
+        '"model_00"',
+        '"model_01"',
+    ]
+
+    # Fetch second batch of 2 using cursor from batch1
+    batch2 = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch1.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
+    )
+    assert batch2 is not None
+    assert len(batch2.expired_snapshot_ids) == 2
+    assert sorted([x.name for x in batch2.expired_snapshot_ids]) == [
+        '"model_02"',
+        '"model_03"',
+    ]
+
+    # Fetch third batch of 2 using cursor from batch2
+    batch3 = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch2.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
+    )
+    assert batch3 is not None
+    assert sorted([x.name for x in batch3.expired_snapshot_ids]) == [
+        '"model_04"',
+    ]
+
+
+def test_delete_expired_snapshots_batching_with_deletion(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    """Test that delete_expired_snapshots properly deletes batches as it pages through them."""
+    now_ts = now_timestamp()
+
+    # Create 5 expired snapshots with different timestamps
+    snapshots = []
+    for idx in range(5):
+        snapshot = make_snapshot(
+            SqlModel(
+                name=f"model_{idx}",
+                query=parse_one("select 1 as a, ds"),
+            ),
+        )
+        snapshot.ttl = "in 10 seconds"
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        snapshot.updated_ts = now_ts - (20000 + idx * 1000)
+        snapshots.append(snapshot)
+
+    state_sync.push_snapshots(snapshots)
+
+    # Verify all 5 snapshots exist
+    assert len(state_sync.get_snapshots(snapshots)) == 5
+
+    # Get first batch of 2
+    batch1 = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=2),
+    )
+    assert batch1 is not None
+    assert len(batch1.expired_snapshot_ids) == 2
+
+    # Delete the first batch using batch_range
+    state_sync.delete_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch1.batch_range.start,
+            end=batch1.batch_range.end,
+        ),
+    )
+
+    # Verify first 2 snapshots (model_0 and model_1, the oldest) are deleted and last 3 remain
+    remaining = state_sync.get_snapshots(snapshots)
+    assert len(remaining) == 3
+    assert snapshots[0].snapshot_id in remaining  # model_0 (newest)
+    assert snapshots[1].snapshot_id in remaining  # model_1
+    assert snapshots[2].snapshot_id in remaining  # model_2
+    assert snapshots[3].snapshot_id not in remaining  # model_3
+    assert snapshots[4].snapshot_id not in remaining  # model_4 (oldest)
+
+    # Get next batch of 2 (should start after batch1's boundary)
+    batch2 = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch1.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
+    )
+    assert batch2 is not None
+    assert len(batch2.expired_snapshot_ids) == 2
+
+    # Delete the second batch
+    state_sync.delete_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch2.batch_range.start,
+            end=batch2.batch_range.end,
+        ),
+    )
+
+    # Verify only the last snapshot remains
+    remaining = state_sync.get_snapshots(snapshots)
+    assert len(remaining) == 1
+    assert snapshots[0].snapshot_id in remaining  # model_0 (newest)
+    assert snapshots[1].snapshot_id not in remaining  # model_1
+    assert snapshots[2].snapshot_id not in remaining  # model_2
+    assert snapshots[3].snapshot_id not in remaining  # model_3
+    assert snapshots[4].snapshot_id not in remaining  # model_4 (oldest)
+
+    # Get final batch
+    batch3 = state_sync.get_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch2.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
+    )
+    assert batch3 is not None
+    assert len(batch3.expired_snapshot_ids) == 1
+
+    # Delete the final batch
+    state_sync.delete_expired_snapshots(
+        batch_range=ExpiredBatchRange(
+            start=batch3.batch_range.start,
+            end=batch3.batch_range.end,
+        ),
+    )
+
+    # Verify all snapshots are deleted
+    assert len(state_sync.get_snapshots(snapshots)) == 0
+
+    # Verify no more expired snapshots exist
+    assert (
+        state_sync.get_expired_snapshots(
+            batch_range=ExpiredBatchRange(
+                start=batch3.batch_range.end,
+                end=LimitBoundary(batch_size=2),
+            ),
+        )
+        is None
+    )
+
+
+def test_iterator_expired_snapshot_batch(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    """Test the for_each_expired_snapshot_batch helper function."""
+    from sqlmesh.core.state_sync.common import iter_expired_snapshot_batches
+
+    now_ts = now_timestamp()
+
+    snapshots = []
+    for idx in range(5):
+        snapshot = make_snapshot(
+            SqlModel(
+                name=f"model_{idx}",
+                query=parse_one("select 1 as a, ds"),
+            ),
+        )
+        snapshot.ttl = "in 10 seconds"
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        snapshot.updated_ts = now_ts - (20000 + idx * 1000)
+        snapshots.append(snapshot)
+
+    state_sync.push_snapshots(snapshots)
+
+    # Track all batches processed
+    batches_processed = []
+
+    # Process with batch size of 2
+    for batch in iter_expired_snapshot_batches(
+        state_sync,
+        current_ts=now_ts,
+        ignore_ttl=False,
+        batch_size=2,
+    ):
+        batches_processed.append(batch)
+
+    # Should have processed 3 batches (2 + 2 + 1)
+    assert len(batches_processed) == 3
+    assert len(batches_processed[0].expired_snapshot_ids) == 2
+    assert len(batches_processed[1].expired_snapshot_ids) == 2
+    assert len(batches_processed[2].expired_snapshot_ids) == 1
+
+    # Verify all snapshots were processed
+    all_processed_ids = set()
+    for batch in batches_processed:
+        all_processed_ids.update(batch.expired_snapshot_ids)
+
+    expected_ids = {s.snapshot_id for s in snapshots}
+    assert all_processed_ids == expected_ids
+
+
+@pytest.mark.parametrize(
+    "start_boundary,end_boundary,expected_sql",
+    [
+        # Test with GT only (when end is LimitBoundary)
+        (
+            RowBoundary(updated_ts=0, name="", identifier=""),
+            LimitBoundary(batch_size=100),
+            "updated_ts > 0 OR (updated_ts = 0 AND name > '') OR (updated_ts = 0 AND name = '' AND identifier > '')",
+        ),
+        # Test with GT and LTE (when both are RowBoundary)
+        (
+            RowBoundary(updated_ts=1000, name="model_a", identifier="abc"),
+            RowBoundary(updated_ts=2000, name="model_z", identifier="xyz"),
+            "(updated_ts > 1000 OR (updated_ts = 1000 AND name > 'model_a') OR (updated_ts = 1000 AND name = 'model_a' AND identifier > 'abc')) AND (updated_ts < 2000 OR (updated_ts = 2000 AND name < 'model_z') OR (updated_ts = 2000 AND name = 'model_z' AND identifier <= 'xyz'))",
+        ),
+        # Test with zero timestamp
+        (
+            RowBoundary(updated_ts=0, name="", identifier=""),
+            RowBoundary(updated_ts=1234567890, name="model_x", identifier="id_123"),
+            "(updated_ts > 0 OR (updated_ts = 0 AND name > '') OR (updated_ts = 0 AND name = '' AND identifier > '')) AND (updated_ts < 1234567890 OR (updated_ts = 1234567890 AND name < 'model_x') OR (updated_ts = 1234567890 AND name = 'model_x' AND identifier <= 'id_123'))",
+        ),
+        # Test with same timestamp, different names
+        (
+            RowBoundary(updated_ts=5000, name="model_a", identifier="id_1"),
+            RowBoundary(updated_ts=5000, name="model_b", identifier="id_2"),
+            "(updated_ts > 5000 OR (updated_ts = 5000 AND name > 'model_a') OR (updated_ts = 5000 AND name = 'model_a' AND identifier > 'id_1')) AND (updated_ts < 5000 OR (updated_ts = 5000 AND name < 'model_b') OR (updated_ts = 5000 AND name = 'model_b' AND identifier <= 'id_2'))",
+        ),
+        # Test with same timestamp and name, different identifiers
+        (
+            RowBoundary(updated_ts=7000, name="model_x", identifier="id_a"),
+            RowBoundary(updated_ts=7000, name="model_x", identifier="id_b"),
+            "(updated_ts > 7000 OR (updated_ts = 7000 AND name > 'model_x') OR (updated_ts = 7000 AND name = 'model_x' AND identifier > 'id_a')) AND (updated_ts < 7000 OR (updated_ts = 7000 AND name < 'model_x') OR (updated_ts = 7000 AND name = 'model_x' AND identifier <= 'id_b'))",
+        ),
+        # Test all_batch_range use case
+        (
+            RowBoundary(updated_ts=0, name="", identifier=""),
+            RowBoundary(updated_ts=253_402_300_799_999, name="", identifier=""),
+            "(updated_ts > 0 OR (updated_ts = 0 AND name > '') OR (updated_ts = 0 AND name = '' AND identifier > '')) AND (updated_ts < 253402300799999 OR (updated_ts = 253402300799999 AND name < '') OR (updated_ts = 253402300799999 AND name = '' AND identifier <= ''))",
+        ),
+    ],
+)
+def test_expired_batch_range_where_filter(start_boundary, end_boundary, expected_sql):
+    """Test ExpiredBatchRange.where_filter generates correct SQL for various boundary combinations."""
+    batch_range = ExpiredBatchRange(start=start_boundary, end=end_boundary)
+    result = batch_range.where_filter
+    assert result.sql() == expected_sql
+
+
+def test_expired_batch_range_where_filter_with_limit():
+    """Test that where_filter correctly handles LimitBoundary (only start condition, no end condition)."""
+    batch_range = ExpiredBatchRange(
+        start=RowBoundary(updated_ts=1000, name="model_a", identifier="abc"),
+        end=LimitBoundary(batch_size=50),
+    )
+    result = batch_range.where_filter
+    # When end is LimitBoundary, should only have the start (GT) condition
+    assert (
+        result.sql()
+        == "updated_ts > 1000 OR (updated_ts = 1000 AND name > 'model_a') OR (updated_ts = 1000 AND name = 'model_a' AND identifier > 'abc')"
+    )
 
 
 def test_delete_expired_snapshots_seed(
@@ -1185,9 +1543,10 @@ def test_delete_expired_snapshots_seed(
     state_sync.push_snapshots(all_snapshots)
     assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not state_sync.get_snapshots(all_snapshots)
 
@@ -1225,10 +1584,11 @@ def test_delete_expired_snapshots_batching(
         snapshot_b.snapshot_id,
     }
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False),
         SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not state_sync.get_snapshots(all_snapshots)
 
@@ -1261,7 +1621,8 @@ def test_delete_expired_snapshots_promoted(
     state_sync.promote(env)
 
     all_snapshots = [snapshot]
-    assert not state_sync.delete_expired_snapshots()
+    assert not _get_cleanup_tasks(state_sync)
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
     env.snapshots_ = []
@@ -1270,10 +1631,88 @@ def test_delete_expired_snapshots_promoted(
     now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.db.facade.now_timestamp")
     now_timestamp_mock.return_value = now_timestamp() + 11000
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert not state_sync.get_snapshots(all_snapshots)
+
+
+def test_delete_expired_snapshots_previous_finalized_snapshots(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    """Test that expired snapshots are protected if they are part of previous finalized snapshots
+    in a non-finalized environment."""
+    now_ts = now_timestamp()
+
+    # Create an old snapshot that will be expired
+    old_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    old_snapshot.ttl = "in 10 seconds"
+    old_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Create a new snapshot
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([old_snapshot, new_snapshot])
+
+    # Promote the old snapshot to an environment and finalize it
+    env = Environment(
+        name="test_environment",
+        snapshots=[old_snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    state_sync.promote(env)
+    state_sync.finalize(env)
+
+    # Verify old snapshot is not cleaned up because it's in a finalized environment
+    assert not _get_cleanup_tasks(state_sync)
+
+    # Now promote the new snapshot to the same environment (this simulates a new plan)
+    # The environment will have previous_finalized_snapshots set to the old snapshot
+    # and will not be finalized yet
+    env = Environment(
+        name="test_environment",
+        snapshots=[new_snapshot.table_info],
+        previous_finalized_snapshots=[old_snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="new_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    state_sync.promote(env)
+
+    # Manually update the snapshots updated_ts to simulate expiration
+    state_sync.engine_adapter.execute(
+        f"UPDATE sqlmesh._snapshots SET updated_ts = {now_ts - 15000} WHERE name = '{old_snapshot.name}' AND identifier = '{old_snapshot.identifier}'"
+    )
+
+    # The old snapshot should still not be cleaned up because it's part of
+    # previous_finalized_snapshots in a non-finalized environment
+    assert not _get_cleanup_tasks(state_sync)
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
+    assert state_sync.snapshots_exist([old_snapshot.snapshot_id]) == {old_snapshot.snapshot_id}
+
+    # Once the environment is finalized, the expired snapshot should be removed successfully
+    state_sync.finalize(env)
+    assert _get_cleanup_tasks(state_sync) == [
+        SnapshotTableCleanupTask(snapshot=old_snapshot.table_info, dev_table_only=False),
+    ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
+    assert not state_sync.snapshots_exist([old_snapshot.snapshot_id])
 
 
 def test_delete_expired_snapshots_dev_table_cleanup_only(
@@ -1298,7 +1737,7 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
@@ -1309,9 +1748,10 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
         new_snapshot.snapshot_id,
     }
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
@@ -1338,7 +1778,7 @@ def test_delete_expired_snapshots_shared_dev_table(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.updated_ts = now_ts - 5000
@@ -1350,7 +1790,8 @@ def test_delete_expired_snapshots_shared_dev_table(
         new_snapshot.snapshot_id,
     }
 
-    assert not state_sync.delete_expired_snapshots()  # No dev table cleanup
+    assert not _get_cleanup_tasks(state_sync)  # No dev table cleanup
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
 
@@ -1395,13 +1836,19 @@ def test_delete_expired_snapshots_ignore_ttl(
     state_sync.promote(env)
 
     # default TTL = 1 week, nothing to clean up yet if we take TTL into account
-    assert not state_sync.delete_expired_snapshots()
+    assert not _get_cleanup_tasks(state_sync)
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
+    assert state_sync.snapshots_exist([snapshot_c.snapshot_id]) == {snapshot_c.snapshot_id}
 
     # If we ignore TTL, only snapshot_c should get cleaned up because snapshot_a and snapshot_b are part of an environment
     assert snapshot_a.table_info != snapshot_b.table_info != snapshot_c.table_info
-    assert state_sync.delete_expired_snapshots(ignore_ttl=True) == [
+    assert _get_cleanup_tasks(state_sync, ignore_ttl=True) == [
         SnapshotTableCleanupTask(snapshot=snapshot_c.table_info, dev_table_only=False)
     ]
+    state_sync.delete_expired_snapshots(
+        batch_range=ExpiredBatchRange.all_batch_range(), ignore_ttl=True
+    )
+    assert not state_sync.snapshots_exist([snapshot_c.snapshot_id])
 
 
 def test_delete_expired_snapshots_cleanup_intervals(
@@ -1430,7 +1877,7 @@ def test_delete_expired_snapshots_cleanup_intervals(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 12000
 
@@ -1464,10 +1911,11 @@ def test_delete_expired_snapshots_cleanup_intervals(
     ]
     assert not stored_new_snapshot.dev_intervals
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not get_snapshot_intervals(snapshot)
 
@@ -1497,7 +1945,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
@@ -1551,9 +1999,10 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     )
 
     # Delete the expired snapshot
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert not state_sync.get_snapshots([snapshot])
 
     # Check new snapshot's intervals
@@ -1612,7 +2061,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.updated_ts = now_ts - 5000
@@ -1632,7 +2081,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_new_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check old snapshot's intervals
@@ -1641,7 +2090,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check all intervals
@@ -1663,14 +2112,15 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
                 identifier=new_snapshot.identifier,
                 version=snapshot.version,
                 dev_version=new_snapshot.dev_version,
-                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-11"))],
             ),
         ],
         key=compare_snapshot_intervals,
     )
 
     # Delete the expired snapshot
-    assert state_sync.delete_expired_snapshots() == []
+    assert not _get_cleanup_tasks(state_sync)
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert not state_sync.get_snapshots([snapshot])
 
     # Check new snapshot's intervals
@@ -1679,7 +2129,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_new_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check all intervals
@@ -1707,7 +2157,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
                 identifier=new_snapshot.identifier,
                 version=snapshot.version,
                 dev_version=new_snapshot.dev_version,
-                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-11"))],
             ),
         ],
         key=compare_snapshot_intervals,
@@ -1740,7 +2190,7 @@ def test_compact_intervals_after_cleanup(
     )
     snapshot_b.previous_versions = snapshot_a.all_versions
     snapshot_b.ttl = "in 10 seconds"
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.updated_ts = now_ts - 12000
 
     # An indirect non-breaking change on top of the forward-only change. Not expired.
@@ -1763,9 +2213,10 @@ def test_compact_intervals_after_cleanup(
     state_sync.add_interval(snapshot_c, "2023-01-07", "2023-01-09", is_dev=True)
 
     # Only the dev table of the original snapshot should be deleted
-    assert state_sync.delete_expired_snapshots() == [
+    assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=True),
     ]
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._intervals")[0] == 5  # type: ignore
 
@@ -1872,7 +2323,7 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     new_snapshot = make_snapshot(
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = "a"
 
     assert not new_snapshot.unpaused_ts
@@ -1885,50 +2336,6 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
 
     assert actual_snapshots[snapshot.snapshot_id].unrestorable
     assert not actual_snapshots[new_snapshot.snapshot_id].unrestorable
-
-
-def test_unpause_snapshots_hourly(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
-    snapshot = make_snapshot(
-        SqlModel(
-            name="test_snapshot",
-            query=parse_one("select 1, ds"),
-            cron="@hourly",
-        ),
-    )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot.version = "a"
-
-    assert not snapshot.unpaused_ts
-    state_sync.push_snapshots([snapshot])
-
-    # Unpaused timestamp not aligned with cron
-    unpaused_dt = "2022-01-01 01:22:33"
-    state_sync.unpause_snapshots([snapshot], unpaused_dt)
-
-    actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
-    assert actual_snapshot.unpaused_ts
-    assert actual_snapshot.unpaused_ts == to_timestamp("2022-01-01 01:00:00")
-
-    new_snapshot = make_snapshot(
-        SqlModel(
-            name="test_snapshot",
-            query=parse_one("select 2, ds"),
-            cron="@daily",
-            interval_unit="hour",
-        )
-    )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    new_snapshot.version = "a"
-
-    assert not new_snapshot.unpaused_ts
-    state_sync.push_snapshots([new_snapshot])
-    state_sync.unpause_snapshots([new_snapshot], unpaused_dt)
-
-    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
-    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
-    assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(
-        "2022-01-01 01:00:00"
-    )
 
 
 def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1974,7 +2381,7 @@ def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot
     new_forward_only_snapshot = make_snapshot(
         SqlModel(name="test_snapshot", query=parse_one("select 3, ds"), cron="@daily")
     )
-    new_forward_only_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_forward_only_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_forward_only_snapshot.version = "a"
 
     assert not new_forward_only_snapshot.unpaused_ts
@@ -1995,7 +2402,7 @@ def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot
     assert not actual_snapshots[new_forward_only_snapshot.snapshot_id].unrestorable
 
 
-def test_unpause_snapshots_remove_intervals(
+def test_unrestorable_snapshot_target_not_forward_only(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     snapshot = make_snapshot(
@@ -2004,70 +2411,36 @@ def test_unpause_snapshots_remove_intervals(
             query=parse_one("select 1, ds"),
             cron="@daily",
         ),
-        version="a",
     )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.version = "a"
+
+    assert not snapshot.unpaused_ts
     state_sync.push_snapshots([snapshot])
-    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-05")
 
-    new_snapshot = make_snapshot(
-        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
-        version="a",
+    unpaused_dt = "2022-01-01"
+    state_sync.unpause_snapshots([snapshot], unpaused_dt)
+
+    actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert actual_snapshot.unpaused_ts
+    assert actual_snapshot.unpaused_ts == to_timestamp(unpaused_dt)
+
+    updated_snapshot = make_snapshot(
+        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    new_snapshot.version = "a"
-    new_snapshot.effective_from = "2023-01-03"
-    state_sync.push_snapshots([new_snapshot])
-    state_sync.add_interval(snapshot, "2023-01-06", "2023-01-06")
-    state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
+    updated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
+    updated_snapshot.version = "a"
 
-    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
-    assert actual_snapshots[new_snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
-    ]
-    assert actual_snapshots[snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
-    ]
+    assert not updated_snapshot.unpaused_ts
+    state_sync.push_snapshots([updated_snapshot])
+    state_sync.unpause_snapshots([updated_snapshot], unpaused_dt)
 
+    actual_snapshots = state_sync.get_snapshots([snapshot, updated_snapshot])
+    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
+    assert actual_snapshots[updated_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)
 
-def test_unpause_snapshots_remove_intervals_disabled_restatement(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-):
-    kind = dict(name="INCREMENTAL_BY_TIME_RANGE", time_column="ds", disable_restatement=True)
-    snapshot = make_snapshot(
-        SqlModel(
-            name="test_snapshot",
-            query=parse_one("select 1, ds"),
-            cron="@daily",
-            kind=kind,
-        ),
-        version="a",
-    )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot.version = "a"
-    state_sync.push_snapshots([snapshot])
-    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-05")
-
-    new_snapshot = make_snapshot(
-        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily", kind=kind),
-        version="a",
-    )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    new_snapshot.version = "a"
-    new_snapshot.effective_from = "2023-01-03"
-    state_sync.push_snapshots([new_snapshot])
-    state_sync.add_interval(snapshot, "2023-01-06", "2023-01-06")
-    state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
-
-    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
-    assert actual_snapshots[new_snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
-    ]
-    # The intervals shouldn't have been removed because restatement is disabled
-    assert actual_snapshots[snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
-    ]
+    assert actual_snapshots[snapshot.snapshot_id].unrestorable
+    assert not actual_snapshots[updated_snapshot.snapshot_id].unrestorable
 
 
 def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
@@ -2082,22 +2455,24 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(duckdb.connect, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
 
     with pytest.raises(
         SQLMeshError,
-        match=rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is ahead of '0'",
+        match=rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is ahead of '0.0.0' \(remote\). Please run a migration \('sqlmesh migrate' command\).",
     ):
         state_sync.get_versions()
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
 
     # migration version is behind, always raise
     state_sync.version_state.update_versions(schema_version=SCHEMA_VERSION + 1)
     error = (
         rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is behind '{SCHEMA_VERSION + 1}' \(remote\). "
-        rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={SQLMESH_VERSION}"' command\)."""
+        rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={re.escape(SQLMESH_VERSION)}"' command\)."""
     )
 
     with pytest.raises(SQLMeshError, match=error):
@@ -2134,7 +2509,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
     # sqlmesh version is behind
     sqlmesh_version_minor_bump = f"{major}.{int(minor) + 1}.{patch}"
     error = (
-        rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
+        rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
         rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={sqlmesh_version_minor_bump}"' command\)."""
     )
     state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
@@ -2144,7 +2519,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
 
     # sqlmesh version is ahead
     sqlmesh_version_minor_decrease = f"{major}.{int(minor) - 1}.{patch}"
-    error = rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '{sqlmesh_version_minor_decrease}'"
+    error = rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is ahead of '{sqlmesh_version_minor_decrease}'"
     state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
@@ -2197,16 +2572,18 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_
     backup_state_mock = mocker.patch(
         "sqlmesh.core.state_sync.db.migrator.StateMigrator._backup_state"
     )
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     migrate_rows_mock.assert_not_called()
     backup_state_mock.assert_not_called()
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(duckdb.connect, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
 
-    state_sync.migrate(default_catalog=None)
+    state_sync.migrate()
     migrate_rows_mock.assert_called_once()
     backup_state_mock.assert_called_once()
     assert state_sync.get_versions() == Versions(
@@ -2254,14 +2631,16 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
 
 def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> None:
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(lambda: duck_conn, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
     mocker.patch.object(state_sync.migrator, "_migrate_rows", side_effect=Exception("mocked error"))
     with pytest.raises(
         SQLMeshError,
         match="SQLMesh migration failed.",
     ):
-        state_sync.migrate(default_catalog=None)
+        state_sync.migrate()
     assert not state_sync.engine_adapter.table_exists(state_sync.snapshot_state.snapshots_table)
     assert not state_sync.engine_adapter.table_exists(
         state_sync.environment_state.environments_table
@@ -2271,23 +2650,36 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
 
 
 def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
-    delete_versions(state_sync)
+    state_sync.engine_adapter.replace_query(
+        "sqlmesh._versions",
+        pd.read_json("tests/fixtures/migrations/versions.json"),
+        target_columns_to_types={
+            "schema_version": exp.DataType.build("int"),
+            "sqlglot_version": exp.DataType.build("text"),
+            "sqlmesh_version": exp.DataType.build("text"),
+        },
+    )
 
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
         pd.read_json("tests/fixtures/migrations/snapshots.json"),
-        columns_to_types={
+        target_columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
             "snapshot": exp.DataType.build("text"),
+            "kind_name": exp.DataType.build("text"),
+            "updated_ts": exp.DataType.build("bigint"),
+            "unpaused_ts": exp.DataType.build("bigint"),
+            "ttl_ms": exp.DataType.build("bigint"),
+            "unrestorable": exp.DataType.build("boolean"),
         },
     )
 
     state_sync.engine_adapter.replace_query(
         "sqlmesh._environments",
         pd.read_json("tests/fixtures/migrations/environments.json"),
-        columns_to_types={
+        target_columns_to_types={
             "name": exp.DataType.build("text"),
             "snapshots": exp.DataType.build("text"),
             "start_at": exp.DataType.build("text"),
@@ -2295,21 +2687,43 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
             "plan_id": exp.DataType.build("text"),
             "previous_plan_id": exp.DataType.build("text"),
             "expiration_ts": exp.DataType.build("bigint"),
+            "finalized_ts": exp.DataType.build("bigint"),
+            "promoted_snapshot_ids": exp.DataType.build("text"),
+            "suffix_target": exp.DataType.build("text"),
+            "catalog_name_override": exp.DataType.build("text"),
+            "previous_finalized_snapshots": exp.DataType.build("text"),
+            "normalize_name": exp.DataType.build("boolean"),
+            "requirements": exp.DataType.build("text"),
         },
     )
 
-    state_sync.engine_adapter.drop_table("sqlmesh._seeds")
-    state_sync.engine_adapter.drop_table("sqlmesh._intervals")
+    state_sync.engine_adapter.replace_query(
+        "sqlmesh._intervals",
+        pd.read_json("tests/fixtures/migrations/intervals.json"),
+        target_columns_to_types={
+            "id": exp.DataType.build("text"),
+            "created_ts": exp.DataType.build("bigint"),
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
+            "start_ts": exp.DataType.build("bigint"),
+            "end_ts": exp.DataType.build("bigint"),
+            "is_dev": exp.DataType.build("boolean"),
+            "is_removed": exp.DataType.build("boolean"),
+            "is_compacted": exp.DataType.build("boolean"),
+        },
+    )
 
     old_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     old_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
 
-    state_sync.migrate(default_catalog=None, skip_backup=True)
+    state_sync.migrate(skip_backup=True)
 
     new_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     new_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
 
-    assert len(old_snapshots) * 2 == len(new_snapshots)
+    assert len(old_snapshots) == 24
+    assert len(new_snapshots) == 36
     assert len(old_environments) == len(new_environments)
 
     start = "2023-01-01"
@@ -2356,7 +2770,7 @@ def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
         pd.read_json("tests/fixtures/migrations/snapshots.json"),
-        columns_to_types={
+        target_columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
@@ -2381,14 +2795,14 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
         pd.read_json("tests/fixtures/migrations/snapshots.json"),
-        columns_to_types=snapshot_columns_to_types,
+        target_columns_to_types=snapshot_columns_to_types,
     )
 
     old_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     old_snapshots_count = state_sync.engine_adapter.fetchone(
         "select count(*) from sqlmesh._snapshots"
     )
-    assert old_snapshots_count == (12,)
+    assert old_snapshots_count == (24,)
     state_sync.migrator._backup_state()
 
     state_sync.engine_adapter.delete_from("sqlmesh._snapshots", "TRUE")
@@ -2599,105 +3013,6 @@ def test_cache(state_sync, make_snapshot, mocker):
     with patch.object(state_sync, "get_snapshots") as mock:
         assert not cache.get_snapshots([snapshot.snapshot_id])
         mock.assert_called()
-
-
-def test_cleanup_expired_views(
-    mocker: MockerFixture, state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-):
-    adapter = mocker.MagicMock()
-    adapter.dialect = None
-    snapshot_a = make_snapshot(SqlModel(name="catalog.schema.a", query=parse_one("select 1, ds")))
-    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot_b = make_snapshot(SqlModel(name="catalog.schema.b", query=parse_one("select 1, ds")))
-    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
-    # Make sure that we don't drop schemas from external models
-    snapshot_external_model = make_snapshot(
-        ExternalModel(name="catalog.external_schema.external_table", kind=ModelKindName.EXTERNAL)
-    )
-    snapshot_external_model.categorize_as(SnapshotChangeCategory.BREAKING)
-    schema_environment = Environment(
-        name="test_environment",
-        suffix_target=EnvironmentSuffixTarget.SCHEMA,
-        snapshots=[
-            snapshot_a.table_info,
-            snapshot_b.table_info,
-            snapshot_external_model.table_info,
-        ],
-        start_at="2022-01-01",
-        end_at="2022-01-01",
-        plan_id="test_plan_id",
-        previous_plan_id="test_plan_id",
-        catalog_name_override="catalog_override",
-    )
-    snapshot_c = make_snapshot(SqlModel(name="catalog.schema.c", query=parse_one("select 1, ds")))
-    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot_d = make_snapshot(SqlModel(name="catalog.schema.d", query=parse_one("select 1, ds")))
-    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
-    table_environment = Environment(
-        name="test_environment",
-        suffix_target=EnvironmentSuffixTarget.TABLE,
-        snapshots=[
-            snapshot_c.table_info,
-            snapshot_d.table_info,
-            snapshot_external_model.table_info,
-        ],
-        start_at="2022-01-01",
-        end_at="2022-01-01",
-        plan_id="test_plan_id",
-        previous_plan_id="test_plan_id",
-        catalog_name_override="catalog_override",
-    )
-    cleanup_expired_views(adapter, {}, [schema_environment, table_environment])
-    assert adapter.drop_schema.called
-    assert adapter.drop_view.called
-    assert adapter.drop_schema.call_args_list == [
-        call(
-            schema_("schema__test_environment", "catalog_override"),
-            ignore_if_not_exists=True,
-            cascade=True,
-        )
-    ]
-    assert sorted(adapter.drop_view.call_args_list) == [
-        call("catalog_override.schema.c__test_environment", ignore_if_not_exists=True),
-        call("catalog_override.schema.d__test_environment", ignore_if_not_exists=True),
-    ]
-
-
-@pytest.mark.parametrize(
-    "suffix_target", [EnvironmentSuffixTarget.SCHEMA, EnvironmentSuffixTarget.TABLE]
-)
-def test_cleanup_expired_environment_schema_warn_on_delete_failure(
-    mocker: MockerFixture, make_snapshot: t.Callable, suffix_target: EnvironmentSuffixTarget
-):
-    adapter = mocker.MagicMock()
-    adapter.dialect = None
-    adapter.drop_schema.side_effect = Exception("Failed to drop the schema")
-    adapter.drop_view.side_effect = Exception("Failed to drop the view")
-
-    snapshot = make_snapshot(
-        SqlModel(name="test_catalog.test_schema.test_model", query=parse_one("select 1, ds"))
-    )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    schema_environment = Environment(
-        name="test_environment",
-        suffix_target=suffix_target,
-        snapshots=[snapshot.table_info],
-        start_at="2022-01-01",
-        end_at="2022-01-01",
-        plan_id="test_plan_id",
-        previous_plan_id="test_plan_id",
-        catalog_name_override="catalog_override",
-    )
-
-    with pytest.raises(SQLMeshError, match="Failed to drop the expired environment .*"):
-        cleanup_expired_views(adapter, {}, [schema_environment], warn_on_delete_failure=False)
-
-    cleanup_expired_views(adapter, {}, [schema_environment], warn_on_delete_failure=True)
-
-    if suffix_target == EnvironmentSuffixTarget.SCHEMA:
-        assert adapter.drop_schema.called
-    else:
-        assert adapter.drop_view.called
 
 
 def test_max_interval_end_per_model(
@@ -2951,6 +3266,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 1,
                 1,
                 False,
+                False,
                 None,
             ],
             [
@@ -2962,6 +3278,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "2",
                 1,
                 1,
+                False,
                 False,
                 None,
             ],
@@ -2976,6 +3293,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "3",
                 1,
                 1,
+                False,
                 False,
                 None,
             ],
@@ -3013,7 +3331,7 @@ def test_seed_model_metadata_update(
     model = model.copy(update={"owner": "jen"})
     new_snapshot = make_snapshot(model)
     new_snapshot.previous_versions = snapshot.all_versions
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     assert snapshot.fingerprint != new_snapshot.fingerprint
     assert snapshot.version == new_snapshot.version
@@ -3622,3 +3940,112 @@ def test_update_environment_statements(state_sync: EngineAdapterStateSync):
         "@grant_schema_usage()",
         "@grant_select_privileges()",
     ]
+
+
+def test_get_snapshots_by_names(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable[..., Snapshot]
+):
+    assert state_sync.get_snapshots_by_names(snapshot_names=[]) == set()
+
+    snap_a_v1, snap_a_v2 = (
+        make_snapshot(
+            SqlModel(
+                name="a",
+                query=parse_one(f"select {i}, ds"),
+            ),
+            version="a",
+        )
+        for i in range(2)
+    )
+
+    snap_b = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one(f"select 'b' as b, ds"),
+        ),
+        version="b",
+    )
+
+    state_sync.push_snapshots([snap_a_v1, snap_a_v2, snap_b])
+
+    assert {s.snapshot_id for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"'])} == {
+        snap_a_v1.snapshot_id,
+        snap_a_v2.snapshot_id,
+    }
+    assert {
+        s.snapshot_id for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"', '"b"'])
+    } == {
+        snap_a_v1.snapshot_id,
+        snap_a_v2.snapshot_id,
+        snap_b.snapshot_id,
+    }
+
+
+def test_get_snapshots_by_names_include_expired(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable[..., Snapshot]
+):
+    now_ts = now_timestamp()
+
+    normal_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one(f"select 1, ds"),
+        ),
+        version="a",
+    )
+
+    expired_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one(f"select 2, ds"),
+        ),
+        version="a",
+        ttl="in 10 seconds",
+    )
+    expired_a.updated_ts = now_ts - (
+        1000 * 15
+    )  # last updated 15 seconds ago, expired 10 seconds from last updated = expired 5 seconds ago
+
+    state_sync.push_snapshots([normal_a, expired_a])
+
+    assert {
+        s.snapshot_id
+        for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"'], current_ts=now_ts)
+    } == {normal_a.snapshot_id}
+    assert {
+        s.snapshot_id
+        for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"'], exclude_expired=False)
+    } == {
+        normal_a.snapshot_id,
+        expired_a.snapshot_id,
+    }
+
+    # wind back time to 10 seconds ago (before the expired snapshot is expired - it expired 5 seconds ago) to test it stil shows in a normal query
+    assert {
+        s.snapshot_id
+        for s in state_sync.get_snapshots_by_names(
+            snapshot_names=['"a"'], current_ts=(now_ts - (10 * 1000))
+        )
+    } == {normal_a.snapshot_id, expired_a.snapshot_id}
+
+
+def test_state_version_is_too_old(
+    state_sync: EngineAdapterStateSync, mocker: MockerFixture
+) -> None:
+    state_sync.engine_adapter.replace_query(
+        "sqlmesh._versions",
+        pd.DataFrame(
+            [{"schema_version": 59, "sqlmesh_version": "0.133.0", "sqlglot_version": "25.31.4"}]
+        ),
+        target_columns_to_types={
+            "schema_version": exp.DataType.build("int"),
+            "sqlglot_version": exp.DataType.build("text"),
+            "sqlmesh_version": exp.DataType.build("text"),
+        },
+    )
+
+    with pytest.raises(
+        StateMigrationError,
+        match="The current state belongs to an old version of SQLMesh that is no longer supported. Please upgrade to 0.134.0 first before upgrading to.*",
+    ):
+        state_sync.migrate(skip_backup=True)

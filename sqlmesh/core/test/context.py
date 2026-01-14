@@ -18,6 +18,8 @@ class TestExecutionContext(ExecutionContext):
         models: All upstream models to use for expansion and mapping of physical locations.
     """
 
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     def __init__(
         self,
         engine_adapter: EngineAdapter,
@@ -43,8 +45,8 @@ class TestExecutionContext(ExecutionContext):
         # Include upstream dependencies to ensure they can be resolved during test execution
         return {
             name: self._test._test_fixture_table(name).sql()
-            for model in self._models.values()
-            for name in [model.name, *model.depends_on]
+            for normalized_model_name, model in self._models.items()
+            for name in [normalized_model_name, *model.depends_on]
         }
 
     def with_variables(

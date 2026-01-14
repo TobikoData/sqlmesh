@@ -8,12 +8,24 @@ import re
 import typing as t
 from argparse import Namespace
 from collections import defaultdict
+from functools import cached_property
 from pathlib import Path
 
-from dbt import constants as dbt_constants, flags
+from dbt import flags
+
+from sqlmesh.dbt.util import DBT_VERSION
+from sqlmesh.utils.conversions import make_serializable
 
 # Override the file name to prevent dbt commands from invalidating the cache.
-dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
+
+if DBT_VERSION >= (1, 6, 0):
+    from dbt import constants as dbt_constants
+
+    dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"  # type: ignore
+else:
+    from dbt.parser import manifest as dbt_manifest  # type: ignore
+
+    dbt_manifest.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"  # type: ignore
 
 import jinja2
 from dbt.adapters.factory import register_adapter, reset_adapters
@@ -32,10 +44,12 @@ except ImportError:
 from dbt.tracking import do_not_track
 
 from sqlmesh.core import constants as c
-from sqlmesh.dbt.basemodel import Dependencies
+from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.model import ModelConfig
-from sqlmesh.dbt.package import HookConfig, MacroConfig
+from sqlmesh.dbt.package import HookConfig, MacroConfig, MaterializationConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import TargetConfig
@@ -49,6 +63,7 @@ from sqlmesh.utils.jinja import (
     extract_call_names,
     jinja_call_arg_name,
 )
+from sqlglot.helper import ensure_list
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
@@ -63,10 +78,18 @@ SeedConfigs = t.Dict[str, SeedConfig]
 SourceConfigs = t.Dict[str, SourceConfig]
 MacroConfigs = t.Dict[str, MacroConfig]
 HookConfigs = t.Dict[str, HookConfig]
+MaterializationConfigs = t.Dict[str, MaterializationConfig]
 
 
 IGNORED_PACKAGES = {"elementary"}
 BUILTIN_CALLS = {*BUILTIN_GLOBALS, *BUILTIN_FILTERS}
+
+# Patch Semantic Manifest to skip validation and avoid Pydantic v1 errors on DBT 1.6
+# We patch for 1.7+ since we don't care about semantic models
+if DBT_VERSION >= (1, 6, 0):
+    from dbt.contracts.graph.semantic_manifest import SemanticManifest  # type: ignore
+
+    SemanticManifest.validate = lambda _: True  # type: ignore
 
 
 class ManifestHelper:
@@ -77,12 +100,15 @@ class ManifestHelper:
         profile_name: str,
         target: TargetConfig,
         variable_overrides: t.Optional[t.Dict[str, t.Any]] = None,
+        cache_dir: t.Optional[str] = None,
+        model_defaults: t.Optional[ModelDefaultsConfig] = None,
     ):
         self.project_path = project_path
         self.profiles_path = profiles_path
         self.profile_name = profile_name
         self.target = target
         self.variable_overrides = variable_overrides or {}
+        self.model_defaults = model_defaults or ModelDefaultsConfig()
 
         self.__manifest: t.Optional[Manifest] = None
         self._project_name: str = ""
@@ -99,12 +125,21 @@ class ManifestHelper:
         self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
         self._disabled_refs: t.Optional[t.Set[str]] = None
         self._disabled_sources: t.Optional[t.Set[str]] = None
+
+        if cache_dir is not None:
+            cache_path = Path(cache_dir)
+            if not cache_path.is_absolute():
+                cache_path = self.project_path / cache_path
+        else:
+            cache_path = self.project_path / c.CACHE
+
         self._call_cache: FileCache[t.Dict[str, t.List[CallNames]]] = FileCache(
-            self.project_path / c.CACHE, "jinja_calls"
+            cache_path, "jinja_calls"
         )
 
         self._on_run_start_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
         self._on_run_end_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
+        self._materializations: MaterializationConfigs = {}
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -134,6 +169,10 @@ class ManifestHelper:
         self._load_all()
         return self._on_run_end_per_package[package_name or self._project_name]
 
+    def materializations(self) -> MaterializationConfigs:
+        self._load_all()
+        return self._materializations
+
     @property
     def all_macros(self) -> t.Dict[str, t.Dict[str, MacroInfo]]:
         self._load_all()
@@ -143,6 +182,39 @@ class ManifestHelper:
                 result[package_name][macro_name] = macro_config.info
         return result
 
+    @cached_property
+    def flat_graph(self) -> t.Dict[str, t.Any]:
+        return {
+            "exposures": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "exposures", {}).items()
+            },
+            "groups": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "groups", {}).items()
+            },
+            "metrics": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "metrics", {}).items()
+            },
+            "nodes": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in self._manifest.nodes.items()
+            },
+            "sources": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in self._manifest.sources.items()
+            },
+            "semantic_models": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "semantic_models", {}).items()
+            },
+            "saved_queries": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "saved_queries", {}).items()
+            },
+        }
+
     def _load_all(self) -> None:
         if self._is_loaded:
             return
@@ -150,6 +222,7 @@ class ManifestHelper:
         self._calls = {k: (v, False) for k, v in (self._call_cache.get("") or {}).items()}
 
         self._load_macros()
+        self._load_materializations()
         self._load_sources()
         self._load_tests()
         self._load_models_and_seeds()
@@ -187,11 +260,14 @@ class ManifestHelper:
 
     def _load_macros(self) -> None:
         for macro in self._manifest.macros.values():
+            if macro.name.startswith("materialization_"):
+                continue
+
             if macro.name.startswith("test_"):
                 macro.macro_sql = _convert_jinja_test_to_macro(macro.macro_sql)
 
             dependencies = Dependencies(macros=_macro_references(self._manifest, macro))
-            if not macro.name.startswith("materialization_") and not macro.name.startswith("test_"):
+            if not macro.name.startswith("test_"):
                 dependencies = dependencies.union(
                     self._extra_dependencies(macro.macro_sql, macro.package_name)
                 )
@@ -217,6 +293,32 @@ class ManifestHelper:
                 pos = name.find("__")
                 if pos > 0 and name[pos + 2 :] in adapter_macro_names:
                     macro_config.info.is_top_level = True
+
+    def _load_materializations(self) -> None:
+        for macro in self._manifest.macros.values():
+            if macro.name.startswith("materialization_"):
+                # Extract name and adapter ( "materialization_{name}_{adapter}" or "materialization_{name}_default")
+                name_parts = macro.name.split("_")
+                if len(name_parts) >= 3:
+                    mat_name = "_".join(name_parts[1:-1])
+                    adapter = name_parts[-1]
+
+                    dependencies = Dependencies(macros=_macro_references(self._manifest, macro))
+                    macro.macro_sql = _strip_jinja_materialization_tags(macro.macro_sql)
+                    dependencies = dependencies.union(
+                        self._extra_dependencies(macro.macro_sql, macro.package_name)
+                    )
+
+                    materialization_config = MaterializationConfig(
+                        name=mat_name,
+                        adapter=adapter,
+                        definition=macro.macro_sql,
+                        dependencies=dependencies,
+                        path=Path(macro.original_file_path),
+                    )
+
+                    key = f"{mat_name}_{adapter}"
+                    self._materializations[key] = materialization_config
 
     def _load_tests(self) -> None:
         for node in self._manifest.nodes.values():
@@ -254,15 +356,17 @@ class ManifestHelper:
             )
 
             test_model = _test_model(node)
+            node_config = _node_base_config(node)
+            node_config["name"] = _build_test_name(node, dependencies)
 
             test = TestConfig(
                 sql=sql,
                 model_name=test_model,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
-                **_node_base_config(node),
+                **node_config,
             )
-            self._tests_per_package[node.package_name][node.name.lower()] = test
+            self._tests_per_package[node.package_name][node.unique_id] = test
             if test_model:
                 self._tests_by_owner[test_model].append(test)
 
@@ -275,10 +379,12 @@ class ManifestHelper:
                 continue
 
             macro_references = _macro_references(self._manifest, node)
-            tests = (
+            all_tests = (
                 self._tests_by_owner[node.name]
                 + self._tests_by_owner[f"{node.package_name}.{node.name}"]
             )
+            # Only include non-standalone tests (tests that don't reference other models)
+            tests = [test for test in all_tests if not test.is_standalone]
             node_config = _node_base_config(node)
 
             node_name = node.name
@@ -291,22 +397,34 @@ class ManifestHelper:
                 dependencies = Dependencies(
                     macros=macro_references, refs=_refs(node), sources=_sources(node)
                 )
-                dependencies = dependencies.union(self._extra_dependencies(sql, node.package_name))
+                dependencies = dependencies.union(
+                    self._extra_dependencies(sql, node.package_name, track_all_model_attrs=True)
+                )
+                for hook in [*node_config.get("pre-hook", []), *node_config.get("post-hook", [])]:
+                    dependencies = dependencies.union(
+                        self._extra_dependencies(
+                            hook["sql"], node.package_name, track_all_model_attrs=True
+                        )
+                    )
                 dependencies = dependencies.union(
                     self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )
 
                 self._models_per_package[node.package_name][node_name] = ModelConfig(
-                    sql=sql,
-                    dependencies=dependencies,
-                    tests=tests,
-                    **node_config,
+                    **dict(
+                        node_config,
+                        sql=sql,
+                        dependencies=dependencies,
+                        tests=tests,
+                    )
                 )
             else:
                 self._seeds_per_package[node.package_name][node_name] = SeedConfig(
-                    dependencies=Dependencies(macros=macro_references),
-                    tests=tests,
-                    **node_config,
+                    **dict(
+                        node_config,
+                        dependencies=Dependencies(macros=macro_references),
+                        tests=tests,
+                    )
                 )
 
     def _load_on_run_start_end(self) -> None:
@@ -330,17 +448,26 @@ class ManifestHelper:
 
                 if "on-run-start" in node.tags:
                     self._on_run_start_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, index=node.index or 0, path=node_path, dependencies=dependencies
+                        sql=sql,
+                        index=getattr(node, "index", None) or 0,
+                        path=node_path,
+                        dependencies=dependencies,
                     )
                 else:
                     self._on_run_end_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, index=node.index or 0, path=node_path, dependencies=dependencies
+                        sql=sql,
+                        index=getattr(node, "index", None) or 0,
+                        path=node_path,
+                        dependencies=dependencies,
                     )
 
     @property
     def _manifest(self) -> Manifest:
         if not self.__manifest:
-            self.__manifest = self._load_manifest()
+            try:
+                self.__manifest = self._load_manifest()
+            except Exception as ex:
+                raise SQLMeshError(f"Failed to load dbt manifest: {ex}") from ex
         return self.__manifest
 
     def _load_manifest(self) -> Manifest:
@@ -371,9 +498,12 @@ class ManifestHelper:
         profile = self._load_profile()
         project = self._load_project(profile)
 
-        if not any(k in project.models for k in ("start", "+start")):
+        if (
+            not any(k in project.models for k in ("start", "+start"))
+            and not self.model_defaults.start
+        ):
             raise ConfigError(
-                "SQLMesh's requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
+                "SQLMesh requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
             )
 
         runtime_config = RuntimeConfig.from_parts(project, profile, args)
@@ -388,6 +518,8 @@ class ManifestHelper:
             register_adapter(runtime_config)  # type: ignore
 
         manifest = ManifestLoader.get_full_manifest(runtime_config)
+        # This adapter doesn't care about semantic models so we clear them out to avoid issues
+        manifest.semantic_models = {}
         reset_adapters()
         return manifest
 
@@ -471,17 +603,37 @@ class ManifestHelper:
             dependencies = dependencies.union(macro_dependencies)
         return dependencies
 
-    def _extra_dependencies(self, target: str, package: str) -> Dependencies:
-        # We sometimes observe that the manifest doesn't capture all macros, refs, and sources within a macro.
-        # This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
-        # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
+    def _extra_dependencies(
+        self,
+        target: str,
+        package: str,
+        track_all_model_attrs: bool = False,
+    ) -> Dependencies:
+        """
+        We sometimes observe that the manifest doesn't capture all macros, refs, and sources within a macro.
+        This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
+        Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
+        """
         dependencies = Dependencies()
+
+        # Whether all `model` attributes (e.g., `model.config`) should be included in the dependencies
+        all_model_attrs = False
+
         for call_name, node in extract_call_names(target, cache=self._calls):
             if call_name[0] == "config":
                 continue
-            elif isinstance(node, jinja2.nodes.Getattr):
+
+            if (
+                track_all_model_attrs
+                and not all_model_attrs
+                and isinstance(node, jinja2.nodes.Call)
+                and any(isinstance(a, jinja2.nodes.Name) and a.name == "model" for a in node.args)
+            ):
+                all_model_attrs = True
+
+            if isinstance(node, jinja2.nodes.Getattr):
                 if call_name[0] == "model":
-                    dependencies.model_attrs.add(call_name[1])
+                    dependencies.model_attrs.attrs.add(call_name[1])
             elif call_name[0] == "source":
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
@@ -500,6 +652,9 @@ class ManifestHelper:
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     dependencies.variables.add(args[0])
+                else:
+                    # We couldn't determine the var name statically
+                    dependencies.has_dynamic_var_names = True
                 dependencies.macros.append(MacroReference(name="var"))
             elif len(call_name) == 1:
                 macro_name = call_name[0]
@@ -522,6 +677,14 @@ class ManifestHelper:
                         call_name[0], call_name[1], dependencies.macros.append
                     )
 
+        # When `model` is referenced as-is, e.g. it's passed as an argument to a macro call like
+        # `{{ foo(model) }}`, we can't easily track the attributes that are actually used, because
+        # it may be aliased and hence tracking actual uses of `model` requires a proper data flow
+        # analysis. We conservatively deal with this by including all of its supported attributes
+        # if a standalone reference is found.
+        if all_model_attrs:
+            dependencies.model_attrs.all_attrs = True
+
         return dependencies
 
 
@@ -541,8 +704,11 @@ def _macro_references(
     manifest: Manifest, node: t.Union[ManifestNode, Macro]
 ) -> t.Set[MacroReference]:
     result: t.Set[MacroReference] = set()
+    if not hasattr(node, "depends_on"):
+        return result
+
     for macro_node_id in node.depends_on.macros:
-        if not macro_node_id:
+        if not macro_node_id or macro_node_id == "None":
             continue
 
         macro_node = manifest.macros[macro_node_id]
@@ -556,18 +722,20 @@ def _macro_references(
 
 def _refs(node: ManifestNode) -> t.Set[str]:
     if DBT_VERSION >= (1, 5, 0):
-        result = set()
+        result: t.Set[str] = set()
+        if not hasattr(node, "refs"):
+            return result
         for r in node.refs:
-            ref_name = f"{r.package}.{r.name}" if r.package else r.name
+            ref_name = f"{r.package}.{r.name}" if r.package else r.name  # type: ignore
             if getattr(r, "version", None):
-                ref_name = f"{ref_name}_v{r.version}"
+                ref_name = f"{ref_name}_v{r.version}"  # type: ignore
             result.add(ref_name)
         return result
     return {".".join(r) for r in node.refs}  # type: ignore
 
 
 def _sources(node: ManifestNode) -> t.Set[str]:
-    return {".".join(s) for s in node.sources}
+    return {".".join(s) for s in getattr(node, "sources", [])}
 
 
 def _model_node_id(model_name: str, package: str) -> str:
@@ -578,7 +746,12 @@ def _test_model(node: ManifestNode) -> t.Optional[str]:
     attached_node = getattr(node, "attached_node", None)
     if attached_node:
         pieces = attached_node.split(".")
-        return pieces[-1] if pieces[0] in ["model", "seed"] else None
+        if pieces[0] in ["model", "seed"]:
+            # versioned models have format "model.package.model_name.v1" (4 parts)
+            if len(pieces) == 4:
+                return f"{pieces[2]}_{pieces[3]}"
+            return pieces[-1]
+        return None
 
     key_name = getattr(node, "file_key_name", None)
     if key_name:
@@ -597,12 +770,91 @@ def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
 
 
 def _convert_jinja_test_to_macro(test_jinja: str) -> str:
-    TEST_TAG_REGEX = r"\s*{%\s*test\s+"
-    ENDTEST_REGEX = r"{%\s*endtest\s*%}"
+    TEST_TAG_REGEX = r"\s*{%-?\s*test\s+"
+    ENDTEST_REGEX = r"{%-?\s*endtest\s*-?%}"
+
     match = re.match(TEST_TAG_REGEX, test_jinja)
     if not match:
         # already a macro
         return test_jinja
 
-    macro = "{% macro test_" + test_jinja[match.span()[-1] :]
-    return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
+    test_tag = test_jinja[: match.span()[-1]]
+
+    macro_tag = re.sub(r"({%-?\s*)test\s+", r"\1macro test_", test_tag)
+    macro = macro_tag + test_jinja[match.span()[-1] :]
+
+    return re.sub(ENDTEST_REGEX, lambda m: m.group(0).replace("endtest", "endmacro"), macro)
+
+
+def _strip_jinja_materialization_tags(materialization_jinja: str) -> str:
+    MATERIALIZATION_TAG_REGEX = r"\s*{%-?\s*materialization\s+[^%]*%}\s*\n?"
+    ENDMATERIALIZATION_REGEX = r"{%-?\s*endmaterialization\s*-?%}\s*\n?"
+
+    if not re.match(MATERIALIZATION_TAG_REGEX, materialization_jinja):
+        return materialization_jinja
+
+    materialization_jinja = re.sub(
+        MATERIALIZATION_TAG_REGEX,
+        "",
+        materialization_jinja,
+        flags=re.IGNORECASE,
+    )
+
+    materialization_jinja = re.sub(
+        ENDMATERIALIZATION_REGEX,
+        "",
+        materialization_jinja,
+        flags=re.IGNORECASE,
+    )
+
+    return materialization_jinja.strip()
+
+
+def _build_test_name(node: ManifestNode, dependencies: Dependencies) -> str:
+    """
+    Build a user-friendly test name that includes the test's model/source, column,
+    and args for tests with custom user names. Needed because dbt only generates these
+    names for tests that do not specify the "name" field in their YAML definition.
+
+    Name structure
+    - Model test:  [namespace]_[test name]_[model name]_[column name]__[arg values]
+    - Source test: [namespace]_source_[test name]_[source name]_[table name]_[column name]__[arg values]
+    """
+    # standalone test
+    if not hasattr(node, "test_metadata"):
+        return node.name
+
+    model_name = _test_model(node)
+    source_name = None
+    if not model_name and dependencies.sources:
+        # extract source and table names
+        source_parts = list(dependencies.sources)[0].split(".")
+        source_name = "_".join(source_parts) if len(source_parts) == 2 else source_parts[-1]
+    entity_name = model_name or source_name or ""
+    entity_name = f"_{entity_name}" if entity_name else ""
+
+    name_prefix = ""
+    if namespace := getattr(node.test_metadata, "namespace", None):
+        name_prefix += f"{namespace}_"
+    if source_name and not model_name:
+        name_prefix += "source_"
+
+    metadata_kwargs = node.test_metadata.kwargs
+    arg_val_parts = []
+    for arg, val in sorted(metadata_kwargs.items()):
+        if arg == "model":
+            continue
+        if isinstance(val, dict):
+            val = list(val.values())
+        val = [re.sub("[^0-9a-zA-Z_]+", "_", str(v)) for v in ensure_list(val)]
+        arg_val_parts.extend(val)
+    unique_args = "__".join(arg_val_parts) if arg_val_parts else ""
+    unique_args = f"_{unique_args}" if unique_args else ""
+
+    auto_name = f"{name_prefix}{node.test_metadata.name}{entity_name}{unique_args}"
+
+    if node.name == auto_name:
+        return node.name
+
+    custom_prefix = name_prefix if source_name and not model_name else ""
+    return f"{custom_prefix}{node.name}{entity_name}{unique_args}"

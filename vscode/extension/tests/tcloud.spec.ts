@@ -1,15 +1,20 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   createVirtualEnvironment,
+  openServerPage,
   pipInstall,
   REPO_ROOT,
-  startVSCode,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 /**
  * Helper function to create and set up a Python virtual environment
@@ -34,12 +39,14 @@ async function setupPythonEnvironment(envDir: string): Promise<string> {
   return pythonDetails.pythonPath
 }
 
-test('not signed in, shows sign in window', async ({}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('not signed in, shows sign in window', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   const pythonEnvDir = path.join(tempDir, '.venv')
+
+  const context = await startCodeServer({ tempDir })
 
   try {
     // Copy sushi project
@@ -74,46 +81,43 @@ test('not signed in, shows sign in window', async ({}, testInfo) => {
       { spaces: 2 },
     )
 
-    // Start VS Code
-    const { window, close } = await startVSCode(tempDir)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+    await page.waitForSelector('text=models')
 
     // Click on the models folder
-    await window
+    await page
       .getByRole('treeitem', { name: 'models', exact: true })
       .locator('a')
       .click()
 
     // Open the top_waiters model
-    await window
+    await page
       .getByRole('treeitem', { name: 'customers.sql', exact: true })
       .locator('a')
       .click()
 
     // Wait for the file to open
-    await window.waitForTimeout(2000)
+    await page.waitForLoadState('networkidle')
 
-    await window.waitForSelector(
+    await page.waitForSelector(
       'text=Please sign in to Tobiko Cloud to use SQLMesh',
     )
-
-    // Close VS Code
-    await close()
   } finally {
-    // Clean up
-    await fs.remove(tempDir)
+    await stopCodeServer(context)
   }
 })
 
-test('signed in and not installed shows installation window', async ({}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('signed in and not installed shows installation window', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   const pythonEnvDir = path.join(tempDir, '.venv')
+
+  const context = await startCodeServer({ tempDir })
 
   try {
     // Copy sushi project
@@ -151,45 +155,40 @@ test('signed in and not installed shows installation window', async ({}, testInf
       { spaces: 2 },
     )
 
-    // Start VS Code
-    const { window, close } = await startVSCode(tempDir)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+    await page.waitForSelector('text=models')
 
     // Click on the models folder
-    await window
+    await page
       .getByRole('treeitem', { name: 'models', exact: true })
       .locator('a')
       .click()
 
     // Open the top_waiters model
-    await window
+    await page
       .getByRole('treeitem', { name: 'customers.sql', exact: true })
       .locator('a')
       .click()
 
-    await window.waitForSelector('text=Installing enterprise python package')
-    expect(
-      await window.locator('text=Installing enterprise python package'),
+    await page.waitForSelector('text=Installing enterprise python package')
+    await expect(
+      page.locator('text=Installing enterprise python package'),
     ).toHaveCount(2)
 
-    await window.waitForSelector('text=Loaded SQLMesh context')
-
-    // Close VS Code
-    await close()
+    await waitForLoadedSQLMesh(page)
   } finally {
-    // Clean up
-    await fs.remove(tempDir)
+    await stopCodeServer(context)
   }
 })
 
-test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when ready', async ({}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when ready', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   try {
@@ -234,40 +233,37 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when read
     )
 
     // Start VS Code
-    const { window, close } = await startVSCode(tempDir)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+    await page.waitForSelector('text=models')
 
     // Click on the models folder
-    await window
+    await page
       .getByRole('treeitem', { name: 'models', exact: true })
       .locator('a')
       .click()
 
     // Open the top_waiters model
-    await window
+    await page
       .getByRole('treeitem', { name: 'customers.sql', exact: true })
       .locator('a')
       .click()
 
     // Verify the context loads successfully
-    await window.waitForSelector('text=Loaded SQLMesh context')
-
-    // Close VS Code
-    await close()
+    await waitForLoadedSQLMesh(page)
   } finally {
     // Clean up
     await fs.remove(tempDir)
   }
 })
 
-test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when ready', async ({}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when ready', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   try {
@@ -311,30 +307,26 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when read
       { spaces: 2 },
     )
 
-    // Start VS Code
-    const { window, close } = await startVSCode(tempDir)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+    await page.waitForSelector('text=models')
 
     // Click on the models folder
-    await window
+    await page
       .getByRole('treeitem', { name: 'models', exact: true })
       .locator('a')
       .click()
 
     // Open the top_waiters model
-    await window
+    await page
       .getByRole('treeitem', { name: 'customers.sql', exact: true })
       .locator('a')
       .click()
 
     // Verify the context loads successfully
-    await window.waitForSelector('text=Loaded SQLMesh context')
-
-    // Close VS Code
-    await close()
+    await waitForLoadedSQLMesh(page)
   } finally {
     // Clean up
     await fs.remove(tempDir)
@@ -343,11 +335,10 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when read
 
 // This test is skipped becuase of the way the sign in window is shown is not useable by playwright. It's not solvable
 // but the test is still useful when running it manually.
-test.skip('tcloud not signed in and not installed, shows sign in window and then fact that loaded', async ({}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test.skip('tcloud not signed in and not installed, shows sign in window and then fact that loaded', async ({
+  page,
+  tempDir,
+}) => {
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   // Create a tcloud.yaml to mark this as a tcloud project
@@ -378,7 +369,11 @@ test.skip('tcloud not signed in and not installed, shows sign in window and then
   await setTcloudVersion(tempDir, '2.10.1')
 
   // Start VS Code
-  const { window, close } = await startVSCode(tempDir)
+  const context = await startCodeServer({
+    tempDir,
+  })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
+  await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
   try {
     // Copy sushi project
@@ -386,38 +381,36 @@ test.skip('tcloud not signed in and not installed, shows sign in window and then
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+    await page.waitForSelector('text=models')
 
     // Click on the models folder
-    await window
+    await page
       .getByRole('treeitem', { name: 'models', exact: true })
       .locator('a')
       .click()
 
     // Open the top_waiters model
-    await window
+    await page
       .getByRole('treeitem', { name: 'customers.sql', exact: true })
       .locator('a')
       .click()
 
     // Verify the sign in window is shown
-    await window.waitForSelector(
+    await page.waitForSelector(
       'text=Please sign in to Tobiko Cloud to use SQLMesh',
     )
 
     // Click on the sign in button
-    await window
+    await page
       .getByRole('button', { name: 'Sign in' })
       .filter({ hasText: 'Sign in' })
       .click()
-    await window.waitForSelector('text="Signed in successfully"')
+    await page.waitForSelector('text="Signed in successfully"')
 
-    await window.waitForSelector('text=Installing enterprise python package')
+    await page.waitForSelector('text=Installing enterprise python package')
 
-    await window.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   } finally {
-    // Clean up
-    await close()
-    await fs.remove(tempDir)
+    await stopCodeServer(context)
   }
 })

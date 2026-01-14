@@ -44,10 +44,12 @@ class Plan(PydanticModel, frozen=True):
     no_gaps: bool
     forward_only: bool
     allow_destructive_models: t.Set[str]
+    allow_additive_models: t.Set[str]
     include_unmodified: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool
     explain: bool
+    ignore_cron: bool = False
 
     environment_ttl: t.Optional[str] = None
     environment_naming_info: EnvironmentNamingInfo
@@ -56,8 +58,20 @@ class Plan(PydanticModel, frozen=True):
     indirectly_modified: t.Dict[SnapshotId, t.Set[SnapshotId]]
 
     deployability_index: DeployabilityIndex
+    selected_models_to_restate: t.Optional[t.Set[str]] = None
+    """Models that have been explicitly selected for restatement by a user"""
     restatements: t.Dict[SnapshotId, Interval]
-    interval_end_per_model: t.Optional[t.Dict[str, int]]
+    """
+    All models being restated, which are typically the explicitly selected ones + their downstream dependencies.
+
+    Note that dev previews are also considered restatements, so :selected_models_to_restate can be empty
+    while :restatements is still populated with dev previews
+    """
+    restate_all_snapshots: bool
+    """Whether or not to clear intervals from state for other versions of the models listed in :restatements"""
+
+    start_override_per_model: t.Optional[t.Dict[str, datetime]]
+    end_override_per_model: t.Optional[t.Dict[str, datetime]]
 
     selected_models_to_backfill: t.Optional[t.Set[str]] = None
     """Models that have been explicitly selected for backfill by a user."""
@@ -67,6 +81,8 @@ class Plan(PydanticModel, frozen=True):
     execution_time_: t.Optional[TimeLike] = Field(default=None, alias="execution_time")
 
     user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None
+    selected_models: t.Optional[t.Set[str]] = None
+    """Models that have been selected for this plan (used for dbt selected_resources)"""
 
     @cached_property
     def start(self) -> TimeLike:
@@ -177,8 +193,10 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
-                interval_end_per_model=self.interval_end_per_model,
+                start_override_per_model=self.start_override_per_model,
+                end_override_per_model=self.end_override_per_model,
                 end_bounded=self.end_bounded,
+                ignore_cron=self.ignore_cron,
             ).items()
             if snapshot.is_model and missing
         ]
@@ -195,8 +213,8 @@ class Plan(PydanticModel, frozen=True):
 
         snapshots_by_name = self.context_diff.snapshots_by_name
         snapshots = [s.table_info for s in self.snapshots.values()]
-        promoted_snapshot_ids = None
-        if self.is_dev and not self.include_unmodified:
+        promotable_snapshot_ids = None
+        if self.is_dev:
             if self.selected_models_to_backfill is not None:
                 # Only promote models that have been explicitly selected for backfill.
                 promotable_snapshot_ids = {
@@ -207,12 +225,14 @@ class Plan(PydanticModel, frozen=True):
                         if m in snapshots_by_name
                     ],
                 }
-            else:
+            elif not self.include_unmodified:
                 promotable_snapshot_ids = self.context_diff.promotable_snapshot_ids.copy()
 
-            promoted_snapshot_ids = [
-                s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids
-            ]
+        promoted_snapshot_ids = (
+            [s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids]
+            if promotable_snapshot_ids is not None
+            else None
+        )
 
         previous_finalized_snapshots = (
             self.context_diff.environment_snapshots
@@ -252,11 +272,14 @@ class Plan(PydanticModel, frozen=True):
             skip_backfill=self.skip_backfill,
             empty_backfill=self.empty_backfill,
             restatements={s.name: i for s, i in self.restatements.items()},
+            restate_all_snapshots=self.restate_all_snapshots,
             is_dev=self.is_dev,
             allow_destructive_models=self.allow_destructive_models,
+            allow_additive_models=self.allow_additive_models,
             forward_only=self.forward_only,
             end_bounded=self.end_bounded,
             ensure_finalized_snapshots=self.ensure_finalized_snapshots,
+            ignore_cron=self.ignore_cron,
             directly_modified_snapshots=sorted(self.directly_modified),
             indirectly_modified_snapshots={
                 s.name: sorted(snapshot_ids) for s, snapshot_ids in self.indirectly_modified.items()
@@ -265,7 +288,8 @@ class Plan(PydanticModel, frozen=True):
             removed_snapshots=sorted(self.context_diff.removed_snapshots),
             requires_backfill=self.requires_backfill,
             models_to_backfill=self.models_to_backfill,
-            interval_end_per_model=self.interval_end_per_model,
+            start_override_per_model=self.start_override_per_model,
+            end_override_per_model=self.end_override_per_model,
             execution_time=self.execution_time,
             disabled_restatement_models={
                 s.name
@@ -274,6 +298,7 @@ class Plan(PydanticModel, frozen=True):
             },
             environment_statements=self.context_diff.environment_statements,
             user_provided_flags=self.user_provided_flags,
+            selected_models=self.selected_models,
         )
 
     @cached_property
@@ -292,22 +317,27 @@ class EvaluatablePlan(PydanticModel):
     skip_backfill: bool
     empty_backfill: bool
     restatements: t.Dict[str, Interval]
+    restate_all_snapshots: bool
     is_dev: bool
     allow_destructive_models: t.Set[str]
+    allow_additive_models: t.Set[str]
     forward_only: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool
+    ignore_cron: bool = False
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
     metadata_updated_snapshots: t.List[SnapshotId]
     removed_snapshots: t.List[SnapshotId]
     requires_backfill: bool
     models_to_backfill: t.Optional[t.Set[str]] = None
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None
     execution_time: t.Optional[TimeLike] = None
     disabled_restatement_models: t.Set[str]
     environment_statements: t.Optional[t.List[EnvironmentStatements]] = None
     user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None
+    selected_models: t.Optional[t.Set[str]] = None
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill

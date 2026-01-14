@@ -41,11 +41,11 @@ def test_find_all_references_for_macro_add_one():
     assert len(all_references) >= 2, f"Expected at least 2 references, found {len(all_references)}"
 
     # Verify the macro definition is included
-    definition_refs = [ref for ref in all_references if "utils.py" in ref.uri]
+    definition_refs = [ref for ref in all_references if "utils.py" in str(ref.path)]
     assert len(definition_refs) >= 1, "Should include the macro definition in utils.py"
 
     # Verify the usage in top_waiters is included
-    usage_refs = [ref for ref in all_references if "top_waiters" in ref.uri]
+    usage_refs = [ref for ref in all_references if "top_waiters" in str(ref.path)]
     assert len(usage_refs) >= 1, "Should include the usage in top_waiters.sql"
 
     expected_files = {
@@ -55,11 +55,11 @@ def test_find_all_references_for_macro_add_one():
     }
 
     for expected_file, expectations in expected_files.items():
-        file_refs = [ref for ref in all_references if expected_file in ref.uri]
+        file_refs = [ref for ref in all_references if expected_file in str(ref.path)]
         assert len(file_refs) >= 1, f"Should find at least one reference in {expected_file}"
 
         file_ref = file_refs[0]
-        file_path = URI(file_ref.uri).to_path()
+        file_path = file_ref.path
 
         sqlmesh_range = SQLMeshRange(
             start=SQLMeshPosition(
@@ -104,8 +104,10 @@ def test_find_all_references_for_macro_multiply():
     assert len(all_references) >= 2, f"Expected at least 2 references, found {len(all_references)}"
 
     # Verify both definition and usage are included
-    assert any("utils.py" in ref.uri for ref in all_references), "Should include macro definition"
-    assert any("top_waiters" in ref.uri for ref in all_references), "Should include usage"
+    assert any("utils.py" in str(ref.path) for ref in all_references), (
+        "Should include macro definition"
+    )
+    assert any("top_waiters" in str(ref.path) for ref in all_references), "Should include usage"
 
 
 def test_find_all_references_for_sql_literal_macro():
@@ -183,9 +185,11 @@ def test_multi_repo_macro_references():
         assert len(all_references) == 2, f"Expected 2 references, found {len(all_references)}"
 
         # Verify references from repo_2
-        assert any("repo_2" in ref.uri for ref in all_references), "Should find macro in repo_2"
+        assert any("repo_2" in str(ref.path) for ref in all_references), (
+            "Should find macro in repo_2"
+        )
 
         # But not references in repo_1 since despite identical name they're different macros
-        assert not any("repo_1" in ref.uri for ref in all_references), (
+        assert not any("repo_1" in str(ref.path) for ref in all_references), (
             "Shouldn't find macro in repo_1"
         )

@@ -17,7 +17,7 @@ Both executors must be properly configured with environment variables to connect
 
 - Access to a [data warehouse supported by Tobiko Cloud](../../../integrations/overview.md#execution-engines) (e.g., Postgres, Snowflake, BigQuery)
 - Helm 3.8+
-- A Tobiko Cloud account with [client ID and client secret](../single_sign_on.md#provisioning-client-credentials)
+- A Tobiko Cloud account with [client ID and client secret](../security/single_sign_on.md#provisioning-client-credentials)
 
 ## Quick start guide
 
@@ -267,7 +267,7 @@ run:
 
 ## Defining Custom Environment Variables
 
-If there are additional environment variables that are required to run your project, you will want to define them for both the apply and run executors. 
+If there are additional environment variables that are required to run your project, you will want to define them for both the apply and run executors.
 
 ```yaml
 apply:

@@ -11,7 +11,6 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlmesh import migrations
 from sqlmesh.core.environment import (
     Environment,
-    EnvironmentNamingInfo,
     EnvironmentStatements,
     EnvironmentSummary,
 )
@@ -19,17 +18,22 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotInfoLike,
-    SnapshotTableCleanupTask,
-    SnapshotTableInfo,
     SnapshotNameVersion,
+    SnapshotIdAndVersion,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.utils import major_minor
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel, ValidationInfo, field_validator
-from sqlmesh.core.state_sync.common import StateStream
+from sqlmesh.utils.pydantic import PydanticModel, field_validator
+from sqlmesh.core.state_sync.common import (
+    StateStream,
+    ExpiredSnapshotBatch,
+    PromotionResult,
+    ExpiredBatchRange,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,25 +64,14 @@ class Versions(PydanticModel):
         return 0 if v is None else int(v)
 
 
+MIN_SCHEMA_VERSION = 60
+MIN_SQLMESH_VERSION = "0.134.0"
 MIGRATIONS = [
     importlib.import_module(f"sqlmesh.migrations.{migration}")
     for migration in sorted(info.name for info in pkgutil.iter_modules(migrations.__path__))
 ]
-SCHEMA_VERSION: int = len(MIGRATIONS)
-
-
-class PromotionResult(PydanticModel):
-    added: t.List[SnapshotTableInfo]
-    removed: t.List[SnapshotTableInfo]
-    removed_environment_naming_info: t.Optional[EnvironmentNamingInfo]
-
-    @field_validator("removed_environment_naming_info")
-    def _validate_removed_environment_naming_info(
-        cls, v: t.Optional[EnvironmentNamingInfo], info: ValidationInfo
-    ) -> t.Optional[EnvironmentNamingInfo]:
-        if v and not info.data.get("removed"):
-            raise ValueError("removed_environment_naming_info must be None if removed is empty")
-        return v
+# -1 to account for the baseline script
+SCHEMA_VERSION: int = MIN_SCHEMA_VERSION + len(MIGRATIONS) - 1
 
 
 class StateReader(abc.ABC):
@@ -95,6 +88,24 @@ class StateReader(abc.ABC):
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
+        """
+
+    @abc.abstractmethod
+    def get_snapshots_by_names(
+        self,
+        snapshot_names: t.Iterable[str],
+        current_ts: t.Optional[int] = None,
+        exclude_expired: bool = True,
+    ) -> t.Set[SnapshotIdAndVersion]:
+        """Return the snapshot records for all versions of the specified snapshot names.
+
+        Args:
+            snapshot_names: Iterable of snapshot names to fetch all snapshot records for
+            current_ts: Sets the current time for identifying which snapshots have expired so they can be excluded (only relevant if :exclude_expired=True)
+            exclude_expired: Whether or not to return the snapshot id's of expired snapshots in the result
+
+        Returns:
+            A set containing all the matched snapshot records. To fetch full snapshots, pass it into StateSync.get_snapshots()
         """
 
     @abc.abstractmethod
@@ -245,6 +256,15 @@ class StateReader(abc.ABC):
                     f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
                 )
 
+            if major_minor(SQLMESH_VERSION) != major_minor(versions.sqlmesh_version):
+                raise_error(
+                    "SQLMesh",
+                    SQLMESH_VERSION,
+                    versions.sqlmesh_version,
+                    remote_package_version=versions.sqlmesh_version,
+                    ahead=major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version),
+                )
+
             if SCHEMA_VERSION != versions.schema_version:
                 raise_error(
                     "SQLMesh",
@@ -261,15 +281,6 @@ class StateReader(abc.ABC):
                     versions.sqlglot_version,
                     remote_package_version=versions.sqlglot_version,
                     ahead=major_minor(SQLGLOT_VERSION) > major_minor(versions.sqlglot_version),
-                )
-
-            if major_minor(SQLMESH_VERSION) != major_minor(versions.sqlmesh_version):
-                raise_error(
-                    "SQLMesh",
-                    SQLMESH_VERSION,
-                    versions.sqlmesh_version,
-                    remote_package_version=versions.sqlmesh_version,
-                    ahead=major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version),
                 )
 
         return versions
@@ -292,15 +303,21 @@ class StateReader(abc.ABC):
 
     @abc.abstractmethod
     def get_expired_snapshots(
-        self, current_ts: int, ignore_ttl: bool = False
-    ) -> t.List[SnapshotTableCleanupTask]:
-        """Aggregates the id's of the expired snapshots and creates a list of table cleanup tasks.
+        self,
+        *,
+        batch_range: ExpiredBatchRange,
+        current_ts: t.Optional[int] = None,
+        ignore_ttl: bool = False,
+    ) -> t.Optional[ExpiredSnapshotBatch]:
+        """Returns a single batch of expired snapshots ordered by (updated_ts, name, identifier).
 
-        Expired snapshots are snapshots that have exceeded their time-to-live
-        and are no longer in use within an environment.
+        Args:
+            current_ts: Timestamp used to evaluate expiration.
+            ignore_ttl: If True, include snapshots regardless of TTL (only checks if unreferenced).
+            batch_range: The range of the batch to fetch.
 
         Returns:
-           The list of table cleanup tasks.
+            A batch describing expired snapshots or None if no snapshots are pending cleanup.
         """
 
     @abc.abstractmethod
@@ -340,19 +357,21 @@ class StateSync(StateReader, abc.ABC):
 
     @abc.abstractmethod
     def delete_expired_snapshots(
-        self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
-    ) -> t.List[SnapshotTableCleanupTask]:
+        self,
+        batch_range: ExpiredBatchRange,
+        ignore_ttl: bool = False,
+        current_ts: t.Optional[int] = None,
+    ) -> None:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live
         and are no longer in use within an environment.
 
         Args:
+            batch_range: The range of snapshots to delete in this batch.
             ignore_ttl: Ignore the TTL on the snapshot when considering it expired. This has the effect of deleting
                 all snapshots that are not referenced in any environment
-
-        Returns:
-            The list of snapshot table cleanup tasks.
+            current_ts: Timestamp used to evaluate expiration.
         """
 
     @abc.abstractmethod
@@ -371,7 +390,7 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         """Remove an interval from a list of snapshots and sync it to the store.
@@ -453,7 +472,6 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def migrate(
         self,
-        default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
     ) -> None:
@@ -477,6 +495,7 @@ class StateSync(StateReader, abc.ABC):
         start: TimeLike,
         end: TimeLike,
         is_dev: bool = False,
+        last_altered_ts: t.Optional[int] = None,
     ) -> None:
         """Add an interval to a snapshot and sync it to the store.
 
@@ -485,6 +504,7 @@ class StateSync(StateReader, abc.ABC):
             start: The start of the interval to add.
             end: The end of the interval to add.
             is_dev: Indicates whether the given interval is being added while in development mode
+            last_altered_ts: The timestamp of the last modification of the physical table
         """
         start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False, expand=False)
         if not snapshot.version:
@@ -497,6 +517,8 @@ class StateSync(StateReader, abc.ABC):
             dev_version=snapshot.dev_version,
             intervals=intervals if not is_dev else [],
             dev_intervals=intervals if is_dev else [],
+            last_altered_ts=last_altered_ts if not is_dev else None,
+            dev_last_altered_ts=last_altered_ts if is_dev else None,
         )
         self.add_snapshots_intervals([snapshot_intervals])
 

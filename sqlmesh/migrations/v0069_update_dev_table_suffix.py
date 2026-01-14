@@ -7,11 +7,13 @@ from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
+    pass
+
+
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
     import pandas as pd
 
-    engine_adapter = state_sync.engine_adapter
-    schema = state_sync.schema
     snapshots_table = "_snapshots"
     environments_table = "_environments"
     if schema:
@@ -85,7 +87,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
-            columns_to_types=snapshots_columns_to_types,
+            target_columns_to_types=snapshots_columns_to_types,
         )
 
     new_environments = []
@@ -144,7 +146,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.insert_append(
             environments_table,
             pd.DataFrame(new_environments),
-            columns_to_types=environments_columns_to_types,
+            target_columns_to_types=environments_columns_to_types,
         )
 
 

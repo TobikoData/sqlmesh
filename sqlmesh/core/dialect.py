@@ -13,6 +13,7 @@ from functools import lru_cache
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects import DuckDB, Snowflake
+import sqlglot.dialects.athena as athena
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -22,6 +23,7 @@ from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
+from sqlmesh.utils import get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError, ConfigError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -172,6 +174,7 @@ def _parse_id_var(
 
     while (
         identifier
+        and not identifier.args.get("quoted")
         and self._is_connected()
         and (
             self._match_texts(("{", SQLMESH_MACRO_PREFIX))
@@ -347,6 +350,7 @@ def _parse_select(
     parse_subquery_alias: bool = True,
     parse_set_operation: bool = True,
     consume_pipe: bool = True,
+    from_: t.Optional[exp.From] = None,
 ) -> t.Optional[exp.Expression]:
     select = self.__parse_select(  # type: ignore
         nested=nested,
@@ -354,6 +358,7 @@ def _parse_select(
         parse_subquery_alias=parse_subquery_alias,
         parse_set_operation=parse_set_operation,
         consume_pipe=consume_pipe,
+        from_=from_,
     )
 
     if (
@@ -417,6 +422,20 @@ def _parse_limit(
 
     macro.this.append("expressions", self.__parse_limit(this, top=top, skip_limit_token=True))  # type: ignore
     return macro
+
+
+def _parse_value(self: Parser, values: bool = True) -> t.Optional[exp.Expression]:
+    wrapped = self._match(TokenType.L_PAREN, advance=False)
+
+    # The base _parse_value method always constructs a Tuple instance. This is problematic when
+    # generating values with a macro function, because it's impossible to tell whether the user's
+    # intention was to construct a row or a column with the VALUES expression. To avoid this, we
+    # amend the AST such that the Tuple is replaced by the macro function call itself.
+    expr = self.__parse_value()  # type: ignore
+    if expr and not wrapped and isinstance(seq_get(expr.expressions, 0), MacroFunc):
+        return expr.expressions[0]
+
+    return expr
 
 
 def _parse_macro_or_clause(self: Parser, parser: t.Callable) -> t.Optional[exp.Expression]:
@@ -784,8 +803,15 @@ def text_diff(
     return "\n".join(unified_diff(a_sql, b_sql))
 
 
+WS_OR_COMMENT = r"(?:\s|--[^\n]*\n|/\*.*?\*/)"
+HEADER = r"\b(?:model|audit)\b(?=\s*\()"
+KEY_BOUNDARY = r"(?:\(|,)"  # key is preceded by either '(' or ','
+DIALECT_VALUE = r"['\"]?(?P<dialect>[a-z][a-z0-9]*)['\"]?"
+VALUE_BOUNDARY = r"(?=,|\))"  # value is followed by comma or closing paren
+
 DIALECT_PATTERN = re.compile(
-    r"(model|audit).*?\(.*?dialect\s+'?([a-z]*)", re.IGNORECASE | re.DOTALL
+    rf"{HEADER}.*?{KEY_BOUNDARY}{WS_OR_COMMENT}*dialect{WS_OR_COMMENT}+{DIALECT_VALUE}{WS_OR_COMMENT}*{VALUE_BOUNDARY}",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -876,9 +902,10 @@ def parse(
         A list of the parsed expressions: [Model, *Statements, Query, *Statements]
     """
     match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
-    dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)
+    dialect_str = match.group("dialect") if match else None
+    dialect = Dialect.get_or_raise(dialect_str or default_dialect)
 
-    tokens = dialect.tokenizer.tokenize(sql)
+    tokens = dialect.tokenize(sql)
     chunks: t.List[t.Tuple[t.List[Token], ChunkType]] = [([], ChunkType.SQL)]
     total = len(tokens)
 
@@ -1000,6 +1027,14 @@ def extend_sqlglot() -> None:
     generators = {Generator}
 
     for dialect in Dialect.classes.values():
+        # Athena picks a different Tokenizer / Parser / Generator depending on the query
+        # so this ensures that the extra ones it defines are also extended
+        if dialect == athena.Athena:
+            tokenizers.add(athena._TrinoTokenizer)
+            parsers.add(athena._TrinoParser)
+            generators.add(athena._TrinoGenerator)
+            generators.add(athena._HiveGenerator)
+
         if hasattr(dialect, "Tokenizer"):
             tokenizers.add(dialect.Tokenizer)
         if hasattr(dialect, "Parser"):
@@ -1063,6 +1098,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_with)
     _override(Parser, _parse_having)
     _override(Parser, _parse_limit)
+    _override(Parser, _parse_value)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_types)
     _override(Parser, _parse_if)
@@ -1097,7 +1133,7 @@ def select_from_values(
     for i in range(0, num_rows, batch_size):
         yield select_from_values_for_batch_range(
             values=values,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             batch_start=i,
             batch_end=min(i + batch_size, num_rows),
             alias=alias,
@@ -1106,35 +1142,49 @@ def select_from_values(
 
 def select_from_values_for_batch_range(
     values: t.List[t.Tuple[t.Any, ...]],
-    columns_to_types: t.Dict[str, exp.DataType],
+    target_columns_to_types: t.Dict[str, exp.DataType],
     batch_start: int,
     batch_end: int,
     alias: str = "t",
+    source_columns: t.Optional[t.List[str]] = None,
 ) -> exp.Select:
-    casted_columns = [
-        exp.alias_(exp.cast(exp.column(column), to=kind), column, copy=False)
-        for column, kind in columns_to_types.items()
-    ]
+    source_columns = source_columns or list(target_columns_to_types)
+    source_columns_to_types = get_source_columns_to_types(target_columns_to_types, source_columns)
 
     if not values:
         # Ensures we don't generate an empty VALUES clause & forces a zero-row output
         where = exp.false()
-        expressions = [tuple(exp.cast(exp.null(), to=kind) for kind in columns_to_types.values())]
+        expressions = [
+            tuple(exp.cast(exp.null(), to=kind) for kind in source_columns_to_types.values())
+        ]
     else:
         where = None
         expressions = [
-            tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]
+            tuple(transform_values(v, source_columns_to_types))
+            for v in values[batch_start:batch_end]
         ]
 
-    values_exp = exp.values(expressions, alias=alias, columns=columns_to_types)
+    values_exp = exp.values(expressions, alias=alias, columns=source_columns_to_types)
     if values:
         # BigQuery crashes on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([NULL]) AS x`, but not
         # on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([CAST(NULL AS TIMESTAMP)]) AS x`. This
         # ensures nulls under the `Values` expression are cast to avoid similar issues.
-        for value, kind in zip(values_exp.expressions[0].expressions, columns_to_types.values()):
+        for value, kind in zip(
+            values_exp.expressions[0].expressions, source_columns_to_types.values()
+        ):
             if isinstance(value, exp.Null):
                 value.replace(exp.cast(value, to=kind))
 
+    casted_columns = [
+        exp.alias_(
+            exp.cast(
+                exp.column(column) if column in source_columns_to_types else exp.Null(), to=kind
+            ),
+            column,
+            copy=False,
+        )
+        for column, kind in target_columns_to_types.items()
+    ]
     return exp.select(*casted_columns).from_(values_exp, copy=False).where(where, copy=False)
 
 
@@ -1175,7 +1225,7 @@ def set_default_catalog(
     return table
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def normalize_model_name(
     table: str | exp.Table | exp.Column,
     default_catalog: t.Optional[str],
@@ -1384,11 +1434,48 @@ def extract_func_call(
     return func.lower(), kwargs
 
 
+def extract_function_calls(func_calls: t.Any, allow_tuples: bool = False) -> t.Any:
+    """Used for extracting function calls for signals or audits."""
+
+    if isinstance(func_calls, (exp.Tuple, exp.Array)):
+        return [extract_func_call(i, allow_tuples=allow_tuples) for i in func_calls.expressions]
+    if isinstance(func_calls, exp.Paren):
+        return [extract_func_call(func_calls.this, allow_tuples=allow_tuples)]
+    if isinstance(func_calls, exp.Expression):
+        return [extract_func_call(func_calls, allow_tuples=allow_tuples)]
+    if isinstance(func_calls, list):
+        function_calls = []
+        for entry in func_calls:
+            if isinstance(entry, dict):
+                args = entry
+                name = "" if allow_tuples else entry.pop("name")
+            elif isinstance(entry, (tuple, list)):
+                name, args = entry
+            else:
+                raise ConfigError(f"Audit must be a dictionary or named tuple. Got {entry}.")
+
+            function_calls.append(
+                (
+                    name.lower(),
+                    {
+                        key: parse_one(value) if isinstance(value, str) else value
+                        for key, value in args.items()
+                    },
+                )
+            )
+
+        return function_calls
+
+    return func_calls or []
+
+
 def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
 
 
-def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
+def replace_merge_table_aliases(
+    expression: exp.Expression, dialect: t.Optional[str] = None
+) -> exp.Expression:
     """
     Resolves references from the "source" and "target" tables (or their DBT equivalents)
     with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)
@@ -1397,8 +1484,8 @@ def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
 
     if isinstance(expression, exp.Column) and (first_part := expression.parts[0]):
         if first_part.this.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
-            first_part.replace(exp.to_identifier(MERGE_TARGET_ALIAS))
+            first_part.replace(exp.to_identifier(MERGE_TARGET_ALIAS, quoted=True))
         elif first_part.this.lower() in ("source", "dbt_internal_source", "__merge_source__"):
-            first_part.replace(exp.to_identifier(MERGE_SOURCE_ALIAS))
+            first_part.replace(exp.to_identifier(MERGE_SOURCE_ALIAS, quoted=True))
 
     return expression

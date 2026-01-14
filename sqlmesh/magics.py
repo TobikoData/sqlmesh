@@ -8,6 +8,7 @@ import typing as t
 from argparse import Namespace, SUPPRESS
 from collections import defaultdict
 from copy import deepcopy
+from pathlib import Path
 
 from hyperscript import h
 
@@ -166,6 +167,9 @@ class SQLMeshMagics(Magics):
     @argument("--ignore-warnings", action="store_true", help="Ignore warnings.")
     @argument("--debug", action="store_true", help="Enable debug mode.")
     @argument("--log-file-dir", type=str, help="The directory to write the log file to.")
+    @argument(
+        "--dotenv", type=str, help="Path to a custom .env file to load environment variables from."
+    )
     @line_magic
     def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
@@ -181,7 +185,10 @@ class SQLMeshMagics(Magics):
         )
         configure_console(ignore_warnings=args.ignore_warnings)
 
-        configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
+        dotenv_path = Path(args.dotenv) if args.dotenv else None
+        configs = load_configs(
+            args.config, Context.CONFIG_TYPE, args.paths, dotenv_path=dotenv_path
+        )
         log_limit = list(configs.values())[0].log_limit
 
         remove_excess_logs(log_file_dir, log_limit)
@@ -280,8 +287,9 @@ class SQLMeshMagics(Magics):
             if loaded.name == args.model:
                 model = loaded
         else:
-            with open(model._path, "r", encoding="utf-8") as file:
-                expressions = parse(file.read(), default_dialect=config.dialect)
+            if model._path:
+                with open(model._path, "r", encoding="utf-8") as file:
+                    expressions = parse(file.read(), default_dialect=config.dialect)
 
         formatted = format_model_expressions(
             expressions,
@@ -300,8 +308,9 @@ class SQLMeshMagics(Magics):
             replace=True,
         )
 
-        with open(model._path, "w", encoding="utf-8") as file:
-            file.write(formatted)
+        if model._path:
+            with open(model._path, "w", encoding="utf-8") as file:
+                file.write(formatted)
 
         if sql:
             context.console.log_success(f"Model `{args.model}` updated")
@@ -328,7 +337,7 @@ class SQLMeshMagics(Magics):
         if not args.test_name and not args.ls:
             raise MagicError("Must provide either test name or `--ls` to list tests")
 
-        test_meta = context.load_model_tests()
+        test_meta = context.select_tests()
 
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in test_meta:
@@ -478,6 +487,12 @@ class SQLMeshMagics(Magics):
         help="Run latest intervals as part of the plan application (prod environment only).",
     )
     @argument(
+        "--ignore-cron",
+        action="store_true",
+        help="Run for all missing intervals, ignoring individual cron schedules. Only applies if --run is set.",
+        default=None,
+    )
+    @argument(
         "--enable-preview",
         action="store_true",
         help="Enable preview for forward-only models when targeting a development environment.",
@@ -524,6 +539,7 @@ class SQLMeshMagics(Magics):
             select_models=args.select_model,
             no_diff=args.no_diff,
             run=args.run,
+            ignore_cron=args.run,
             enable_preview=args.enable_preview,
             diff_rendered=args.diff_rendered,
         )
@@ -631,6 +647,8 @@ class SQLMeshMagics(Magics):
         render_opts = vars(parse_argstring(self.render, line))
         model = render_opts.pop("model")
         dialect = render_opts.pop("dialect", None)
+
+        model = context.get_model(model, raise_if_missing=True)
 
         query = context.render(
             model,

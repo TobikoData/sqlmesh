@@ -25,7 +25,7 @@ function_exists() {
 # Snowflake
 snowflake_init() {
     echo "Installing Snowflake CLI"
-    pip install "snowflake-cli-labs<3.8.0"
+    pip install "snowflake-cli"
 }
 
 snowflake_up() {
@@ -40,18 +40,6 @@ snowflake_down() {
 databricks_init() {
     echo "Installing Databricks CLI"
     curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sudo sh || true
-
-    echo "Writing out Databricks CLI config file"
-    echo -e "[DEFAULT]\nhost = $DATABRICKS_SERVER_HOSTNAME\ntoken = $DATABRICKS_ACCESS_TOKEN" > ~/.databrickscfg
-
-    # this takes a path like 'sql/protocolv1/o/2934659247569/0723-005339-foobar' and extracts '0723-005339-foobar' from it
-    CLUSTER_ID=${DATABRICKS_HTTP_PATH##*/}
-
-    echo "Extracted cluster id: $CLUSTER_ID from '$DATABRICKS_HTTP_PATH'"
-
-    # Note: the cluster doesnt need to be running to create / drop catalogs, but it does need to be running to run the integration tests
-    echo "Ensuring cluster is running"
-    databricks clusters start $CLUSTER_ID || true
 }
 
 databricks_up() {
@@ -80,7 +68,11 @@ redshift_down() {
     EXIT_CODE=1
     ATTEMPTS=0
     while [ $EXIT_CODE -ne 0 ] && [ $ATTEMPTS -lt 5 ]; do
-        redshift_exec "select pg_terminate_backend(procpid) from pg_stat_activity where datname = '$1'"
+        # note: sometimes this pg_terminate_backend() call can randomly fail with: ERROR:  Insufficient privileges 
+        # if it does, let's proceed with the drop anyway rather than aborting and never attempting the drop
+        redshift_exec "select pg_terminate_backend(procpid) from pg_stat_activity where datname = '$1'" || true
+        
+        # perform drop
         redshift_exec "drop database $1;" && EXIT_CODE=$? || EXIT_CODE=$?
         if [ $EXIT_CODE -ne 0 ]; then
             echo "Unable to drop database; retrying..."
@@ -107,6 +99,51 @@ clickhouse-cloud_init() {
         sleep 5
     done
     echo "Clickhouse Cloud instance $CLICKHOUSE_CLOUD_HOST is up and running"
+}
+
+# GCP Postgres
+gcp-postgres_init() {
+    # Download and start Cloud SQL Proxy
+    curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.18.0/cloud-sql-proxy.linux.amd64
+    chmod +x cloud-sql-proxy
+    echo "$GCP_POSTGRES_KEYFILE_JSON" > /tmp/keyfile.json
+    ./cloud-sql-proxy --credentials-file /tmp/keyfile.json $GCP_POSTGRES_INSTANCE_CONNECTION_STRING &
+
+    # Wait for proxy to start
+    sleep 5
+}
+
+gcp-postgres_exec() {
+    PGPASSWORD=$GCP_POSTGRES_PASSWORD psql -h 127.0.0.1 -U $GCP_POSTGRES_USER -c "$1" postgres
+}
+
+gcp-postgres_up() {
+    gcp-postgres_exec "create database $1"
+}
+
+gcp-postgres_down() {
+    gcp-postgres_exec "drop database $1"
+}
+
+# Fabric
+fabric_init() {    
+    python --version #note: as at 2025-08-20, ms-fabric-cli is pinned to Python >= 3.10, <3.13
+    pip install ms-fabric-cli
+    
+    # to prevent the '[EncryptionFailed] An error occurred with the encrypted cache.' error
+    # ref: https://microsoft.github.io/fabric-cli/#switch-to-interactive-mode-optional
+    fab config set encryption_fallback_enabled true 
+
+    echo "Logging in to Fabric"
+    fab auth login -u $FABRIC_CLIENT_ID -p $FABRIC_CLIENT_SECRET --tenant $FABRIC_TENANT_ID
+}
+
+fabric_up() {
+    fab create "SQLMesh CircleCI.Workspace/$1.Warehouse"
+}
+
+fabric_down() {
+    fab rm -f "SQLMesh CircleCI.Workspace/$1.Warehouse" || true
 }
 
 INIT_FUNC="${ENGINE}_init"

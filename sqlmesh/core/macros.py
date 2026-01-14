@@ -12,7 +12,6 @@ from string import Template
 from datetime import datetime, date
 
 import sqlglot
-from jinja2 import Environment
 from sqlglot import Generator, exp, parse_one
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
@@ -40,7 +39,6 @@ from sqlmesh.utils import (
 )
 from sqlmesh.utils.date import DatetimeRanges, to_datetime, to_date
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import (
     Executable,
     SqlValue,
@@ -67,6 +65,7 @@ class RuntimeStage(Enum):
     CREATING = "creating"
     EVALUATING = "evaluating"
     PROMOTING = "promoting"
+    DEMOTING = "demoting"
     AUDITING = "auditing"
     TESTING = "testing"
     BEFORE_ALL = "before_all"
@@ -129,6 +128,17 @@ def _macro_str_replace(text: str) -> str:
     return f"self.template({text}, locals())"
 
 
+class CaseInsensitiveMapping(t.Dict[str, t.Any]):
+    def __init__(self, data: t.Dict[str, t.Any]) -> None:
+        super().__init__(data)
+
+    def __getitem__(self, key: str) -> t.Any:
+        return super().__getitem__(key.lower())
+
+    def get(self, key: str, default: t.Any = None, /) -> t.Any:
+        return super().get(key.lower(), default)
+
+
 class MacroDialect(Python):
     class Generator(Python.Generator):
         TRANSFORMS = {
@@ -171,7 +181,7 @@ class MacroEvaluator:
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
-        path: Path = Path(),
+        path: t.Optional[Path] = None,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
         model_fqn: t.Optional[str] = None,
     ):
@@ -192,7 +202,6 @@ class MacroEvaluator:
         self.columns_to_types_called = False
         self.default_catalog = default_catalog
 
-        self._jinja_env: t.Optional[Environment] = None
         self._schema = schema
         self._resolve_table = resolve_table
         self._resolve_tables = resolve_tables
@@ -209,7 +218,12 @@ class MacroEvaluator:
                 self.macros[normalize_macro_name(k)] = self.env[k]
             elif v.is_value:
                 value = self.env[k]
-                if k in (c.SQLMESH_VARS, c.SQLMESH_BLUEPRINT_VARS):
+                if k in (
+                    c.SQLMESH_VARS,
+                    c.SQLMESH_VARS_METADATA,
+                    c.SQLMESH_BLUEPRINT_VARS,
+                    c.SQLMESH_BLUEPRINT_VARS_METADATA,
+                ):
                     value = {
                         var_name: (
                             self.parse_one(var_value.sql)
@@ -253,14 +267,18 @@ class MacroEvaluator:
                 changed = True
                 variables = self.variables
 
-                if node.name not in self.locals and node.name.lower() not in variables:
+                # This makes all variables case-insensitive, e.g. @X is the same as @x. We do this
+                # for consistency, since `variables` and `blueprint_variables` are normalized.
+                var_name = node.name.lower()
+
+                if var_name not in self.locals and var_name not in variables:
                     if not isinstance(node.parent, StagedFilePath):
                         raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
                 # Precedence order is locals (e.g. @DEF) > blueprint variables > config variables
-                value = self.locals.get(node.name, variables.get(node.name.lower()))
+                value = self.locals.get(var_name, variables.get(var_name))
                 if isinstance(value, list):
                     return exp.convert(
                         tuple(
@@ -276,12 +294,6 @@ class MacroEvaluator:
                 if node.this != text:
                     changed = True
                     return exp.to_identifier(text, quoted=node.quoted or None)
-            if node.is_string:
-                text = node.this
-                if has_jinja(text):
-                    changed = True
-                    node.set("this", self.jinja_env.from_string(node.this).render())
-                return node
             if isinstance(node, MacroFunc):
                 changed = True
                 return self.evaluate(node)
@@ -316,11 +328,16 @@ class MacroEvaluator:
         """
         # We try to convert all variables into sqlglot expressions because they're going to be converted
         # into strings; in sql we don't convert strings because that would result in adding quotes
-        mapping = {
-            k: convert_sql(v, self.dialect)
+        base_mapping = {
+            k.lower(): convert_sql(v, self.dialect)
             for k, v in chain(self.variables.items(), self.locals.items(), local_variables.items())
+            if k.lower()
+            not in (
+                "engine_adapter",
+                "snapshot",
+            )
         }
-        return MacroStrTemplate(str(text)).safe_substitute(mapping)
+        return MacroStrTemplate(str(text)).safe_substitute(CaseInsensitiveMapping(base_mapping))
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):
@@ -330,7 +347,9 @@ class MacroEvaluator:
                     args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
                 )
             else:
-                self.locals[node.name] = self.transform(node.expression)
+                # Make variables defined through `@DEF` case-insensitive
+                self.locals[node.name.lower()] = self.transform(node.expression)
+
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):
@@ -360,8 +379,37 @@ class MacroEvaluator:
             return None
 
         if isinstance(result, (tuple, list)):
-            return [self.parse_one(item) for item in result if item is not None]
-        return self.parse_one(result)
+            result = [self.parse_one(item) for item in result if item is not None]
+
+            if (
+                len(result) == 1
+                and isinstance(result[0], (exp.Array, exp.Tuple))
+                and node.find_ancestor(MacroFunc)
+            ):
+                """
+                if:
+                 - the output of evaluating this node is being passed as an argument to another macro function
+                 - and that output is something that _norm_var_arg_lambda() will unpack into varargs
+                   > (a list containing a single item of type exp.Tuple/exp.Array)
+                then we will get inconsistent behaviour depending on if this node emits a list with a single item vs multiple items.
+                
+                In the first case, emitting a list containing a single array item will cause that array to get unpacked and its *members* passed to the calling macro
+                In the second case, emitting a list containing multiple array items will cause each item to get passed as-is to the calling macro
+                
+                To prevent this inconsistency, we wrap this node output in an exp.Array so that _norm_var_arg_lambda() can "unpack" that into the
+                actual argument we want to pass to the parent macro function
+                
+                Note we only do this for evaluation results that get passed as an argument to another macro, because when the final
+                result is given to something like SELECT, we still want that to be unpacked into a list of items like:
+                 - SELECT ARRAY(1), ARRAY(2)
+                rather than a single item like:
+                 - SELECT ARRAY(ARRAY(1), ARRAY(2))                
+                """
+                result = [exp.Array(expressions=result)]
+        else:
+            result = self.parse_one(result)
+
+        return result
 
     def eval_expression(self, node: t.Any) -> t.Any:
         """Converts a SQLGlot expression into executable Python code and evals it.
@@ -400,14 +448,6 @@ class MacroEvaluator:
             Expression: the syntax tree for the first parsed statement
         """
         return sqlglot.maybe_parse(sql, dialect=self.dialect, into=into, **opts)
-
-    @property
-    def jinja_env(self) -> Environment:
-        if not self._jinja_env:
-            jinja_env_methods = {**self.locals, **self.env}
-            del jinja_env_methods["self"]
-            self._jinja_env = JinjaMacroRegistry().build_environment(**jinja_env_methods)
-        return self._jinja_env
 
     def columns_to_types(self, model_name: TableName | exp.Column) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
@@ -527,17 +567,25 @@ class MacroEvaluator:
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
-        return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name.lower(), default)
+        return {
+            **(self.locals.get(c.SQLMESH_VARS) or {}),
+            **(self.locals.get(c.SQLMESH_VARS_METADATA) or {}),
+        }.get(var_name.lower(), default)
 
     def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified blueprint variable, or the default value if it doesn't exist."""
-        return (self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}).get(var_name.lower(), default)
+        return {
+            **(self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}),
+            **(self.locals.get(c.SQLMESH_BLUEPRINT_VARS_METADATA) or {}),
+        }.get(var_name.lower(), default)
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:
         return {
             **self.locals.get(c.SQLMESH_VARS, {}),
+            **self.locals.get(c.SQLMESH_VARS_METADATA, {}),
             **self.locals.get(c.SQLMESH_BLUEPRINT_VARS, {}),
+            **self.locals.get(c.SQLMESH_BLUEPRINT_VARS_METADATA, {}),
         }
 
     def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:
@@ -604,7 +652,7 @@ def _norm_var_arg_lambda(
     ) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, (exp.Identifier, exp.Var)):
             if not isinstance(node.parent, exp.Column):
-                name = node.name
+                name = node.name.lower()
                 if name in args:
                     return args[name].copy()
                 if name in evaluator.locals:
@@ -623,7 +671,13 @@ def _norm_var_arg_lambda(
 
     if len(items) == 1:
         item = items[0]
-        expressions = item.expressions if isinstance(item, (exp.Array, exp.Tuple)) else item
+        expressions = (
+            item.expressions
+            if isinstance(item, (exp.Array, exp.Tuple))
+            else [item.this]
+            if isinstance(item, exp.Paren)
+            else item
+        )
     else:
         expressions = items
 
@@ -631,7 +685,7 @@ def _norm_var_arg_lambda(
         return expressions, lambda args: func.this.transform(
             substitute,
             {
-                expression.name: arg
+                expression.name.lower(): arg
                 for expression, arg in zip(
                     func.expressions, args.expressions if isinstance(args, exp.Tuple) else [args]
                 )
@@ -1096,7 +1150,7 @@ def haversine_distance(
 def pivot(
     evaluator: MacroEvaluator,
     column: SQL,
-    values: t.List[SQL],
+    values: t.List[exp.Expression],
     alias: bool = True,
     agg: exp.Expression = exp.Literal.string("SUM"),
     cmp: exp.Expression = exp.Literal.string("="),
@@ -1114,10 +1168,10 @@ def pivot(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "\\'cancelled\\'", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "\\'completed\\'" FROM rides GROUP BY 1'
+        'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "cancelled", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "completed" FROM rides GROUP BY 1'
         >>> sql = "SELECT @PIVOT(a, ['v'], then_value := tv, suffix := '_sfx', quote := FALSE)"
         >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql)).sql("bigquery")
-        "SELECT SUM(CASE WHEN a = 'v' THEN tv ELSE 0 END) AS `v_sfx`"
+        "SELECT SUM(CASE WHEN a = 'v' THEN tv ELSE 0 END) AS v_sfx"
     """
     aggregates: t.List[exp.Expression] = []
     for value in values:
@@ -1125,12 +1179,12 @@ def pivot(
         if distinct:
             proj += "DISTINCT "
 
-        proj += f"CASE WHEN {column} {cmp.name} {value} THEN {then_value} ELSE {else_value} END) "
+        proj += f"CASE WHEN {column} {cmp.name} {value.sql(evaluator.dialect)} THEN {then_value} ELSE {else_value} END) "
         node = evaluator.parse_one(proj)
 
         if alias:
             node = node.as_(
-                f"{prefix.name}{value}{suffix.name}",
+                f"{prefix.name}{value.name}{suffix.name}",
                 quoted=quote,
                 copy=False,
                 dialect=evaluator.dialect,
@@ -1384,7 +1438,7 @@ for m in macro.get_registry().values():
 def call_macro(
     func: t.Callable,
     dialect: DialectType,
-    path: Path,
+    path: t.Optional[Path],
     provided_args: t.Tuple[t.Any, ...],
     provided_kwargs: t.Dict[str, t.Any],
     **optional_kwargs: t.Any,
@@ -1431,7 +1485,7 @@ def _coerce(
     expr: t.Any,
     typ: t.Any,
     dialect: DialectType,
-    path: Path,
+    path: t.Optional[Path] = None,
     strict: bool = False,
 ) -> t.Any:
     """Coerces the given expression to the specified type on a best-effort basis."""
@@ -1558,6 +1612,6 @@ def _convert_sql(v: t.Any, dialect: DialectType) -> t.Any:
     return v
 
 
-@lru_cache(maxsize=1028)
+@lru_cache(maxsize=16384)
 def _cache_convert_sql(v: t.Any, dialect: DialectType, t: type) -> t.Any:
     return _convert_sql(v, dialect)

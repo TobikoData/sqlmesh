@@ -1,0 +1,7 @@
+:where(:root) {
+  --color-input-background: var(--color-light);
+  --color-input-background-translucid: var(--color-neutral-5);
+  --color-input-foreground: var(--color-prose);
+  --color-input-placeholder: var(--color-neutral-400);
+  --color-input-border: var(--color-neutral-300);
+}

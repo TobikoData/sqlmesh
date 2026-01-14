@@ -1,5 +1,7 @@
 from lsprotocol import types
 import typing as t
+
+from sqlmesh.core.linter.rule import Range
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -143,3 +145,113 @@ class FormatProjectResponse(CustomMethodResponseBaseClass):
     """
 
     pass
+
+
+LIST_WORKSPACE_TESTS_FEATURE = "sqlmesh/list_workspace_tests"
+
+
+class ListWorkspaceTestsRequest(CustomMethodRequestBaseClass):
+    """
+    Request to list all tests in the current project.
+    """
+
+    pass
+
+
+GET_ENVIRONMENTS_FEATURE = "sqlmesh/get_environments"
+
+
+class GetEnvironmentsRequest(CustomMethodRequestBaseClass):
+    """
+    Request to get all environments in the current project.
+    """
+
+    pass
+
+
+class TestEntry(PydanticModel):
+    """
+    An entry representing a test in the workspace.
+    """
+
+    name: str
+    uri: str
+    range: Range
+
+
+class ListWorkspaceTestsResponse(CustomMethodResponseBaseClass):
+    tests: t.List[TestEntry]
+
+
+LIST_DOCUMENT_TESTS_FEATURE = "sqlmesh/list_document_tests"
+
+
+class ListDocumentTestsRequest(CustomMethodRequestBaseClass):
+    textDocument: types.TextDocumentIdentifier
+
+
+class ListDocumentTestsResponse(CustomMethodResponseBaseClass):
+    tests: t.List[TestEntry]
+
+
+RUN_TEST_FEATURE = "sqlmesh/run_test"
+
+
+class RunTestRequest(CustomMethodRequestBaseClass):
+    textDocument: types.TextDocumentIdentifier
+    testName: str
+
+
+class RunTestResponse(CustomMethodResponseBaseClass):
+    success: bool
+    error_message: t.Optional[str] = None
+
+
+class EnvironmentInfo(PydanticModel):
+    """
+    Information about an environment.
+    """
+
+    name: str
+    snapshots: t.List[str]
+    start_at: str
+    plan_id: str
+
+
+class GetEnvironmentsResponse(CustomMethodResponseBaseClass):
+    """
+    Response containing all environments in the current project.
+    """
+
+    environments: t.Dict[str, EnvironmentInfo]
+    pinned_environments: t.Set[str]
+    default_target_environment: str
+
+
+GET_MODELS_FEATURE = "sqlmesh/get_models"
+
+
+class GetModelsRequest(CustomMethodRequestBaseClass):
+    """
+    Request to get all models available for table diff.
+    """
+
+    pass
+
+
+class ModelInfo(PydanticModel):
+    """
+    Information about a model for table diff.
+    """
+
+    name: str
+    fqn: str
+    description: t.Optional[str] = None
+
+
+class GetModelsResponse(CustomMethodResponseBaseClass):
+    """
+    Response containing all models available for table diff.
+    """
+
+    models: t.List[ModelInfo]

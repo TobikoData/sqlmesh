@@ -367,8 +367,8 @@ class TableDiff:
                 column_type = matched_columns[name]
                 qualified_column = exp.column(name, table)
 
-                if column_type.is_type(*exp.DataType.FLOAT_TYPES):
-                    return exp.func("ROUND", qualified_column, exp.Literal.number(self.decimals))
+                if column_type.is_type(*exp.DataType.REAL_TYPES):
+                    return self.adapter._normalize_decimal_value(qualified_column, self.decimals)
                 if column_type.is_type(*exp.DataType.NESTED_TYPES):
                     return self.adapter._normalize_nested_value(qualified_column)
 
@@ -421,21 +421,16 @@ class TableDiff:
                 exp.select(
                     *s_selects.values(),
                     *t_selects.values(),
-                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in s_index)), 1, 0).as_(
-                        "s_exists"
-                    ),
-                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in t_index)), 1, 0).as_(
-                        "t_exists"
-                    ),
+                    exp.func(
+                        "IF", exp.column(SQLMESH_JOIN_KEY_COL, "s").is_(exp.Null()).not_(), 1, 0
+                    ).as_("s_exists"),
+                    exp.func(
+                        "IF", exp.column(SQLMESH_JOIN_KEY_COL, "t").is_(exp.Null()).not_(), 1, 0
+                    ).as_("t_exists"),
                     exp.func(
                         "IF",
-                        exp.and_(
-                            exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
-                                exp.column(SQLMESH_JOIN_KEY_COL, "t")
-                            ),
-                            exp.and_(
-                                *(c.is_(exp.Null()).not_() for c in s_index + t_index),
-                            ),
+                        exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
+                            exp.column(SQLMESH_JOIN_KEY_COL, "t")
                         ),
                         1,
                         0,
@@ -499,7 +494,7 @@ class TableDiff:
             schema = to_schema(temp_schema, dialect=self.dialect)
             temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
-            temp_table_kwargs = {}
+            temp_table_kwargs: t.Dict[str, t.Any] = {}
             if isinstance(self.adapter, AthenaEngineAdapter):
                 # Athena has two table formats: Hive (the default) and Iceberg. TableDiff requires that
                 # the formats be the same for the source, target, and temp tables.
@@ -517,7 +512,7 @@ class TableDiff:
                     )
 
             with self.adapter.temp_table(
-                query, name=temp_table, columns_to_types=None, **temp_table_kwargs
+                query, name=temp_table, target_columns_to_types=None, **temp_table_kwargs
             ) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
