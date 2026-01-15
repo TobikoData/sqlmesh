@@ -119,6 +119,19 @@ gateways:
       port: 4566
       check_import: false
 
+  inttest_gizmosql:
+    connection:
+      type: gizmosql
+      host: {{ env_var('GIZMOSQL_HOST', 'localhost') }}
+      port: {{ env_var('GIZMOSQL_PORT', '31337') }}
+      username: {{ env_var('GIZMOSQL_USERNAME', 'gizmosql_username') }}
+      password: {{ env_var('GIZMOSQL_PASSWORD', 'gizmosql_password') }}
+      use_encryption: true
+      disable_certificate_verification: true
+      check_import: false
+    state_connection:
+      type: duckdb
+
 
   # Cloud databases
   inttest_snowflake:

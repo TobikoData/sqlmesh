@@ -208,6 +208,9 @@ trino-test: engine-trino-up
 risingwave-test: engine-risingwave-up
 	pytest -n auto -m "risingwave" --reruns 3 --junitxml=test-results/junit-risingwave.xml
 
+gizmosql-test: engine-gizmosql-up
+	pytest -n auto -m "gizmosql" --reruns 3 --junitxml=test-results/junit-gizmosql.xml
+
 #################
 # Cloud Engines #
 #################

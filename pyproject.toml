@@ -144,6 +144,7 @@ lsp = [
     "lsprotocol",
 ]
 risingwave = ["psycopg2"]
+gizmosql = ["adbc-driver-flightsql", "pyarrow"]
 
 [project.scripts]
 sqlmesh = "sqlmesh.cli.main:cli"
@@ -271,6 +272,7 @@ markers = [
     "pyspark: test for PySpark that need to run separately from the other spark tests",
     "trino: test for Trino (all connectors)",
     "risingwave: test for Risingwave",
+    "gizmosql: test for GizmoSQL",
 
     # Other
     "set_default_connection",

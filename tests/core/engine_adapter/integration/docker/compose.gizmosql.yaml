@@ -1,0 +1,18 @@
+services:
+  gizmosql:
+    image: gizmodata/gizmosql:latest
+    ports:
+      - '31337:31337'
+    environment:
+      GIZMOSQL_USERNAME: gizmosql_username
+      GIZMOSQL_PASSWORD: gizmosql_password
+      TLS_ENABLED: "1"
+      PRINT_QUERIES: "1"
+      # Use a writable database file instead of the default TPC-H sample
+      DATABASE_FILENAME: "/tmp/sqlmesh_test.duckdb"
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q 'GizmoSQL server - started' /proc/1/fd/1 || exit 1"]
+      interval: 5s
+      timeout: 30s
+      retries: 10
+      start_period: 10s

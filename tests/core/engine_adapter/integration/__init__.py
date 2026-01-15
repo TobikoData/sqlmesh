@@ -70,6 +70,7 @@ class IntegrationTestEngine:
 ENGINES = [
     # Docker engines that can be locally tested
     IntegrationTestEngine("duckdb"),
+    IntegrationTestEngine("gizmosql"),
     IntegrationTestEngine("postgres"),
     IntegrationTestEngine("mysql"),
     IntegrationTestEngine("mssql"),

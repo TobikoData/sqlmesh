@@ -59,6 +59,14 @@ risingwave_ready() {
     probe_port 4566
 }
 
+gizmosql_ready() {
+    # GizmoSQL uses port 31337 for Flight SQL connections
+    # Also check that the server has fully started by looking for the startup message
+    probe_port 31337
+    # Give it a few more seconds for the server to initialize after port is available
+    sleep 3
+}
+
 echo "Waiting for $ENGINE to be ready..."
 
 READINESS_FUNC="${ENGINE}_ready"

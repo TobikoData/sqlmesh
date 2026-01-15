@@ -89,6 +89,7 @@ nav:
       - integrations/engines/mysql.md
       - integrations/engines/postgres.md
       - integrations/engines/gcp-postgres.md
+      - integrations/engines/gizmosql.md
       - integrations/engines/redshift.md
       - integrations/engines/risingwave.md
       - integrations/engines/snowflake.md

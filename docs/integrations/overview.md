@@ -23,6 +23,7 @@ SQLMesh supports the following execution engines for running SQLMesh projects (e
 * [MySQL](./engines/mysql.md) (mysql)
 * [Postgres](./engines/postgres.md) (postgres)
 * [GCP Postgres](./engines/gcp-postgres.md) (gcppostgres)
+* [GizmoSQL](./engines/gizmosql.md) (gizmosql)
 * [Redshift](./engines/redshift.md) (redshift)
 * [Snowflake](./engines/snowflake.md) (snowflake)
 * [Spark](./engines/spark.md) (spark)
