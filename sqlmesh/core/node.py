@@ -259,7 +259,8 @@ INTERVAL_SECONDS = {
     IntervalUnit.FIVE_MINUTE: 60 * 5,
 }
 
-def _cron_tz_validator(cls, v: t.Any) -> t.Optional[zoneinfo.ZoneInfo]:
+
+def _cron_tz_validator(cls: t.Type, v: t.Any) -> t.Optional[zoneinfo.ZoneInfo]:
     if not v or v == "UTC":
         return None
 
@@ -278,6 +279,7 @@ def _cron_tz_validator(cls, v: t.Any) -> t.Optional[zoneinfo.ZoneInfo]:
             )
 
     return None
+
 
 cron_tz_validator = field_validator("cron_tz", mode="before")(_cron_tz_validator)
 

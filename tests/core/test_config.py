@@ -933,7 +933,7 @@ def test_gateway_model_defaults(tmp_path):
 def test_model_defaults_cron_tz(tmp_path):
     """Test that cron_tz can be set in model_defaults."""
     import zoneinfo
-    
+
     config_path = tmp_path / "config_model_defaults_cron_tz.yaml"
     with open(config_path, "w", encoding="utf-8") as fd:
         fd.write(
@@ -958,13 +958,11 @@ model_defaults:
 def test_gateway_model_defaults_cron_tz(tmp_path):
     """Test that cron_tz can be set in gateway-specific model_defaults."""
     import zoneinfo
-    
+
     global_defaults = ModelDefaultsConfig(
         dialect="snowflake", owner="foo", cron="@daily", cron_tz="UTC"
     )
-    gateway_defaults = ModelDefaultsConfig(
-        dialect="duckdb", cron_tz="America/New_York"
-    )
+    gateway_defaults = ModelDefaultsConfig(dialect="duckdb", cron_tz="America/New_York")
 
     config = Config(
         gateways={
