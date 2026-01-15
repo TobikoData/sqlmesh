@@ -150,22 +150,45 @@ class GizmoSQLEngineAdapter(
         """
         Convert a DataFrame to source queries for insertion.
 
-        For GizmoSQL, we use a temporary table approach similar to DuckDB.
-        The DataFrame is registered and then selected from.
+        Uses ADBC bulk ingestion (adbc_ingest) for efficient Arrow-native data transfer
+        to GizmoSQL, avoiding row-by-row insertion overhead.
         """
+        import pyarrow as pa
+
+        # Generate a simple temp table name without schema prefix
+        # adbc_ingest creates tables in the current schema and treats the full
+        # string as a literal table name (doesn't parse schema.table)
         temp_table = self._get_temp_table(target_table)
-        temp_table_sql = (
-            exp.select(*self._casted_columns(target_columns_to_types, source_columns))
-            .from_("df")
-            .sql(dialect=self.dialect)
+        # Extract just the table name without schema/catalog
+        temp_table_name = temp_table.name
+
+        # Select only the source columns in the right order
+        source_columns_to_types = (
+            {col: target_columns_to_types[col] for col in source_columns}
+            if source_columns
+            else target_columns_to_types
         )
-        self.cursor.sql(f"CREATE TABLE {temp_table} AS {temp_table_sql}")
+        ordered_df = df[list(source_columns_to_types.keys())]
+
+        # Convert DataFrame to PyArrow Table for bulk ingestion
+        arrow_table = pa.Table.from_pandas(ordered_df)
+
+        # Use ADBC bulk ingestion - much faster than row-by-row INSERT
+        self.cursor.adbc_ingest(
+            table_name=temp_table_name,
+            data=arrow_table,
+            mode="create",
+        )
+
+        # Create a simple table reference for queries (no schema prefix)
+        temp_table_ref = exp.to_table(temp_table_name)
+
         return [
             SourceQuery(
                 query_factory=lambda: self._select_columns(target_columns_to_types).from_(
-                    temp_table
+                    temp_table_ref
                 ),
-                cleanup_func=lambda: self.drop_table(temp_table),
+                cleanup_func=lambda: self.drop_table(temp_table_ref),
             )
         ]
 

@@ -255,3 +255,51 @@ def test_query_with_expressions(gizmosql_adapter: GizmoSQLEngineAdapter):
     assert result is not None
     assert result[0] == 1
     assert result[1] == "hello"
+
+
+def test_dataframe_bulk_ingestion(gizmosql_adapter: GizmoSQLEngineAdapter):
+    """Test bulk DataFrame ingestion using ADBC adbc_ingest."""
+    import pandas as pd
+
+    schema_name = "test_bulk_ingest_schema"
+    table_name = f"{schema_name}.bulk_test_table"
+
+    try:
+        # Setup
+        gizmosql_adapter.drop_schema(schema_name, ignore_if_not_exists=True, cascade=True)
+        gizmosql_adapter.create_schema(schema_name)
+
+        # Create a test DataFrame
+        df = pd.DataFrame({
+            "id": [1, 2, 3, 4, 5],
+            "name": ["alice", "bob", "charlie", "diana", "eve"],
+            "value": [10.5, 20.5, 30.5, 40.5, 50.5],
+        })
+
+        # Create target table
+        columns_to_types = {
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "value": exp.DataType.build("DOUBLE"),
+        }
+        gizmosql_adapter.create_table(table_name, columns_to_types)
+
+        # Use replace_query with DataFrame (this uses _df_to_source_queries internally)
+        gizmosql_adapter.replace_query(
+            table_name,
+            df,
+            columns_to_types,
+        )
+
+        # Verify data was loaded
+        result = gizmosql_adapter.fetchall(f"SELECT * FROM {table_name} ORDER BY id")
+        assert len(result) == 5
+        assert result[0][0] == 1
+        assert result[0][1] == "alice"
+        assert abs(result[0][2] - 10.5) < 0.001
+        assert result[4][0] == 5
+        assert result[4][1] == "eve"
+
+    finally:
+        # Cleanup
+        gizmosql_adapter.drop_schema(schema_name, ignore_if_not_exists=True, cascade=True)
