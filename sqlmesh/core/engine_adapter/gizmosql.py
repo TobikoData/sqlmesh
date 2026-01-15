@@ -155,12 +155,7 @@ class GizmoSQLEngineAdapter(
         """
         import pyarrow as pa
 
-        # Generate a simple temp table name without schema prefix
-        # adbc_ingest creates tables in the current schema and treats the full
-        # string as a literal table name (doesn't parse schema.table)
         temp_table = self._get_temp_table(target_table)
-        # Extract just the table name without schema/catalog
-        temp_table_name = temp_table.name
 
         # Select only the source columns in the right order
         source_columns_to_types = (
@@ -173,22 +168,25 @@ class GizmoSQLEngineAdapter(
         # Convert DataFrame to PyArrow Table for bulk ingestion
         arrow_table = pa.Table.from_pandas(ordered_df)
 
-        # Use ADBC bulk ingestion - much faster than row-by-row INSERT
+        # Use ADBC bulk ingestion with temporary table
+        # Note: DuckDB temporary tables cannot have catalog/schema prefixes,
+        # so we only pass the table name when temporary=True
         self.cursor.adbc_ingest(
-            table_name=temp_table_name,
+            table_name=temp_table.name,
             data=arrow_table,
             mode="create",
+            temporary=True,
         )
 
-        # Create a simple table reference for queries (no schema prefix)
-        temp_table_ref = exp.to_table(temp_table_name)
+        # Reference temp table by name only (no schema prefix for temporary tables)
+        temp_table_name = exp.to_table(temp_table.name)
 
         return [
             SourceQuery(
                 query_factory=lambda: self._select_columns(target_columns_to_types).from_(
-                    temp_table_ref
+                    temp_table_name
                 ),
-                cleanup_func=lambda: self.drop_table(temp_table_ref),
+                cleanup_func=lambda: self.drop_table(temp_table_name),
             )
         ]
 
