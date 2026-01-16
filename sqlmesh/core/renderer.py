@@ -419,7 +419,14 @@ class BaseExpressionRenderer:
 
     @contextmanager
     def _normalize_and_quote(self, query: E) -> t.Iterator[E]:
-        if self._normalize_identifiers:
+        # Snowflake doesn't accept quoted identifiers in ALTER SESSION SET statements
+        # e.g., ALTER SESSION SET "TIMEZONE" = 'UTC' is invalid
+        # SQLGlot parses "ALTER SESSION SET" as exp.Alter, not exp.Set
+        # We need to skip both normalization and quoting for these statements
+        # because quote_identifiers() modifies the AST directly and quotes persist
+        if self._dialect == "snowflake" and isinstance(query, (exp.Set, exp.Alter)):
+            yield query
+        elif self._normalize_identifiers:
             with d.normalize_and_quote(
                 query, self._dialect, self._default_catalog, quote=self._quote_identifiers
             ) as query:
