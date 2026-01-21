@@ -106,7 +106,7 @@ def test_optimized_query_cache_macro_def_change(tmp_path: Path, mocker: MockerFi
     assert cache.with_optimized_query(model)
     assert (
         model.render_query_or_raise().sql()
-        == 'SELECT "_q_0"."a" AS "a" FROM (SELECT 1 AS "a") AS "_q_0" WHERE "_q_0"."a" = 1'
+        == 'SELECT "_0"."a" AS "a" FROM (SELECT 1 AS "a") AS "_0" WHERE "_0"."a" = 1'
     )
 
     # Change the filter_ definition
@@ -129,5 +129,5 @@ def test_optimized_query_cache_macro_def_change(tmp_path: Path, mocker: MockerFi
     assert cache.with_optimized_query(new_model)
     assert (
         new_model.render_query_or_raise().sql()
-        == 'SELECT "_q_0"."a" AS "a" FROM (SELECT 1 AS "a") AS "_q_0" WHERE "_q_0"."a" = 2'
+        == 'SELECT "_0"."a" AS "a" FROM (SELECT 1 AS "a") AS "_0" WHERE "_0"."a" = 2'
     )

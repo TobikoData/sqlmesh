@@ -57,7 +57,8 @@ class Rewriter:
         return sources
 
     def _expand(self, select: exp.Select) -> None:
-        base = select.args["from"].this.find(exp.Table)
+        from_clause = t.cast(exp.From, select.args.get("from") or select.args.get("from_"))
+        base = from_clause.this.find(exp.Table)
         base_alias = base.alias_or_name
         base_name = exp.table_name(base)
 

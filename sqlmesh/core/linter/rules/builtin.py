@@ -318,4 +318,4 @@ class NoAmbiguousProjections(Rule):
         return None
 
 
-BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
+BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, exclude={Rule}))
