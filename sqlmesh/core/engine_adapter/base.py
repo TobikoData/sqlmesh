@@ -2861,7 +2861,7 @@ class EngineAdapter:
             return query
 
         query = t.cast(exp.Query, query.copy())
-        with_ = query.args.pop("with_", None) or query.args.pop("with", None)
+        with_ = query.args.pop("with_", None)
 
         select_exprs: t.List[exp.Expression] = [
             exp.column(c, quoted=True) for c in target_columns_to_types
@@ -2877,8 +2877,7 @@ class EngineAdapter:
             query = query.where(where, copy=False)
 
         if with_:
-            with_key = "with_" if "with_" in query.arg_types else "with"
-            query.set(with_key, with_)
+            query.set("with_", with_)
 
         return query
 

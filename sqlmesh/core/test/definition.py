@@ -711,7 +711,7 @@ class SqlModelTest(ModelTest):
             query = self._render_model_query()
             sql = query.sql(self._test_adapter_dialect, pretty=self.engine_adapter._pretty_sql)
 
-        with_clause = query.args.get("with_") or query.args.get("with")
+        with_clause = query.args.get("with_")
 
         if with_clause:
             self.test_ctes(
@@ -905,7 +905,7 @@ def generate_test(
     if isinstance(model, SqlModel):
         assert isinstance(test, SqlModelTest)
         model_query = test._render_model_query()
-        with_clause = model_query.args.get("with_") or model_query.args.get("with")
+        with_clause = model_query.args.get("with_")
 
         if with_clause and include_ctes:
             ctes = {}
