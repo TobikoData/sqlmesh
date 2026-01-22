@@ -18,7 +18,7 @@ dependencies = [
     "ipywidgets",
     "jinja2",
     "packaging",
-    "pandas",
+    "pandas<3.0.0",
     "pydantic>=2.0.0",
     "python-dotenv",
     "requests",
