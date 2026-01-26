@@ -911,6 +911,7 @@ These pages describe the connection configuration options for each execution eng
 * [Athena](../integrations/engines/athena.md)
 * [BigQuery](../integrations/engines/bigquery.md)
 * [Databricks](../integrations/engines/databricks.md)
+* [Doris](../integrations/engines/doris.md)
 * [DuckDB](../integrations/engines/duckdb.md)
 * [Fabric](../integrations/engines/fabric.md)
 * [MotherDuck](../integrations/engines/motherduck.md)
@@ -953,6 +954,7 @@ Unsupported state engines, even for development:
 * [ClickHouse](../integrations/engines/clickhouse.md)
 * [Spark](../integrations/engines/spark.md)
 * [Trino](../integrations/engines/trino.md)
+* [Doris](../integrations/engines/doris.md)
 
 This example gateway configuration uses Snowflake for the data warehouse connection and Postgres for the state backend connection:
 
