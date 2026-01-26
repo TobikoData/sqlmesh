@@ -622,6 +622,12 @@ class SnowflakeEngineAdapter(
         return expression
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
+        # Snowflake doesn't accept quoted identifiers in ALTER SESSION SET statements
+        # e.g., ALTER SESSION SET "TIMEZONE" = 'UTC' is invalid
+        # We need to disable quoting for these statements
+        if isinstance(expression, (exp.Set, exp.Alter)):
+            quote = False
+
         return super()._to_sql(
             expression=self._normalize_catalog(expression), quote=quote, **kwargs
         )
