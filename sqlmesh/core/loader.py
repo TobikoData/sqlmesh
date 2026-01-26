@@ -840,7 +840,7 @@ class SqlMeshLoader(Loader):
             if os.path.getsize(path):
                 self._track_file(path)
                 module = import_python_file(path, self.config_path)
-                module_rules = subclasses(module.__name__, Rule, (Rule,))
+                module_rules = subclasses(module.__name__, Rule, exclude={Rule})
                 for user_rule in module_rules:
                     user_rules[user_rule.name] = user_rule
 

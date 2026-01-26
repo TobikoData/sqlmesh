@@ -24,12 +24,13 @@ TEST_DIR="$TMP_DIR/$EXAMPLE_NAME"
 
 echo "Running migration test for '$EXAMPLE_NAME' in '$TEST_DIR' for example project '$EXAMPLE_DIR' using options '$SQLMESH_OPTS'"
 
+# Copy the example project from the *current* checkout so it's stable across old/new SQLMesh versions
+cp -r "$EXAMPLE_DIR" "$TEST_DIR"
+
 git checkout $LAST_TAG
 
 # Install dependencies from the previous release.
 make install-dev
-
-cp -r $EXAMPLE_DIR $TEST_DIR
 
 # this is only needed temporarily until the released tag for $LAST_TAG includes this config
 if [ "$EXAMPLE_NAME" == "sushi_dbt" ]; then
