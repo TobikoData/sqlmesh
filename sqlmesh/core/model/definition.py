@@ -753,7 +753,7 @@ class _Model(ModelMeta, frozen=True):
         query = self.render_query_or_raise(**render_kwarg).limit(0)
 
         for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
-            if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
+            if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from_"):
                 select_or_set_op.where(exp.false(), copy=False)
 
         if self.managed_columns:
