@@ -460,6 +460,48 @@ def test_serialize_env_with_enum_import_appearing_in_two_functions() -> None:
     assert serialized_env == expected_env
 
 
+class ReferencedClass:
+    def __init__(self, value: int):
+        self.value = value
+
+    def get_value(self) -> int:
+        return self.value
+
+
+class ClassThatReferencesAnother:
+    def __init__(self, x: int):
+        self.helper = ReferencedClass(x * 2)
+
+    def compute(self) -> int:
+        return self.helper.get_value() + 10
+
+
+def function_using_class_with_reference(y: int) -> int:
+    obj = ClassThatReferencesAnother(y)
+    return obj.compute()
+
+
+def test_serialize_env_with_class_referencing_another_class() -> None:
+    # firstly we can confirm that func_globals picks up the reference
+    init_globals = func_globals(ClassThatReferencesAnother.__init__)
+    assert "ReferencedClass" in init_globals
+
+    path = Path("tests/utils")
+    env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
+
+    # build ajd serialize environment for the function that uses the class
+    build_env(function_using_class_with_reference, env=env, name="test_func", path=path)
+    serialized_env = serialize_env(env, path=path)
+
+    # both classes should be in the serialized environment
+    assert "ClassThatReferencesAnother" in serialized_env
+    assert "ReferencedClass" in serialized_env
+
+    prepared_env = prepare_env(serialized_env)
+    result = eval("test_func(33)", prepared_env)
+    assert result == 76
+
+
 def test_dict_sort_basic_types():
     """Test dict_sort with basic Python types."""
     # Test basic types that should use standard repr
