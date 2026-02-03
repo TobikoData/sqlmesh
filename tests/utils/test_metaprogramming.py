@@ -83,7 +83,18 @@ class DataClass:
     x: int
 
 
+class ReferencedClass:
+    def __init__(self, value: int):
+        self.value = value
+
+    def get_value(self) -> int:
+        return self.value
+
+
 class MyClass:
+    def __init__(self, x: int):
+        self.helper = ReferencedClass(x * 2)
+
     @staticmethod
     def foo():
         return KLASS_X
@@ -95,6 +106,13 @@ class MyClass:
     def baz(self):
         return KLASS_Z
 
+    def use_referenced(self, value: int) -> int:
+        ref = ReferencedClass(value)
+        return ref.get_value()
+
+    def compute_with_reference(self) -> int:
+        return self.helper.get_value() + 10
+
 
 def other_func(a: int) -> int:
     import sqlglot
@@ -103,7 +121,8 @@ def other_func(a: int) -> int:
     pd.DataFrame([{"x": 1}])
     to_table("y")
     my_lambda()  # type: ignore
-    return X + a + W
+    obj = MyClass(a)
+    return X + a + W + obj.compute_with_reference()
 
 
 @contextmanager
@@ -131,7 +150,7 @@ def function_with_custom_decorator():
 def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
-    MyClass()
+    MyClass(47)
     DataClass(x=y)
     normalize_model_name("test" + SQLGLOT_META)
     fetch_data()
@@ -177,6 +196,7 @@ def test_func_globals() -> None:
     assert func_globals(other_func) == {
         "X": 1,
         "W": 0,
+        "MyClass": MyClass,
         "my_lambda": my_lambda,
         "pd": pd,
         "to_table": to_table,
@@ -202,7 +222,7 @@ def test_normalize_source() -> None:
         == """def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
     ):
     sqlglot.parse_one('1')
-    MyClass()
+    MyClass(47)
     DataClass(x=y)
     normalize_model_name('test' + SQLGLOT_META)
     fetch_data()
@@ -223,7 +243,8 @@ def test_normalize_source() -> None:
     pd.DataFrame([{'x': 1}])
     to_table('y')
     my_lambda()
-    return X + a + W"""
+    obj = MyClass(a)
+    return X + a + W + obj.compute_with_reference()"""
     )
 
 
@@ -252,7 +273,7 @@ def test_serialize_env() -> None:
             payload="""def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
     ):
     sqlglot.parse_one('1')
-    MyClass()
+    MyClass(47)
     DataClass(x=y)
     normalize_model_name('test' + SQLGLOT_META)
     fetch_data()
@@ -295,6 +316,9 @@ class DataClass:
             path="test_metaprogramming.py",
             payload="""class MyClass:
 
+    def __init__(self, x: int):
+        self.helper = ReferencedClass(x * 2)
+
     @staticmethod
     def foo():
         return KLASS_X
@@ -304,7 +328,26 @@ class DataClass:
         return KLASS_Y
 
     def baz(self):
-        return KLASS_Z""",
+        return KLASS_Z
+
+    def use_referenced(self, value: int):
+        ref = ReferencedClass(value)
+        return ref.get_value()
+
+    def compute_with_reference(self):
+        return self.helper.get_value() + 10""",
+        ),
+        "ReferencedClass": Executable(
+            kind=ExecutableKind.DEFINITION,
+            name="ReferencedClass",
+            path="test_metaprogramming.py",
+            payload="""class ReferencedClass:
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def get_value(self):
+        return self.value""",
         ),
         "dataclass": Executable(
             payload="from dataclasses import dataclass", kind=ExecutableKind.IMPORT
@@ -341,7 +384,8 @@ def sample_context_manager():
     pd.DataFrame([{'x': 1}])
     to_table('y')
     my_lambda()
-    return X + a + W""",
+    obj = MyClass(a)
+    return X + a + W + obj.compute_with_reference()""",
         ),
         "sample_context_manager": Executable(
             payload="""@contextmanager
@@ -424,6 +468,21 @@ def function_with_custom_decorator():
     assert all(is_metadata for (_, is_metadata) in env.values())
     assert serialized_env == expected_env
 
+    # Check that class references inside init are captured
+    init_globals = func_globals(MyClass.__init__)
+    assert "ReferencedClass" in init_globals
+
+    env = {}
+    build_env(other_func, env=env, name="other_func_test", path=path)
+    serialized_env = serialize_env(env, path=path)
+
+    assert "MyClass" in serialized_env
+    assert "ReferencedClass" in serialized_env
+
+    prepared_env = prepare_env(serialized_env)
+    result = eval("other_func_test(2)", prepared_env)
+    assert result == 17
+
 
 def test_serialize_env_with_enum_import_appearing_in_two_functions() -> None:
     path = Path("tests/utils")
@@ -458,48 +517,6 @@ def test_serialize_env_with_enum_import_appearing_in_two_functions() -> None:
     }
 
     assert serialized_env == expected_env
-
-
-class ReferencedClass:
-    def __init__(self, value: int):
-        self.value = value
-
-    def get_value(self) -> int:
-        return self.value
-
-
-class ClassThatReferencesAnother:
-    def __init__(self, x: int):
-        self.helper = ReferencedClass(x * 2)
-
-    def compute(self) -> int:
-        return self.helper.get_value() + 10
-
-
-def function_using_class_with_reference(y: int) -> int:
-    obj = ClassThatReferencesAnother(y)
-    return obj.compute()
-
-
-def test_serialize_env_with_class_referencing_another_class() -> None:
-    # firstly we can confirm that func_globals picks up the reference
-    init_globals = func_globals(ClassThatReferencesAnother.__init__)
-    assert "ReferencedClass" in init_globals
-
-    path = Path("tests/utils")
-    env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
-
-    # build ajd serialize environment for the function that uses the class
-    build_env(function_using_class_with_reference, env=env, name="test_func", path=path)
-    serialized_env = serialize_env(env, path=path)
-
-    # both classes should be in the serialized environment
-    assert "ClassThatReferencesAnother" in serialized_env
-    assert "ReferencedClass" in serialized_env
-
-    prepared_env = prepare_env(serialized_env)
-    result = eval("test_func(33)", prepared_env)
-    assert result == 76
 
 
 def test_dict_sort_basic_types():
