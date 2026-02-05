@@ -140,7 +140,7 @@ class ExpiredBatchRange(PydanticModel):
     def _expanded_tuple_comparison(
         cls,
         columns: t.List[exp.Column],
-        values: t.List[exp.Literal],
+        values: t.List[t.Union[exp.Literal, exp.Neg]],
         operator: t.Type[exp.Expression],
     ) -> exp.Expression:
         """Generate expanded tuple comparison that works across all SQL engines.

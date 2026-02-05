@@ -1889,6 +1889,7 @@ class TrinoConnectionConfig(ConnectionConfig):
     client_certificate: t.Optional[str] = None
     client_private_key: t.Optional[str] = None
     cert: t.Optional[str] = None
+    source: str = "sqlmesh"
 
     # SQLMesh options
     schema_location_mapping: t.Optional[dict[re.Pattern, str]] = None
@@ -1985,6 +1986,7 @@ class TrinoConnectionConfig(ConnectionConfig):
             "port",
             "catalog",
             "roles",
+            "source",
             "http_scheme",
             "http_headers",
             "session_properties",
@@ -2042,7 +2044,7 @@ class TrinoConnectionConfig(ConnectionConfig):
             "user": self.impersonation_user or self.user,
             "max_attempts": self.retries,
             "verify": self.cert if self.cert is not None else self.verify,
-            "source": "sqlmesh",
+            "source": self.source,
         }
 
     @property
@@ -2407,7 +2409,7 @@ CONNECTION_CONFIG_TO_TYPE = {
     for tpe in subclasses(
         __name__,
         ConnectionConfig,
-        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
     )
 }
 
@@ -2416,7 +2418,7 @@ DIALECT_TO_TYPE = {
     for tpe in subclasses(
         __name__,
         ConnectionConfig,
-        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
     )
 }
 
@@ -2428,7 +2430,7 @@ INIT_DISPLAY_INFO_TO_TYPE = {
     for tpe in subclasses(
         __name__,
         ConnectionConfig,
-        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
     )
 }
 

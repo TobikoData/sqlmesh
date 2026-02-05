@@ -464,10 +464,10 @@ def test_model_qualification(tmp_path: Path):
         ctx.upsert_model(load_sql_based_model(expressions))
         ctx.plan_builder("dev")
 
-        assert (
-            """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
-            in mock_logger.call_args[0][0]
-        )
+        warning_msg = mock_logger.call_args[0][0]
+        assert "ambiguousorinvalidcolumn:" in warning_msg
+        assert "could not be resolved" in warning_msg
+        assert "db.table" in warning_msg
 
 
 @use_terminal_console
@@ -3650,7 +3650,7 @@ def test_model_ctas_query():
 
     assert (
         load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
-        == 'WITH RECURSIVE "a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+        == 'WITH RECURSIVE "a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_0" WHERE FALSE) AS "_1" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
     expressions = d.parse(
@@ -3671,7 +3671,7 @@ def test_model_ctas_query():
 
     assert (
         load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
-        == 'WITH RECURSIVE "a" AS (WITH "nested_a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE) SELECT * FROM "nested_a" AS "nested_a" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+        == 'WITH RECURSIVE "a" AS (WITH "nested_a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_0" WHERE FALSE) AS "_1" WHERE FALSE) SELECT * FROM "nested_a" AS "nested_a" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
 
@@ -4995,7 +4995,7 @@ def test_model_session_properties(sushi_context):
         )
     )
     assert model.session_properties == {
-        "query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]")
+        "query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]", dialect="bigquery")
     }
 
     model = load_sql_based_model(
