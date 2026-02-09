@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
-from sqlglot.dialects import DuckDB, Snowflake
+from sqlglot.dialects import DuckDB, Snowflake, TSQL
 import sqlglot.dialects.athena as athena
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -1101,6 +1101,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_value)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_types)
+    _override(TSQL.Parser, Parser._parse_if)
     _override(Parser, _parse_if)
     _override(Parser, _parse_id_var)
     _override(Parser, _warn_unsupported)
