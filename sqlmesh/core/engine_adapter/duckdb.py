@@ -96,6 +96,27 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
             )
         ]
 
+    def drop_table(
+        self,
+        table_name: TableName,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        DuckDB will raise an error if you try to DROP TABLE on a view.
+        We check the object type first to ensure we use the correct command.
+        """
+        table = exp.to_table(table_name)
+        
+        # Ensure we have a schema name, default to 'main' for DuckDB
+        schema = table.db or "main"
+        objects = self._get_data_objects(schema, object_names={table.name})
+        obj = objects[0] if objects else None
+
+        if obj and obj.type.is_view:
+            return self.drop_view(table_name, **kwargs)
+
+        return super().drop_table(table_name, **kwargs)
+
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:
