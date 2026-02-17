@@ -81,6 +81,7 @@ default_gateway: local_db
 
 * [BigQuery](../integrations/engines/bigquery.md)
 * [Databricks](../integrations/engines/databricks.md)
+* [Doris](../integrations/engines/doris.md)
 * [DuckDB](../integrations/engines/duckdb.md)
 * [MotherDuck](../integrations/engines/motherduck.md)
 * [MySQL](../integrations/engines/mysql.md)
