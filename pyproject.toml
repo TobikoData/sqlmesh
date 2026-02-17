@@ -56,7 +56,7 @@ dev = [
     "agate",
     "beautifulsoup4",
     "clickhouse-connect",
-    "cryptography<46.0.0",
+    "cryptography",
     "databricks-sql-connector",
     "dbt-bigquery",
     "dbt-core",
@@ -120,7 +120,7 @@ postgres = ["psycopg2"]
 redshift = ["redshift_connector"]
 slack = ["slack_sdk"]
 snowflake = [
-    "cryptography<46.0.0",
+    "cryptography",
     "snowflake-connector-python[pandas,secure-local-storage]",
     "snowflake-snowpark-python",
 ]
