@@ -191,14 +191,32 @@ class Selector(abc.ABC):
                 models_by_tags.setdefault(tag, set())
                 models_by_tags[tag].add(model.fqn)
 
+        def _normalize_for_match(name: str) -> str:
+            """Strip surrounding identifier quotes on each component for glob-style matching."""
+            parts = name.split(".")
+
+            def _unquote(part: str) -> str:
+                if len(part) >= 2 and part[0] == part[-1] and part[0] in {"'", '"', "`", "["}:
+                    # For [] quoting, ensure trailing ]
+                    if part[0] == "[" and part[-1] != "]":
+                        return part
+                    return part[1:-1]
+                return part
+
+            return ".".join(_unquote(p) for p in parts)
+
         def evaluate(node: exp.Expression) -> t.Set[str]:
             if isinstance(node, exp.Var):
                 pattern = node.this
                 if "*" in pattern:
+                    normalized_pattern = _normalize_for_match(pattern)
                     return {
                         fqn
                         for fqn, model in all_models.items()
-                        if fnmatch.fnmatchcase(self._model_name(model), node.this)
+                        if fnmatch.fnmatchcase(
+                            _normalize_for_match(self._model_name(model)),
+                            normalized_pattern,
+                        )
                     }
                 return self._pattern_to_model_fqns(pattern, all_models)
             if isinstance(node, exp.And):
