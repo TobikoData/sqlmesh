@@ -314,17 +314,17 @@ workflows:
             parameters:
               engine:
                 - snowflake
-                - databricks
-                - redshift
-                - bigquery
-                - clickhouse-cloud
-                - athena
-                - fabric
+                # - databricks
+                # - redshift
+                # - bigquery
+                # - clickhouse-cloud
+                # - athena
+                # - fabric
                 - gcp-postgres
-          filters:
-            branches:
-              only:
-                - main
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - ui_style
       - ui_test
       - vscode_test
