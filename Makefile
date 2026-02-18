@@ -59,6 +59,10 @@ install-dev-dbt-%:
 		echo "Applying overrides for dbt 1.5.0"; \
 		$(PIP) install 'dbt-databricks==1.5.6' 'numpy<2' --reinstall; \
 	fi; \
+	if [ "$$version" = "1.3.0" ]; then \
+		echo "Applying overrides for dbt $$version - upgrading google-cloud-bigquery"; \
+		$(PIP) install 'google-cloud-bigquery>=3.0.0' --upgrade; \
+	fi; \
 	mv pyproject.toml.backup pyproject.toml; \
 	echo "Restored original pyproject.toml"
 
