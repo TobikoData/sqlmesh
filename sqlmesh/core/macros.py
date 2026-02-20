@@ -271,7 +271,8 @@ class MacroEvaluator:
                     self.env[executable.alias] = self.env[executable.name]
                 # Register as macro if it's a macro definition
                 func_name = executable.name or name
-                self.macros[normalize_macro_name(name)] = self.env[func_name]
+                self.macros[normalize_macro_name(
+                    func_name)] = self.env[func_name]
             elif executable.is_import:
                 self._unloaded_executables[name] = executable
 
@@ -298,10 +299,13 @@ class MacroEvaluator:
                 self.env[executable.alias] = self.env[executable.name]
 
             # If it's a macro import, register it
+            # For imports, the actual imported name might differ from the key
+            imported_name = executable.name or name
             if executable.is_import and getattr(
-                self.env.get(name), c.SQLMESH_MACRO, None
+                self.env.get(imported_name), c.SQLMESH_MACRO, None
             ):
-                self.macros[normalize_macro_name(name)] = self.env[name]
+                self.macros[normalize_macro_name(
+                    imported_name)] = self.env[imported_name]
 
             del self._unloaded_executables[name]
             return True

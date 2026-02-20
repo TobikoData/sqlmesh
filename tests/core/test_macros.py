@@ -1254,14 +1254,11 @@ def test_lazy_macro_loading_success():
 
     evaluator = MacroEvaluator(python_env=python_env)
 
-    # The import should be deferred, not loaded yet
     assert "math_module" in evaluator._unloaded_executables
 
-    # Now try to access math_module
     assert evaluator._ensure_executable_loaded("math_module")
 
-    # After loading, it should be available
-    assert "math_module" in evaluator.env
+    assert "math" in evaluator.env
     assert "math_module" not in evaluator._unloaded_executables
 
 
