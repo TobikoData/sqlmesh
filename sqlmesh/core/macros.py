@@ -1114,9 +1114,8 @@ def safe_add(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
     return (
         exp.Case()
         .when(exp.and_(*(field.is_(exp.null()) for field in fields)), exp.null())
-        # type: ignore
         .else_(reduce(lambda a, b: a + b, [exp.func("COALESCE", field, 0) for field in fields]))
-    )
+    )  # type: ignore
 
 
 @macro()
