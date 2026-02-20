@@ -221,11 +221,21 @@ class MacroEvaluator:
         self._load_python_env()
 
     def _load_python_env(self) -> None:
-        """Load python environment, defer imports for lazy loading.
+        """Load python environment with lazy import loading.
 
-        This method loads values and definitions, but defers imports
-        until needed. Allows projects to share state database
-        without requiring all external dependencies.
+        This method implements lazy loading to allow projects to share
+        state databases without requiring all external dependencies:
+
+        1. VALUES: Loaded immediately (no dependencies)
+        2. DEFINITIONS: Loaded immediately (backward compatibility)
+           - Won't fail at definition time even if imports missing
+           - Failures happen at call time
+        3. IMPORTS: Deferred until first macro call
+           - Allows projects to share state without all dependencies
+           - Loaded automatically before any macro execution
+
+        When a macro is called, all deferred imports are loaded first,
+        ensuring the macro has access to its dependencies.
         """
         # Sort to process imports first, then values, then definitions
         sorted_items = sorted(
@@ -254,21 +264,15 @@ class MacroEvaluator:
                     }
                 self.locals[name] = value
             elif executable.is_definition:
-                # Try to load definitions, but they may depend on imports
-                # If they fail, defer them for lazy loading
-                try:
-                    exec(executable.payload, self.env)
-                    if executable.alias and executable.name:
-                        self.env[executable.alias] = self.env[executable.name]
-                    # Register as macro if it's a macro definition
-                    func_name = executable.name or name
-                    self.macros[normalize_macro_name(
-                        name)] = self.env[func_name]
-                except Exception:
-                    # Defer loading if it fails (likely due to missing import)
-                    self._unloaded_executables[name] = executable
+                # Load definitions immediately for backward compatibility
+                # They won't fail at definition time even if imports are missing
+                exec(executable.payload, self.env)
+                if executable.alias and executable.name:
+                    self.env[executable.alias] = self.env[executable.name]
+                # Register as macro if it's a macro definition
+                func_name = executable.name or name
+                self.macros[normalize_macro_name(name)] = self.env[func_name]
             elif executable.is_import:
-                # Defer all imports for lazy loading
                 self._unloaded_executables[name] = executable
 
     def _ensure_executable_loaded(self, name: str) -> bool:
@@ -280,11 +284,9 @@ class MacroEvaluator:
         Returns:
             True if the executable was loaded successfully, False otherwise
         """
-        # Check if already loaded
         if name in self.env or name not in self._unloaded_executables:
             return name in self.env
 
-        # Check if this import previously failed
         if name in self._failed_imports:
             return False
 
@@ -300,9 +302,6 @@ class MacroEvaluator:
                 self.env.get(name), c.SQLMESH_MACRO, None
             ):
                 self.macros[normalize_macro_name(name)] = self.env[name]
-            elif executable.is_definition:
-                func_name = executable.name or name
-                self.macros[normalize_macro_name(name)] = self.env[func_name]
 
             del self._unloaded_executables[name]
             return True
@@ -336,6 +335,13 @@ class MacroEvaluator:
                     )
 
             raise MacroEvalError(f"Macro '{name}' does not exist.")
+
+        # Before calling the macro, load all deferred imports
+        # This ensures macros can reference imports even if they were deferred
+        for import_name in list(self._unloaded_executables.keys()):
+            import_exec = self._unloaded_executables.get(import_name)
+            if import_exec and import_exec.is_import:
+                self._ensure_executable_loaded(import_name)
 
         try:
             return call_macro(

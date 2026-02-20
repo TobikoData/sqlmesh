@@ -1255,10 +1255,9 @@ def test_lazy_macro_loading_success():
     evaluator = MacroEvaluator(python_env=python_env)
 
     # The import should be deferred, not loaded yet
-    assert "math" in evaluator._unloaded_executables
+    assert "math_module" in evaluator._unloaded_executables
 
-    # Now try to access math in a macro
-    # First we need to manually trigger loading by trying to use it
+    # Now try to access math_module
     assert evaluator._ensure_executable_loaded("math_module")
 
     # After loading, it should be available
@@ -1267,7 +1266,7 @@ def test_lazy_macro_loading_success():
 
 
 def test_lazy_macro_loading_definition_with_dependency():
-    """Test that macro definitions depending on imports are deferred correctly."""
+    """Test that macro definitions work even when their imports are deferred."""
     from sqlmesh.utils.metaprogramming import ExecutableKind
 
     python_env = {
@@ -1285,12 +1284,19 @@ def my_macro(evaluator):
         ),
     }
 
-    # Should initialize without error (macro won't load but that's OK)
+    # Should initialize without error (import is deferred)
     evaluator = MacroEvaluator(python_env=python_env)
 
-    # The macro definition that depends on missing import should be deferred
-    assert "macro_using_bad_import" in evaluator._unloaded_executables or \
-           "my_macro" not in evaluator.macros
+    # The macro definition should be loaded immediately
+    assert normalize_macro_name("my_macro") in evaluator.macros
+
+    # The bad import should be deferred
+    assert "bad_import" in evaluator._unloaded_executables
+
+    # Calling the macro should fail because bad_import can't be loaded
+    # When the macro is called, we try to load all imports first
+    with pytest.raises(MacroEvalError):  # type: ignore
+        evaluator.send("my_macro")
 
 
 def test_mixed_python_env_with_partial_loading():
