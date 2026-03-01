@@ -561,6 +561,20 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     DISPLAY_NAME: t.ClassVar[t.Literal["DuckDB"]] = "DuckDB"
     DISPLAY_ORDER: t.ClassVar[t.Literal[1]] = 1
 
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        config: t.Dict[str, t.Any] = {}
+        if self.secrets:
+            if isinstance(self.secrets, list):
+                secrets_items = [(secret_dict, "") for secret_dict in self.secrets]
+            else:
+                secrets_items = [
+                    (secret_dict, secret_name)
+                    for secret_name, secret_dict in self.secrets.items()
+                ]
+            config["s3_secrets_config"] = secrets_items
+        return config
+
 
 class SnowflakeConnectionConfig(ConnectionConfig):
     """Configuration for the Snowflake connection.
