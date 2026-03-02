@@ -1556,6 +1556,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         run = run or False
         diff_rendered = diff_rendered or False
         skip_linter = skip_linter or False
+        min_intervals = min_intervals or 0
 
         environment = environment or self.config.default_target_environment
         environment = Environment.sanitize_name(environment)
