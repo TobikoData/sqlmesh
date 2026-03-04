@@ -1619,10 +1619,6 @@ def test_audit_only_no_nested_concurrency(mocker: MockerFixture, make_snapshot):
     This prevents nested thread pool multiplication: max_workers * concurrent_tasks threads hitting
     the DB at the same time.
     """
-    import sqlmesh.core.snapshot.evaluator as evaluator_module
-
-    spy = mocker.spy(evaluator_module, "concurrent_apply_to_values")
-
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1 as id")))
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 2 as id")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -1634,13 +1630,9 @@ def test_audit_only_no_nested_concurrency(mocker: MockerFixture, make_snapshot):
     mock_evaluator.concurrent_context.return_value.__enter__ = mocker.Mock(return_value=None)
     mock_evaluator.concurrent_context.return_value.__exit__ = mocker.Mock(return_value=False)
 
-    # Use the real SnapshotEvaluator to test the audit_concurrent_tasks parameter flows through
-    real_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), concurrent_tasks=4)
-    real_evaluator.audit = mocker.MagicMock(return_value=[])  # type: ignore
-
     scheduler = Scheduler(
         snapshots=[snapshot_a, snapshot_b],
-        snapshot_evaluator=real_evaluator,
+        snapshot_evaluator=mock_evaluator,
         state_sync=mocker.MagicMock(),
         default_catalog=None,
         max_workers=2,
@@ -1661,10 +1653,10 @@ def test_audit_only_no_nested_concurrency(mocker: MockerFixture, make_snapshot):
 
     assert errors == []
     assert skipped == []
-    assert real_evaluator.audit.call_count == 2
+    assert mock_evaluator.audit.call_count == 2
 
     # Verify that audit_concurrent_tasks=1 was passed to each audit call to prevent nested pools
-    for call in real_evaluator.audit.call_args_list:
+    for call in mock_evaluator.audit.call_args_list:
         assert call.kwargs.get("audit_concurrent_tasks") == 1, (
             "audit_concurrent_tasks=1 must be passed to prevent nested thread pool multiplication"
         )

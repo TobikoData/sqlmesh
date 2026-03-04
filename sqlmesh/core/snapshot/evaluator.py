@@ -633,7 +633,9 @@ class SnapshotEvaluator:
                 **kwargs,
             )
 
-        tasks_num = audit_concurrent_tasks if audit_concurrent_tasks is not None else self.concurrent_tasks
+        tasks_num = (
+            audit_concurrent_tasks if audit_concurrent_tasks is not None else self.concurrent_tasks
+        )
         results = concurrent_apply_to_values(
             prepared_audits,
             _run_audit,

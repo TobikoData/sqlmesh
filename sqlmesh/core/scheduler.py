@@ -38,7 +38,11 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import CompletionStatus
-from sqlmesh.utils.concurrency import concurrent_apply_to_dag, concurrent_apply_to_values, NodeExecutionFailedError
+from sqlmesh.utils.concurrency import (
+    concurrent_apply_to_dag,
+    concurrent_apply_to_values,
+    NodeExecutionFailedError,
+)
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
@@ -527,7 +531,9 @@ class Scheduler:
                     }
 
                     dag = self._dag(
-                        batched_intervals, snapshot_dag=snapshot_dag, snapshots_to_create=snapshots_to_create
+                        batched_intervals,
+                        snapshot_dag=snapshot_dag,
+                        snapshots_to_create=snapshots_to_create,
                     )
 
                     def run_node(node: SchedulingUnit) -> None:
@@ -545,7 +551,8 @@ class Scheduler:
 
                             # If batch_index > 0, then the target table must exist since the first batch would have created it
                             target_table_exists = (
-                                snapshot.snapshot_id not in snapshots_to_create or node.batch_index > 0
+                                snapshot.snapshot_id not in snapshots_to_create
+                                or node.batch_index > 0
                             )
 
                             def _do_evaluate() -> t.List[AuditResult]:
@@ -972,9 +979,7 @@ class Scheduler:
                 num_audits - num_audits_failed,
                 num_audits_failed,
                 execution_stats=execution_stats,
-                auto_restatement_triggers=auto_restatement_triggers.get(
-                    snapshot.snapshot_id
-                ),
+                auto_restatement_triggers=auto_restatement_triggers.get(snapshot.snapshot_id),
             )
 
     def _run_audits_concurrently(
