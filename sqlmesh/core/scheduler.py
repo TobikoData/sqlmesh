@@ -1014,14 +1014,14 @@ class Scheduler:
 
         errors: t.List[NodeExecutionFailedError[SchedulingUnit]] = []
         errors_lock = threading.Lock()
+        cancelled = threading.Event()
 
         def run_audit_task(node: EvaluateNode) -> None:
-            # The circuit breaker is checked at task start. Tasks already submitted to the
-            # thread pool will run to completion — unlike the DAG executor's level-by-level
-            # cancellation, this is acceptable for audit-only runs because audits are
-            # read-only and have no side effects.
+            if cancelled.is_set():
+                return
             if circuit_breaker and circuit_breaker():
-                raise CircuitBreakerError()
+                cancelled.set()
+                return
 
             snapshot = self.snapshots_by_name[node.snapshot_name]
             node_start, node_end = node.interval
@@ -1035,6 +1035,7 @@ class Scheduler:
                     start=node_start,
                     end=node_end,
                     execution_time=execution_time,
+                    audit_concurrent_tasks=1,
                 )
 
             self._run_node_with_progress(
@@ -1048,6 +1049,8 @@ class Scheduler:
         def run_audit_task_collecting_errors(node: EvaluateNode) -> None:
             try:
                 run_audit_task(node)
+            except CircuitBreakerError:
+                cancelled.set()
             except Exception as ex:
                 error: NodeExecutionFailedError[SchedulingUnit] = NodeExecutionFailedError(node)
                 error.__cause__ = ex
@@ -1055,6 +1058,9 @@ class Scheduler:
                     errors.append(error)
 
         concurrent_apply_to_values(audit_tasks, run_audit_task_collecting_errors, self.max_workers)
+
+        if cancelled.is_set():
+            raise CircuitBreakerError()
 
         return errors, []
 

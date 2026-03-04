@@ -555,6 +555,7 @@ class SnapshotEvaluator:
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         wap_id: t.Optional[str] = None,
+        audit_concurrent_tasks: t.Optional[int] = None,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Execute a snapshot's node's audit queries.
@@ -632,10 +633,11 @@ class SnapshotEvaluator:
                 **kwargs,
             )
 
+        tasks_num = audit_concurrent_tasks if audit_concurrent_tasks is not None else self.concurrent_tasks
         results = concurrent_apply_to_values(
             prepared_audits,
             _run_audit,
-            self.concurrent_tasks,
+            tasks_num,
         )
 
         if wap_id is not None:
