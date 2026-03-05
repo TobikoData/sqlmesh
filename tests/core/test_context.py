@@ -1208,13 +1208,14 @@ def test_plan_seed_model_excluded_from_default_end(copy_to_temp_path: t.Callable
 
         # the plan start date 2025-01-01 is after the seeds end date but shouldnt cause the plan to fail
         plan = context.plan(
-            "dev",
-            start="2025-01-01",
-            no_prompts=True,
-            select_models=["*waiter_summary"]
+            "dev", start="2025-01-01", no_prompts=True, select_models=["*waiter_summary"]
         )
 
         # the end should fall back to execution_time rather than seeds end
+        assert plan.models_to_backfill == {
+            '"duckdb"."sushi"."waiter_names"',
+            '"duckdb"."sushi"."waiter_summary"',
+        }
         assert plan.provided_end is None
         assert plan.provided_start == "2025-01-01"
         assert to_timestamp(plan.end) == to_timestamp("2026-03-01")
