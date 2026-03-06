@@ -1158,6 +1158,72 @@ def test_plan_start_ahead_of_end(copy_to_temp_path):
 
 
 @pytest.mark.slow
+def test_plan_seed_model_excluded_from_default_end(copy_to_temp_path: t.Callable):
+    path = copy_to_temp_path("examples/sushi")
+    with time_machine.travel("2024-06-01 00:00:00 UTC"):
+        context = Context(paths=path, gateway="duckdb_persistent")
+        context.plan("prod", no_prompts=True, auto_apply=True)
+        max_ends = context.state_sync.max_interval_end_per_model("prod")
+        seed_fqns = [k for k in max_ends if "waiter_names" in k]
+        assert len(seed_fqns) == 1
+        assert max_ends[seed_fqns[0]] == to_timestamp("2024-06-01")
+        context.close()
+
+    with time_machine.travel("2026-03-01 00:00:00 UTC"):
+        context = Context(paths=path, gateway="duckdb_persistent")
+
+        # a model that depends on this seed but has no interval in prod yet so only the seed would contribute to max_interval_end_per_model
+        context.upsert_model(
+            load_sql_based_model(
+                parse(
+                    """
+                    MODEL(
+                        name sushi.waiter_summary,
+                        kind INCREMENTAL_BY_TIME_RANGE (
+                            time_column ds
+                        ),
+                        start '2025-01-01',
+                        cron '@daily'
+                    );
+
+                    SELECT
+                        id,
+                        name,
+                        @start_ds AS ds
+                    FROM
+                        sushi.waiter_names
+                    WHERE
+                        @start_ds BETWEEN @start_ds AND @end_ds
+                    """
+                ),
+                default_catalog=context.default_catalog,
+            )
+        )
+
+        # the seed's interval end would still be 2024-06-01
+        max_ends = context.state_sync.max_interval_end_per_model("prod")
+        seed_fqns = [k for k in max_ends if "waiter_names" in k]
+        assert len(seed_fqns) == 1
+        assert max_ends[seed_fqns[0]] == to_timestamp("2024-06-01")
+
+        # the plan start date 2025-01-01 is after the seeds end date but shouldnt cause the plan to fail
+        plan = context.plan(
+            "dev", start="2025-01-01", no_prompts=True, select_models=["*waiter_summary"]
+        )
+
+        # the end should fall back to execution_time rather than seeds end
+        assert plan.models_to_backfill == {
+            '"duckdb"."sushi"."waiter_names"',
+            '"duckdb"."sushi"."waiter_summary"',
+        }
+        assert plan.provided_end is None
+        assert plan.provided_start == "2025-01-01"
+        assert to_timestamp(plan.end) == to_timestamp("2026-03-01")
+        assert to_timestamp(plan.start) == to_timestamp("2025-01-01")
+        context.close()
+
+
+@pytest.mark.slow
 def test_schema_error_no_default(sushi_context_pre_scheduling) -> None:
     context = sushi_context_pre_scheduling
 
