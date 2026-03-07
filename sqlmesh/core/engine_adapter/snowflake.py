@@ -675,6 +675,12 @@ class SnowflakeEngineAdapter(
             if isinstance(table_type, exp.TransientProperty):
                 kwargs["properties"] = exp.Properties(expressions=[table_type])
 
+        # Snowflake requires CREATE ICEBERG TABLE ... CLONE for Iceberg tables
+        # instead of the regular CREATE TABLE ... CLONE
+        table_format = kwargs.pop("table_format", None)
+        if table_format and isinstance(table_format, str) and table_format.upper() == "ICEBERG":
+            kwargs["table_kind"] = f"{table_format.upper()} TABLE"
+
         super().clone_table(
             target_table_name,
             source_table_name,

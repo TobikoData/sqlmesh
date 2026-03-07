@@ -1085,6 +1085,7 @@ class SnapshotEvaluator:
                 target_table_name,
                 snapshot.table_name(),
                 rendered_physical_properties=rendered_physical_properties,
+                table_format=snapshot.model.table_format,
             )
             self._migrate_target_table(
                 target_table_name=target_table_name,

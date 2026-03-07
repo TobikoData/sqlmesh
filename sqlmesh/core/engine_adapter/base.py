@@ -1077,10 +1077,11 @@ class EngineAdapter:
             raise NotImplementedError(f"Engine does not support cloning: {type(self)}")
 
         kwargs.pop("rendered_physical_properties", None)
+        table_kind = kwargs.pop("table_kind", "TABLE")
         self.execute(
             exp.Create(
                 this=exp.to_table(target_table_name),
-                kind="TABLE",
+                kind=table_kind,
                 replace=replace,
                 exists=exists,
                 clone=exp.Clone(
