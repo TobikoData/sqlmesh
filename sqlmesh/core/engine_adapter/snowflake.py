@@ -689,6 +689,31 @@ class SnowflakeEngineAdapter(
             **kwargs,
         )
 
+    def alter_table(
+        self,
+        alter_expressions: t.Union[t.List[exp.Alter], t.List["TableAlterOperation"]],
+        **kwargs: t.Any,
+    ) -> None:
+        # Snowflake requires ALTER ICEBERG TABLE instead of ALTER TABLE for Iceberg tables
+        table_format = kwargs.pop("table_format", None)
+        if table_format and isinstance(table_format, str) and table_format.upper() == "ICEBERG":
+            from sqlmesh.core.schema_diff import TableAlterOperation
+
+            resolved_expressions = []
+            for x in alter_expressions:
+                if isinstance(x, TableAlterOperation):
+                    alter_expr = x.expression
+                else:
+                    alter_expr = x
+                alter_expr.args["kind"] = f"{table_format.upper()} TABLE"
+                resolved_expressions.append(alter_expr)
+
+            with self.transaction():
+                for alter_expr in resolved_expressions:
+                    self.execute(alter_expr)
+        else:
+            super().alter_table(alter_expressions, **kwargs)
+
     @t.overload
     def _columns_to_types(
         self,
