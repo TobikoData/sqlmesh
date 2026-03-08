@@ -42,6 +42,7 @@ if t.TYPE_CHECKING:
         SnowparkSession,
     )
     from sqlmesh.core.node import IntervalUnit
+    from sqlmesh.core.schema_diff import TableAlterOperation
 
 
 @set_catalog(
@@ -689,7 +690,7 @@ class SnowflakeEngineAdapter(
             **kwargs,
         )
 
-    def alter_table(
+    def alter_table(  # type: ignore[override]
         self,
         alter_expressions: t.Union[t.List[exp.Alter], t.List["TableAlterOperation"]],
         **kwargs: t.Any,
@@ -712,7 +713,7 @@ class SnowflakeEngineAdapter(
                 for alter_expr in resolved_expressions:
                     self.execute(alter_expr)
         else:
-            super().alter_table(alter_expressions, **kwargs)
+            super().alter_table(alter_expressions)
 
     @t.overload
     def _columns_to_types(
