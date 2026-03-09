@@ -2013,7 +2013,17 @@ class TrinoConnectionConfig(ConnectionConfig):
             OAuth2Authentication,
         )
 
+        auth: t.Optional[
+            t.Union[
+                BasicAuthentication,
+                KerberosAuthentication,
+                OAuth2Authentication,
+                JWTAuthentication,
+                CertificateAuthentication,
+            ]
+        ] = None
         if self.method.is_basic or self.method.is_ldap:
+            assert self.password is not None  # for mypy since validator already checks this
             auth = BasicAuthentication(self.user, self.password)
         elif self.method.is_kerberos:
             if self.keytab:
@@ -2032,11 +2042,12 @@ class TrinoConnectionConfig(ConnectionConfig):
         elif self.method.is_oauth:
             auth = OAuth2Authentication()
         elif self.method.is_jwt:
+            assert self.jwt_token is not None
             auth = JWTAuthentication(self.jwt_token)
         elif self.method.is_certificate:
+            assert self.client_certificate is not None
+            assert self.client_private_key is not None
             auth = CertificateAuthentication(self.client_certificate, self.client_private_key)
-        else:
-            auth = None
 
         return {
             "auth": auth,
