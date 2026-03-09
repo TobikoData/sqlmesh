@@ -287,20 +287,20 @@ def test_destroy(copy_to_temp_path):
 
     # Validate tables have been deleted as well
     with pytest.raises(
-        Exception, match=r"Catalog Error: Table with name model_two does not exist!"
+        Exception, match=r"Catalog Error: Table with name.*model_two.*does not exist"
     ):
         context.fetchdf("SELECT * FROM db_1.first_schema.model_two")
     with pytest.raises(
-        Exception, match=r"Catalog Error: Table with name model_one does not exist!"
+        Exception, match=r"Catalog Error: Table with name.*model_one.*does not exist"
     ):
         context.fetchdf("SELECT * FROM db_1.first_schema.model_one")
 
     with pytest.raises(
-        Exception, match=r"Catalog Error: Table with name model_two does not exist!"
+        Exception, match=r"Catalog Error: Table with name.*model_two.*does not exist"
     ):
         context.engine_adapters["second"].fetchdf("SELECT * FROM db_2.second_schema.model_two")
     with pytest.raises(
-        Exception, match=r"Catalog Error: Table with name model_one does not exist!"
+        Exception, match=r"Catalog Error: Table with name.*model_one.*does not exist"
     ):
         context.engine_adapters["second"].fetchdf("SELECT * FROM db_2.second_schema.model_one")
 
