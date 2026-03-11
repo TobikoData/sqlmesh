@@ -154,8 +154,8 @@ sqlmesh_lsp = "sqlmesh.lsp.main:main"
 [project.urls]
 Homepage = "https://sqlmesh.com/"
 Documentation = "https://sqlmesh.readthedocs.io/en/stable/"
-Repository = "https://github.com/sqlmesh/sqlmesh"
-Issues = "https://github.com/sqlmesh/sqlmesh/issues"
+Repository = "https://github.com/SQLMesh/sqlmesh"
+Issues = "https://github.com/SQLMesh/sqlmesh/issues"
 
 [build-system]
 requires = ["setuptools >= 61.0", "setuptools_scm"]

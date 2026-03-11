@@ -690,7 +690,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
         except Exception as ex:
             raise_config_error(
-                f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",
+                f"Failed to optimize query, please file an issue at https://github.com/SQLMesh/sqlmesh/issues/new. {ex}",
                 self._path,
             )
 

@@ -358,4 +358,4 @@ The dbt jinja methods that are not currently supported are:
 
 ## Missing something you need?
 
-Submit an [issue](https://github.com/TobikoData/sqlmesh/issues), and we'll look into it!
+Submit an [issue](https://github.com/SQLMesh/sqlmesh/issues), and we'll look into it!

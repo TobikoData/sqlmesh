@@ -246,7 +246,7 @@ Next steps:
 Need help?
 • Docs:   https://sqlmesh.readthedocs.io
 • Slack:  https://www.tobikodata.com/slack
-• GitHub: https://github.com/TobikoData/sqlmesh/issues
+• GitHub: https://github.com/SQLMesh/sqlmesh/issues
 """)
 
 
