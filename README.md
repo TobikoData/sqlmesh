@@ -13,7 +13,7 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
 
 ## Core Features
 
-<img src="https://github.com/sqlmesh/sqlmesh-public-assets/blob/main/vscode.gif?raw=true" alt="SQLMesh Plan Mode">
+<img src="https://github.com/SQLMesh/sqlmesh-public-assets/blob/main/vscode.gif?raw=true" alt="SQLMesh Plan Mode">
 
 > Get instant SQL impact and context of your changes, both in the CLI and in the [SQLMesh VSCode Extension](https://sqlmesh.readthedocs.io/en/latest/guides/vscode/?h=vs+cod)
 
@@ -122,12 +122,12 @@ outputs:
 * Never build a table [more than once](https://tobikodata.com/simplicity-or-efficiency-how-dbt-makes-you-choose.html)
 * Track what data’s been modified and run only the necessary transformations for [incremental models](https://tobikodata.com/correctly-loading-incremental-data-at-scale.html)
 * Run [unit tests](https://tobikodata.com/we-need-even-greater-expectations.html) for free and configure automated audits
-* Run [table diffs](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/?h=crash#run-data-diff-against-prod) between prod and dev based on tables/views impacted by a change 
+* Run [table diffs](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/?h=crash#run-data-diff-against-prod) between prod and dev based on tables/views impacted by a change
 
 <details>
 <summary><b>Level Up Your SQL</b></summary>
 Write SQL in any dialect and SQLMesh will transpile it to your target SQL dialect on the fly before sending it to the warehouse.
-<img src="https://github.com/sqlmesh/sqlmesh/blob/main/docs/readme/transpile_example.png?raw=true" alt="Transpile Example">
+<img src="https://github.com/SQLMesh/sqlmesh/blob/main/docs/readme/transpile_example.png?raw=true" alt="Transpile Example">
 </details>
 
 * Debug transformation errors *before* you run them in your warehouse in [10+ different SQL dialects](https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
@@ -170,15 +170,17 @@ sqlmesh init # follow the prompts to get started (choose DuckDB)
 
 Follow the [quickstart guide](https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/) to learn how to use SQLMesh. You already have a head start!
 
-Follow the [crash course](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/) to learn the core movesets and use the easy to reference cheat sheet. 
+Follow the [crash course](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/) to learn the core movesets and use the easy to reference cheat sheet.
 
 Follow this [example](https://sqlmesh.readthedocs.io/en/stable/examples/incremental_time_full_walkthrough/) to learn how to use SQLMesh in a full walkthrough.
 
 ## Join Our Community
 Connect with us in the following ways:
 
-* Join the [SQLMesh Slack Community](https://tobikodata.com/slack) to ask questions, or just to say hi!
-* File an issue on our [GitHub](https://github.com/sqlmesh/sqlmesh/issues/new)
+* Join the [Tobiko Slack Community](https://tobikodata.com/slack) to ask questions, or just to say hi!
+* File an issue on our [GitHub](https://github.com/SQLMesh/sqlmesh/issues/new)
+* Send us an email at [hello@tobikodata.com](mailto:hello@tobikodata.com) with your questions or feedback
+* Read our [blog](https://tobikodata.com/blog)
 
 ## Contributing
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute, including our DCO sign-off requirement.
