@@ -3,7 +3,7 @@ name = "sqlmesh"
 dynamic = ["version"]
 description = "Next-generation data transformation framework"
 readme = "README.md"
-authors = [{ name = "TobikoData Inc.", email = "engineering@tobikodata.com" }]
+authors = [{ name = "SQLMesh Contributors" }]
 license = { file = "LICENSE" }
 requires-python = ">= 3.9"
 dependencies = [
@@ -154,8 +154,8 @@ sqlmesh_lsp = "sqlmesh.lsp.main:main"
 [project.urls]
 Homepage = "https://sqlmesh.com/"
 Documentation = "https://sqlmesh.readthedocs.io/en/stable/"
-Repository = "https://github.com/TobikoData/sqlmesh"
-Issues = "https://github.com/TobikoData/sqlmesh/issues"
+Repository = "https://github.com/sqlmesh/sqlmesh"
+Issues = "https://github.com/sqlmesh/sqlmesh/issues"
 
 [build-system]
 requires = ["setuptools >= 61.0", "setuptools_scm"]
