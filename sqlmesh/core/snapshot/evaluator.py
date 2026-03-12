@@ -2026,6 +2026,28 @@ class PromotableStrategy(EvaluationStrategy, abc.ABC):
         self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
 
+def _add_unique_key_to_physical_properties_for_doris(
+    model: Model, physical_properties: t.Dict[str, t.Any]
+) -> t.Dict[str, t.Any]:
+    """
+    For Doris dialect with INCREMENTAL_BY_UNIQUE_KEY models, ensure unique_key is added
+    to physical properties if not already present.
+    """
+    if (
+        model.dialect == "doris"
+        and model.kind.is_incremental_by_unique_key
+        and model.unique_key
+        and "unique_key" not in physical_properties
+    ):
+        physical_properties = dict(physical_properties)
+        physical_properties["unique_key"] = (
+            model.unique_key[0]
+            if len(model.unique_key) == 1
+            else exp.Tuple(expressions=model.unique_key)
+        )
+    return physical_properties
+
+
 class MaterializableStrategy(PromotableStrategy, abc.ABC):
     def create(
         self,
@@ -2038,6 +2060,9 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
     ) -> None:
         ctas_query = model.ctas_query(**render_kwargs)
         physical_properties = kwargs.get("physical_properties", model.physical_properties)
+        physical_properties = _add_unique_key_to_physical_properties_for_doris(
+            model, physical_properties
+        )
 
         logger.info("Creating table '%s'", table_name)
         if model.annotated:
@@ -2152,6 +2177,10 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
             except Exception:
                 columns_to_types, source_columns = None, None
 
+        physical_properties = kwargs.get("physical_properties", model.physical_properties)
+        physical_properties = _add_unique_key_to_physical_properties_for_doris(
+            model, physical_properties
+        )
         self.adapter.replace_query(
             name,
             query_or_df,
@@ -2160,7 +2189,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.partition_interval_unit,
             clustered_by=model.clustered_by,
-            table_properties=kwargs.get("physical_properties", model.physical_properties),
+            table_properties=physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
             target_columns_to_types=columns_to_types,
@@ -2294,6 +2323,10 @@ class IncrementalByUniqueKeyStrategy(IncrementalStrategy):
                 table_name,
                 render_kwargs=render_kwargs,
             )
+            physical_properties = kwargs.get("physical_properties", model.physical_properties)
+            physical_properties = _add_unique_key_to_physical_properties_for_doris(
+                model, physical_properties
+            )
             self.adapter.merge(
                 table_name,
                 query_or_df,
@@ -2305,7 +2338,7 @@ class IncrementalByUniqueKeyStrategy(IncrementalStrategy):
                     end=kwargs.get("end"),
                     execution_time=kwargs.get("execution_time"),
                 ),
-                physical_properties=kwargs.get("physical_properties", model.physical_properties),
+                physical_properties=physical_properties,
                 source_columns=source_columns,
             )
 
@@ -3101,13 +3134,17 @@ class EngineManagedStrategy(MaterializableStrategy):
         if is_table_deployable and is_snapshot_deployable:
             # We could deploy this to prod; create a proper managed table
             logger.info("Creating managed table: %s", table_name)
+            physical_properties = kwargs.get("physical_properties", model.physical_properties)
+            physical_properties = _add_unique_key_to_physical_properties_for_doris(
+                model, physical_properties
+            )
             self.adapter.create_managed_table(
                 table_name=table_name,
                 query=model.render_query_or_raise(**render_kwargs),
                 target_columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
-                table_properties=kwargs.get("physical_properties", model.physical_properties),
+                table_properties=physical_properties,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 table_format=model.table_format,

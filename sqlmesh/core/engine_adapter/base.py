@@ -2823,6 +2823,13 @@ class EngineAdapter:
             logger.debug("Clearing data object cache key: %s", cache_key)
             self._data_object_cache.pop(cache_key, None)
 
+    def _get_temp_table_name(self, table: TableName) -> str:
+        """
+        Get the name of the temp table.
+        """
+        table_obj = exp.to_table(table)
+        return f"__temp_{table_obj.name}_{random_id(short=True)}"
+
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:
@@ -2839,7 +2846,8 @@ class EngineAdapter:
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
         table.set(
-            "this", exp.to_identifier(f"__temp_{table.name}_{random_id(short=True)}", quoted=quoted)
+            "this",
+            exp.to_identifier(self._get_temp_table_name(table), quoted=quoted),
         )
 
         if table_only:
