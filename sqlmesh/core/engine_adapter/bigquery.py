@@ -1110,7 +1110,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
         # Create job config
         job_config = QueryJobConfig(**self._job_params, connection_properties=connection_properties)
-        
+
         self._query_job = self._db_call(
             self.client.query,
             query=sql,
