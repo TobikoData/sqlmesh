@@ -878,7 +878,6 @@ def test_dlt_pipeline_errors(runner, tmp_path):
     assert "Error: Could not attach to pipeline" in result.output
 
 
-@time_machine.travel(FREEZE_TIME)
 def test_dlt_filesystem_pipeline(tmp_path):
     import dlt
 
@@ -982,7 +981,6 @@ WHERE
         rmtree(storage_path)
 
 
-@time_machine.travel(FREEZE_TIME)
 def test_dlt_pipeline(runner, tmp_path):
     from dlt.common.pipeline import get_dlt_pipelines_dir
 
