@@ -115,7 +115,7 @@ jobs:
           source .venv/bin/activate
           make cicd-test
       - name: Upload test results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: test-results-style-cicd-${{ matrix.python-version }}
@@ -151,7 +151,7 @@ jobs:
           python --version
           make fast-test
       - name: Upload test results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: test-results-windows
@@ -277,7 +277,7 @@ jobs:
           source .venv/bin/activate
           make ${{ matrix.engine }}-test
       - name: Upload test results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: test-results-docker-${{ matrix.engine }}
@@ -385,7 +385,7 @@ jobs:
           ./.github/scripts/manage-test-db.sh "${{ matrix.engine }}"
           "$TEST_DB_NAME" down
       - name: Upload test results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: test-results-cloud-${{ matrix.engine }}
@@ -445,7 +445,7 @@ jobs:
         run: |
           source ../../.venv/bin/activate
           pnpm run test:e2e
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
