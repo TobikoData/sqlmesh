@@ -65,7 +65,8 @@ def macro_evaluator() -> MacroEvaluator:
         for cte in with_.find_all(exp.CTE):
             name = cte.alias_or_name
             for query in cte.find_all(exp.Select):
-                query.select(exp.Literal.string(name).as_("source"), copy=False)
+                query.select(exp.Literal.string(
+                    name).as_("source"), copy=False)
         return with_
 
     @macro()
@@ -104,7 +105,8 @@ def macro_evaluator() -> MacroEvaluator:
 
     return MacroEvaluator(
         "hive",
-        {"test": Executable(name="test", payload="def test(_):\n    return 'test'")},
+        {"test": Executable(
+            name="test", payload="def test(_):\n    return 'test'")},
     )
 
 
@@ -121,7 +123,8 @@ def test_star(assert_exp_eq) -> None:
         dialect="tsql",
     )
     evaluator = MacroEvaluator(schema=schema, dialect="tsql")
-    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
+    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")),
+                  expected_sql, dialect="tsql")
 
     sql = "SELECT @STAR(foo, exclude := [SomeColumn]) FROM foo"
     expected_sql = "SELECT CAST(`foo`.`a` AS STRING) AS `a` FROM foo"
@@ -153,7 +156,8 @@ def test_star(assert_exp_eq) -> None:
         dialect="tsql",
     )
     evaluator = MacroEvaluator(schema=schema, dialect="tsql")
-    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
+    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")),
+                  expected_sql, dialect="tsql")
 
     sql = """SELECT @STAR(foo) FROM foo"""
     expected_sql = (
@@ -211,9 +215,11 @@ def test_star(assert_exp_eq) -> None:
 def test_start_no_column_types(assert_exp_eq) -> None:
     sql = """SELECT @STAR(foo) FROM foo"""
     expected_sql = """SELECT [foo].[a] AS [a] FROM foo"""
-    schema = MappingSchema({"foo": {"a": exp.DataType.build("UNKNOWN")}}, dialect="tsql")
+    schema = MappingSchema(
+        {"foo": {"a": exp.DataType.build("UNKNOWN")}}, dialect="tsql")
     evaluator = MacroEvaluator(schema=schema, dialect="tsql")
-    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
+    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")),
+                  expected_sql, dialect="tsql")
 
 
 def test_case(macro_evaluator: MacroEvaluator) -> None:
@@ -239,7 +245,8 @@ def test_macro_var(macro_evaluator):
     macro_evaluator.dialect = "snowflake"
 
     assert e.find(StagedFilePath) is not None
-    assert macro_evaluator.transform(e).sql(dialect="snowflake") == "SELECT a FROM @path, t2"
+    assert macro_evaluator.transform(e).sql(
+        dialect="snowflake") == "SELECT a FROM @path, t2"
 
     # Referencing a var that doesn't exist in the evaluator's scope should raise
     macro_evaluator.locals = {}
@@ -250,17 +257,21 @@ def test_macro_var(macro_evaluator):
         assert "Macro variable 'y' is undefined." in str(ex.value)
 
     # Parsing a "parameter" like Snowflake's $1 should not produce a MacroVar expression
-    e = parse_one("select $1 from @path (file_format => bla.foo)", read="snowflake")
+    e = parse_one("select $1 from @path (file_format => bla.foo)",
+                  read="snowflake")
     assert e.find(exp.Parameter) is e.selects[0]
     assert e.find(StagedFilePath)
     # test no space
-    e = parse_one("select $1 from @path(file_format => bla.foo)", read="snowflake")
+    e = parse_one("select $1 from @path(file_format => bla.foo)",
+                  read="snowflake")
     assert e.find(StagedFilePath)
-    assert e.sql(dialect="snowflake") == "SELECT $1 FROM @path (FILE_FORMAT => bla.foo)"
+    assert e.sql(
+        dialect="snowflake") == "SELECT $1 FROM @path (FILE_FORMAT => bla.foo)"
 
     macro_evaluator.locals = {"x": 1}
     macro_evaluator.dialect = "snowflake"
-    e = parse_one("COPY INTO @'s3://example/foo_@{x}.csv' FROM a.b.c", read="snowflake")
+    e = parse_one(
+        "COPY INTO @'s3://example/foo_@{x}.csv' FROM a.b.c", read="snowflake")
     assert (
         macro_evaluator.transform(e).sql(dialect="snowflake")
         == "COPY INTO 's3://example/foo_1.csv' FROM a.b.c"
@@ -274,7 +285,8 @@ def test_macro_str_replace(macro_evaluator):
 
 
 def test_macro_custom(macro_evaluator, assert_exp_eq):
-    assert_exp_eq(macro_evaluator.transform(parse_one("SELECT @TEST()")), "SELECT test")
+    assert_exp_eq(macro_evaluator.transform(
+        parse_one("SELECT @TEST()")), "SELECT test")
 
 
 def test_ast_correctness(macro_evaluator):
@@ -376,7 +388,8 @@ def test_ast_correctness(macro_evaluator):
         ("SELECT @REDUCE([1], (x, y) -> x + y)", "SELECT 1", {}),
         ("SELECT @REDUCE([1, 2], (x, y) -> x + y)", "SELECT 1 + 2", {}),
         ("SELECT @REDUCE([[1]], (x, y) -> x + y)", "SELECT ARRAY(1)", {}),
-        ("SELECT @REDUCE([[1, 2]], (x, y) -> x + y)", "SELECT ARRAY(1, 2)", {}),
+        ("SELECT @REDUCE([[1, 2]], (x, y) -> x + y)",
+         "SELECT ARRAY(1, 2)", {}),
         (
             """select @EACH([a, b, c], x -> column like x AS @SQL('@{x}_y', 'Identifier')), @x""",
             "SELECT column LIKE a AS a_y, column LIKE b AS b_y, column LIKE c AS c_y, '3'",
@@ -384,13 +397,15 @@ def test_ast_correctness(macro_evaluator):
         ),
         ("SELECT @EACH([1], a -> [@a])", "SELECT ARRAY(1)", {}),
         ("SELECT @EACH([1, 2], a -> [@a])", "SELECT ARRAY(1), ARRAY(2)", {}),
-        ("SELECT @REDUCE(@EACH([1], a -> [@a]), (x, y) -> x + y)", "SELECT ARRAY(1)", {}),
+        ("SELECT @REDUCE(@EACH([1], a -> [@a]), (x, y) -> x + y)",
+         "SELECT ARRAY(1)", {}),
         (
             "SELECT @REDUCE(@EACH([1, 2], a -> [@a]), (x, y) -> x + y)",
             "SELECT ARRAY(1) + ARRAY(2)",
             {},
         ),
-        ("SELECT @REDUCE([[1],[2]], (x, y) -> x + y)", "SELECT ARRAY(1) + ARRAY(2)", {}),
+        ("SELECT @REDUCE([[1],[2]], (x, y) -> x + y)",
+         "SELECT ARRAY(1) + ARRAY(2)", {}),
         (
             """@WITH(@do_with) all_cities as (select * from city) select all_cities""",
             "WITH all_cities AS (SELECT * FROM city) SELECT all_cities",
@@ -641,27 +656,35 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
     assert coerce(exp.Literal.number(1.1), float) == 1.1
     assert coerce(exp.Literal.string("Hi mom"), str) == "Hi mom"
     assert coerce(exp.true(), bool) is True
-    assert coerce(exp.Literal.string("2020-01-01"), datetime) == to_datetime("2020-01-01")
-    assert coerce(exp.Literal.string("2020-01-01"), date) == to_date("2020-01-01")
+    assert coerce(exp.Literal.string("2020-01-01"),
+                  datetime) == to_datetime("2020-01-01")
+    assert coerce(exp.Literal.string("2020-01-01"),
+                  date) == to_date("2020-01-01")
 
     # Coercing a string literal to a column should return a column with the same name
-    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Column), exp.column("order"))
+    assert_exp_eq(coerce(exp.Literal.string("order"),
+                  exp.Column), exp.column("order"))
     # Not possible to coerce this string literal Cast to an exp.Column node -- so it should just return the input
     assert_exp_eq(
-        coerce(exp.Literal.string("order::date"), exp.Column), exp.Literal.string("order::date")
+        coerce(exp.Literal.string("order::date"),
+               exp.Column), exp.Literal.string("order::date")
     )
     # This however, is correctly coercible since it's a cast
     assert_exp_eq(
-        coerce(exp.Literal.string("order::date"), exp.Cast), exp.cast(exp.column("order"), "DATE")
+        coerce(exp.Literal.string("order::date"), exp.Cast), exp.cast(
+            exp.column("order"), "DATE")
     )
 
     # Here we resolve ambiguity via the user type hint
-    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Identifier), exp.to_identifier("order"))
-    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Table), exp.table_("order"))
+    assert_exp_eq(coerce(exp.Literal.string("order"),
+                  exp.Identifier), exp.to_identifier("order"))
+    assert_exp_eq(coerce(exp.Literal.string("order"),
+                  exp.Table), exp.table_("order"))
 
     # Resolve a union type hint by choosing the first one that works
     assert_exp_eq(
-        coerce(exp.Literal.string("order::date"), t.Union[exp.Column, exp.Cast]),
+        coerce(exp.Literal.string("order::date"),
+               t.Union[exp.Column, exp.Cast]),
         exp.cast(exp.column("order"), "DATE"),
     )
 
@@ -673,7 +696,8 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
 
     # From a string literal to a Select should parse the string literal, and the inverse operation works as well
     assert_exp_eq(
-        coerce(exp.Literal.string("SELECT 1 FROM a"), exp.Select), parse_one("SELECT 1 FROM a")
+        coerce(exp.Literal.string("SELECT 1 FROM a"),
+               exp.Select), parse_one("SELECT 1 FROM a")
     )
     assert coerce(parse_one("SELECT 1 FROM a"), SQL) == "SELECT 1 FROM a"
 
@@ -686,16 +710,21 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
 
     # Generics work as well, recursively resolving inner types
     assert coerce(parse_one("[1, 2, 3]"), t.List[int]) == [1, 2, 3]
-    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, int, float]) == (1, 2, 3.0)
+    assert coerce(parse_one("[1, 2, 3]"),
+                  t.Tuple[int, int, float]) == (1, 2, 3.0)
     assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, ...]) == (1, 2, 3)
-    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, str, float]) == (1, "2", 3.0)
+    assert coerce(parse_one("[1, 2, 3]"),
+                  t.Tuple[int, str, float]) == (1, "2", 3.0)
     assert coerce(
-        parse_one("[1, 2, [3]]"), t.Tuple[int, str, t.Union[float, t.Tuple[float, ...]]]
+        parse_one("[1, 2, [3]]"), t.Tuple[int, str,
+                                          t.Union[float, t.Tuple[float, ...]]]
     ) == (1, "2", (3.0,))
 
     # Using exp.Expression will always return the input expression
-    assert coerce(parse_one("order", into=exp.Column), exp.Expression) == exp.column("order")
-    assert coerce(exp.Literal.string("OK"), exp.Expression) == exp.Literal.string("OK")
+    assert coerce(parse_one("order", into=exp.Column),
+                  exp.Expression) == exp.column("order")
+    assert coerce(exp.Literal.string("OK"),
+                  exp.Expression) == exp.Literal.string("OK")
 
     # Strict flag allows raising errors and is used when recursively coercing expressions
     # otherwise, in general, we want to be lenient and just warn the user when something is not possible
@@ -739,7 +768,8 @@ def test_macro_parameter_resolution(macro_evaluator):
         MacroEvalError,
         match=".*'pos_only' parameter is positional only, but was passed as a keyword|.*missing a required positional-only argument: 'pos_only'|.*missing a required argument: 'a1'",
     ):
-        macro_evaluator.evaluate(parse_one("@test_arg_resolution(pos_only := 1)"))
+        macro_evaluator.evaluate(
+            parse_one("@test_arg_resolution(pos_only := 1)"))
 
     with pytest.raises(MacroEvalError, match=".*too many positional arguments"):
         macro_evaluator.evaluate(parse_one("@test_arg_resolution(1, 2, 3)"))
@@ -771,7 +801,8 @@ def test_macro_first_value_ignore_respect_nulls(assert_exp_eq) -> None:
     actual_expr = d.parse_one(
         "SELECT FIRST_VALUE(@test(x) IGNORE NULLS) OVER (ORDER BY y) AS column_test"
     )
-    assert_exp_eq(evaluator.transform(actual_expr), expected_sql, dialect="duckdb")
+    assert_exp_eq(evaluator.transform(actual_expr),
+                  expected_sql, dialect="duckdb")
 
     expected_sql = (
         "SELECT FIRST_VALUE(x RESPECT NULLS) OVER (ORDER BY y NULLS FIRST) AS column_test"
@@ -779,7 +810,8 @@ def test_macro_first_value_ignore_respect_nulls(assert_exp_eq) -> None:
     actual_expr = d.parse_one(
         "SELECT FIRST_VALUE(@test(x) RESPECT NULLS) OVER (ORDER BY y) AS column_test"
     )
-    assert_exp_eq(evaluator.transform(actual_expr), expected_sql, dialect="duckdb")
+    assert_exp_eq(evaluator.transform(actual_expr),
+                  expected_sql, dialect="duckdb")
 
 
 DEDUPLICATE_SQL = """
@@ -844,7 +876,8 @@ DEDUPLICATE_SQL = """
 def test_deduplicate(assert_exp_eq, dialect, sql, expected_sql):
     schema = MappingSchema({}, dialect=dialect)
     evaluator = MacroEvaluator(schema=schema, dialect=dialect)
-    assert_exp_eq(evaluator.transform(parse_one(sql)), expected_sql, dialect=dialect)
+    assert_exp_eq(evaluator.transform(parse_one(sql)),
+                  expected_sql, dialect=dialect)
 
 
 def test_deduplicate_error_handling(macro_evaluator):
@@ -853,21 +886,24 @@ def test_deduplicate_error_handling(macro_evaluator):
         SQLMeshError,
         match="partition_by must be a list of columns: \\[<column>, cast\\(<column> as <type>\\)\\]",
     ):
-        macro_evaluator.evaluate(parse_one("@deduplicate(my_table, user_id, ['timestamp DESC'])"))
+        macro_evaluator.evaluate(
+            parse_one("@deduplicate(my_table, user_id, ['timestamp DESC'])"))
 
     # Test error handling: non-list order_by
     with pytest.raises(
         SQLMeshError,
         match="order_by must be a list of strings, optional - nulls ordering: \\['<column> <asc|desc> nulls <first|last>'\\]",
     ):
-        macro_evaluator.evaluate(parse_one("@deduplicate(my_table, [user_id], 'timestamp DESC')"))
+        macro_evaluator.evaluate(
+            parse_one("@deduplicate(my_table, [user_id], 'timestamp DESC')"))
 
     # Test error handling: empty order_by
     with pytest.raises(
         SQLMeshError,
         match="order_by must be a list of strings, optional - nulls ordering: \\['<column> <asc|desc> nulls <first|last>'\\]",
     ):
-        macro_evaluator.evaluate(parse_one("@deduplicate(my_table, [user_id], [])"))
+        macro_evaluator.evaluate(
+            parse_one("@deduplicate(my_table, [user_id], [])"))
 
 
 @pytest.mark.parametrize(
@@ -1019,7 +1055,8 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
             FROM _generated_dates
         ) AS _generated_dates
         """
-    assert_exp_eq(evaluator.transform(parse_one(date_spine_macro)), expected_sql, dialect=dialect)
+    assert_exp_eq(evaluator.transform(parse_one(date_spine_macro)),
+                  expected_sql, dialect=dialect)
 
 
 def test_date_spine_error_handling(macro_evaluator):
@@ -1028,28 +1065,32 @@ def test_date_spine_error_handling(macro_evaluator):
         MacroEvalError,
         match=".*Invalid datepart 'invalid'. Expected: 'day', 'week', 'month', 'quarter', or 'year'",
     ):
-        macro_evaluator.evaluate(parse_one("@date_spine('invalid', '2022-01-01', '2024-12-31')"))
+        macro_evaluator.evaluate(
+            parse_one("@date_spine('invalid', '2022-01-01', '2024-12-31')"))
 
     # Test error handling: invalid start_date format
     with pytest.raises(
         MacroEvalError,
         match=".*Invalid date format - start_date and end_date must be in format: YYYY-MM-DD",
     ):
-        macro_evaluator.evaluate(parse_one("@date_spine('day', '2022/01/01', '2024-12-31')"))
+        macro_evaluator.evaluate(
+            parse_one("@date_spine('day', '2022/01/01', '2024-12-31')"))
 
     # Test error handling: invalid end_date format
     with pytest.raises(
         MacroEvalError,
         match=".*Invalid date format - start_date and end_date must be in format: YYYY-MM-DD",
     ):
-        macro_evaluator.evaluate(parse_one("@date_spine('day', '2022-01-01', '2024/12/31')"))
+        macro_evaluator.evaluate(
+            parse_one("@date_spine('day', '2022-01-01', '2024/12/31')"))
 
     # Test error handling: start_date after end_date
     with pytest.raises(
         MacroEvalError,
         match=".*Invalid date range - start_date '2024-12-31' is after end_date '2022-01-01'.",
     ):
-        macro_evaluator.evaluate(parse_one("@date_spine('day', '2024-12-31', '2022-01-01')"))
+        macro_evaluator.evaluate(
+            parse_one("@date_spine('day', '2024-12-31', '2022-01-01')"))
 
 
 def test_macro_union(assert_exp_eq, macro_evaluator: MacroEvaluator):
@@ -1079,7 +1120,8 @@ def test_resolve_template_literal():
         evaluator.transform(parsed_sql)
 
     evaluator.locals.update(
-        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+        {"this_model": exp.to_table(
+            "test_catalog.sqlmesh__test.test__test_model__2517971505")}
     )
 
     assert (
@@ -1090,7 +1132,8 @@ def test_resolve_template_literal():
     # Evaluating
     evaluator = MacroEvaluator(runtime_stage=RuntimeStage.EVALUATING)
     evaluator.locals.update(
-        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+        {"this_model": exp.to_table(
+            "test_catalog.sqlmesh__test.test__test_model__2517971505")}
     )
     assert (
         evaluator.transform(parsed_sql).sql()
@@ -1105,7 +1148,8 @@ def test_resolve_template_table():
 
     evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
     evaluator.locals.update(
-        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+        {"this_model": exp.to_table(
+            "test_catalog.sqlmesh__test.test__test_model__2517971505")}
     )
 
     assert (
@@ -1166,3 +1210,231 @@ def test_macro_coerce_literal_type(macro_evaluator):
     expression = d.parse_one("@TEST_LITERAL_TYPE(1.0)")
     with pytest.raises(MacroEvalError, match=".*Coercion failed"):
         macro_evaluator.transform(expression)
+
+
+def test_lazy_macro_loading_with_missing_dependency():
+    """Test that MacroEvaluator can be created even when python_env contains
+    imports with missing dependencies, as long as those macros aren't used."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind
+
+    # Create python_env with a macro that imports a non-existent module
+    python_env = {
+        "missing_module_macro": Executable(
+            payload="from nonexistent_module import helper",
+            kind=ExecutableKind.IMPORT,
+        ),
+        "valid_value": Executable.value(42),
+    }
+
+    # Should not raise during initialization
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    # Valid values should be accessible
+    assert evaluator.locals["valid_value"] == 42
+
+    # Trying to use the macro with missing dependency should raise helpful error
+    with pytest.raises(MacroEvalError) as exc_info:
+        evaluator.send("missing_module_macro")
+
+    error_msg = str(exc_info.value).lower()
+    assert "missing dependency" in error_msg
+    assert "another project" in error_msg
+
+
+def test_lazy_macro_loading_success():
+    """Test that macros are successfully loaded when dependencies are available."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind
+
+    python_env = {
+        "math_module": Executable(
+            payload="import math",
+            kind=ExecutableKind.IMPORT,
+        ),
+    }
+
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    assert "math_module" in evaluator._unloaded_executables
+
+    assert evaluator._ensure_executable_loaded("math_module")
+
+    assert "math" in evaluator.env
+    assert "math_module" not in evaluator._unloaded_executables
+
+
+def test_lazy_macro_loading_definition_with_dependency():
+    """Test that macro definitions work even when their imports are deferred."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind
+
+    python_env = {
+        "bad_import": Executable(
+            payload="from fake_package import fake_func",
+            kind=ExecutableKind.IMPORT,
+        ),
+        "macro_using_bad_import": Executable(
+            payload="""
+def my_macro(evaluator):
+    return fake_func()
+""",
+            kind=ExecutableKind.DEFINITION,
+            name="my_macro",
+        ),
+    }
+
+    # Should initialize without error (import is deferred)
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    # The macro definition should be loaded immediately
+    assert normalize_macro_name("my_macro") in evaluator.macros
+
+    # The bad import should be deferred
+    assert "bad_import" in evaluator._unloaded_executables
+
+    # Calling the macro should fail because bad_import can't be loaded
+    # When the macro is called, we try to load all imports first
+    with pytest.raises(MacroEvalError):  # type: ignore
+        evaluator.send("my_macro")
+
+
+def test_mixed_python_env_with_partial_loading():
+    """Test environment with mix of loadable and unloadable executables."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind
+
+    python_env = {
+        "good_import": Executable(
+            payload="import json",
+            kind=ExecutableKind.IMPORT,
+        ),
+        "bad_import": Executable(
+            payload="from fake_package import fake_func",
+            kind=ExecutableKind.IMPORT,
+        ),
+        "value": Executable.value({"key": "value"}),
+    }
+
+    # Should initialize without error
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    # Good import should be deferred (not loaded yet)
+    assert "good_import" in evaluator._unloaded_executables
+
+    # Bad import should also be deferred
+    assert "bad_import" in evaluator._unloaded_executables
+
+    # Values should be loaded immediately
+    assert evaluator.locals["value"] == {"key": "value"}
+
+    # Can successfully load good import on demand
+    assert evaluator._ensure_executable_loaded("good_import")
+    assert "json" in evaluator.env
+
+    # Cannot load bad import
+    assert not evaluator._ensure_executable_loaded("bad_import")
+    assert "bad_import" in evaluator._failed_imports
+
+
+def test_lazy_loading_with_macro_decorator():
+    """Test that @macro() decorated functions are loaded correctly with lazy loading."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind
+
+    # Simulate a macro definition that would be in python_env
+    python_env = {
+        "test_lazy_macro": Executable(
+            payload="""
+def test_lazy_macro(evaluator):
+    return 'lazy_loaded'
+""",
+            kind=ExecutableKind.DEFINITION,
+            name="test_lazy_macro",
+        ),
+    }
+
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    # The macro should have been loaded successfully
+    assert "test_lazy_macro" in evaluator.env
+    # And registered as a macro
+    assert normalize_macro_name("test_lazy_macro") in evaluator.macros
+
+
+def test_lazy_loading_error_is_cached():
+    """Test that failed imports are cached to avoid repeated attempts."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind
+
+    python_env = {
+        "failing_import": Executable(
+            payload="from nonexistent_package import something",
+            kind=ExecutableKind.IMPORT,
+        ),
+    }
+
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    # Try to load it (will fail)
+    assert not evaluator._ensure_executable_loaded("failing_import")
+
+    # Should be in failed imports
+    assert "failing_import" in evaluator._failed_imports
+
+    # Second attempt should use cached failure (not try to load again)
+    assert not evaluator._ensure_executable_loaded("failing_import")
+
+
+def test_lazy_loading_preserves_values():
+    """Test that SQLMESH_VARS and other special values are loaded correctly."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind, SqlValue
+
+    python_env = {
+        c.SQLMESH_VARS: Executable.value({
+            "my_var": "test_value",
+            "sql_var": SqlValue(sql="SELECT 1"),
+        }),
+        c.SQLMESH_BLUEPRINT_VARS: Executable.value({
+            "blueprint_var": "blueprint_value",
+        }),
+    }
+
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    # Special variables should be loaded and processed
+    assert c.SQLMESH_VARS in evaluator.locals
+    assert evaluator.locals[c.SQLMESH_VARS]["my_var"] == "test_value"
+
+    # SQL values should be parsed
+    assert isinstance(
+        evaluator.locals[c.SQLMESH_VARS]["sql_var"], exp.Expression)
+
+    assert c.SQLMESH_BLUEPRINT_VARS in evaluator.locals
+    assert evaluator.locals[c.SQLMESH_BLUEPRINT_VARS]["blueprint_var"] == "blueprint_value"
+
+
+def test_macro_evaluator_backward_compatibility():
+    """Ensure existing macro behavior is unchanged with lazy loading."""
+    from sqlmesh.utils.metaprogramming import ExecutableKind
+
+    # Test with traditional python_env (no lazy loading needed)
+    python_env = {
+        "var": Executable.value(100),
+        "simple_macro": Executable(
+            payload="""
+def simple_macro(evaluator):
+    return evaluator.locals.get('var', 0) * 2
+""",
+            kind=ExecutableKind.DEFINITION,
+            name="simple_macro",
+        ),
+    }
+
+    evaluator = MacroEvaluator(python_env=python_env)
+
+    # Macro should be loaded and available
+    assert normalize_macro_name("simple_macro") in evaluator.macros
+
+    # Should work exactly as before
+    result = evaluator.send("simple_macro")
+    assert result == 200
+
+
+def normalize_macro_name(name: str) -> str:
+    """Helper to normalize macro names for testing."""
+    return name.lower()

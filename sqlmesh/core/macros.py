@@ -43,7 +43,6 @@ from sqlmesh.utils.metaprogramming import (
     Executable,
     SqlValue,
     format_evaluated_code_exception,
-    prepare_env,
 )
 
 if t.TYPE_CHECKING:
@@ -178,7 +177,8 @@ class MacroEvaluator:
         schema: t.Optional[MappingSchema] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         resolve_table: t.Optional[t.Callable[[str | exp.Table], str]] = None,
-        resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
+        resolve_tables: t.Optional[t.Callable[[
+            exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
         path: t.Optional[Path] = None,
@@ -198,7 +198,8 @@ class MacroEvaluator:
             "MacroEvaluator": MacroEvaluator,
         }
         self.python_env = python_env or {}
-        self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
+        self.macros = {normalize_macro_name(
+            k): v.func for k, v in macro.get_registry().items()}
         self.columns_to_types_called = False
         self.default_catalog = default_catalog
 
@@ -210,15 +211,44 @@ class MacroEvaluator:
         self._environment_naming_info = environment_naming_info
         self._model_fqn = model_fqn
 
-        prepare_env(self.python_env, self.env)
-        for k, v in self.python_env.items():
-            if v.is_definition:
-                self.macros[normalize_macro_name(k)] = self.env[v.name or k]
-            elif v.is_import and getattr(self.env.get(k), c.SQLMESH_MACRO, None):
-                self.macros[normalize_macro_name(k)] = self.env[k]
-            elif v.is_value:
-                value = self.env[k]
-                if k in (
+        # Track executables not loaded yet for lazy loading
+        self._unloaded_executables: t.Dict[str, Executable] = {}
+        # Track failed imports to provide helpful error messages
+        self._failed_imports: t.Dict[str, Exception] = {}
+
+        # Load python_env, defer imports that might fail
+        # Allows projects to share state without all dependencies
+        self._load_python_env()
+
+    def _load_python_env(self) -> None:
+        """Load python environment with lazy import loading.
+
+        This method implements lazy loading to allow projects to share
+        state databases without requiring all external dependencies:
+
+        1. VALUES: Loaded immediately (no dependencies)
+        2. DEFINITIONS: Loaded immediately (backward compatibility)
+           - Won't fail at definition time even if imports missing
+           - Failures happen at call time
+        3. IMPORTS: Deferred until first macro call
+           - Allows projects to share state without all dependencies
+           - Loaded automatically before any macro execution
+
+        When a macro is called, all deferred imports are loaded first,
+        ensuring the macro has access to its dependencies.
+        """
+        # Sort to process imports first, then values, then definitions
+        sorted_items = sorted(
+            self.python_env.items(),
+            key=lambda item: 0 if item[1].is_import else 1,
+        )
+
+        for name, executable in sorted_items:
+            if executable.is_value:
+                # Load values immediately
+                self.env[name] = eval(executable.payload)
+                value = self.env[name]
+                if name in (
                     c.SQLMESH_VARS,
                     c.SQLMESH_VARS_METADATA,
                     c.SQLMESH_BLUEPRINT_VARS,
@@ -232,20 +262,95 @@ class MacroEvaluator:
                         )
                         for var_name, var_value in value.items()
                     }
+                self.locals[name] = value
+            elif executable.is_definition:
+                # Load definitions immediately for backward compatibility
+                # They won't fail at definition time even if imports are missing
+                exec(executable.payload, self.env)
+                if executable.alias and executable.name:
+                    self.env[executable.alias] = self.env[executable.name]
+                # Register as macro if it's a macro definition
+                func_name = executable.name or name
+                self.macros[normalize_macro_name(
+                    func_name)] = self.env[func_name]
+            elif executable.is_import:
+                self._unloaded_executables[name] = executable
 
-                self.locals[k] = value
+    def _ensure_executable_loaded(self, name: str) -> bool:
+        """Lazily load an executable if it hasn't been loaded yet.
+
+        Args:
+            name: The name of the executable to load
+
+        Returns:
+            True if the executable was loaded successfully, False otherwise
+        """
+        if name in self.env or name not in self._unloaded_executables:
+            return name in self.env
+
+        if name in self._failed_imports:
+            return False
+
+        executable = self._unloaded_executables[name]
+
+        try:
+            exec(executable.payload, self.env)
+            if executable.alias and executable.name:
+                self.env[executable.alias] = self.env[executable.name]
+
+            # If it's a macro import, register it
+            # For imports, the actual imported name might differ from the key
+            imported_name = executable.name or name
+            if executable.is_import and getattr(
+                self.env.get(imported_name), c.SQLMESH_MACRO, None
+            ):
+                self.macros[normalize_macro_name(
+                    imported_name)] = self.env[imported_name]
+
+            del self._unloaded_executables[name]
+            return True
+        except Exception as e:
+            self._failed_imports[name] = e
+            return False
 
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
     ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
-        func = self.macros.get(normalize_macro_name(name))
+        normalized_name = normalize_macro_name(name)
+        func = self.macros.get(normalized_name)
 
         if not callable(func):
+            for exec_name in self._unloaded_executables:
+                if normalize_macro_name(exec_name) == normalized_name:
+                    if self._ensure_executable_loaded(exec_name):
+                        func = self.macros.get(normalized_name)
+                        break
+
+        if not callable(func):
+            for exec_name, error in self._failed_imports.items():
+                if normalize_macro_name(exec_name) == normalized_name:
+                    raise MacroEvalError(
+                        f"Macro '{name}' could not be loaded due to a "
+                        "missing dependency. This may be caused by a macro "
+                        "from another project that shares the same state "
+                        "database. If you don't use this macro, you can "
+                        "safely ignore it by not calling it. "
+                        f"Original error: {error}"
+                    )
+
             raise MacroEvalError(f"Macro '{name}' does not exist.")
+
+        # Before calling the macro, load all deferred imports
+        # This ensures macros can reference imports even if they were deferred
+        for import_name in list(self._unloaded_executables.keys()):
+            import_exec = self._unloaded_executables.get(import_name)
+            if import_exec and import_exec.is_import:
+                self._ensure_executable_loaded(import_name)
 
         try:
             return call_macro(
-                func, self.dialect, self._path, provided_args=(self, *args), provided_kwargs=kwargs
+                func, self.dialect, self._path, provided_args=(
+                    self, *args), provided_kwargs=kwargs
             )  # type: ignore
         except Exception as e:
             raise MacroEvalError(
@@ -273,7 +378,8 @@ class MacroEvaluator:
 
                 if var_name not in self.locals and var_name not in variables:
                     if not isinstance(node.parent, StagedFilePath):
-                        raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
+                        raise SQLMeshError(
+                            f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
@@ -287,7 +393,8 @@ class MacroEvaluator:
                     )
 
                 return exp.convert(
-                    self.transform(value) if isinstance(value, exp.Expression) else value
+                    self.transform(value) if isinstance(
+                        value, exp.Expression) else value
                 )
             if isinstance(node, exp.Identifier) and "@" in node.this:
                 text = self.template(node.this, {})
@@ -344,11 +451,13 @@ class MacroEvaluator:
             if isinstance(node.expression, exp.Lambda):
                 _, fn = _norm_var_arg_lambda(self, node.expression)
                 self.macros[normalize_macro_name(node.name)] = lambda _, *args: fn(
-                    args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
+                    args[0] if len(args) == 1 else exp.Tuple(
+                        expressions=list(args))
                 )
             else:
                 # Make variables defined through `@DEF` case-insensitive
-                self.locals[node.name.lower()] = self.transform(node.expression)
+                self.locals[node.name.lower()] = self.transform(
+                    node.expression)
 
             return node
 
@@ -379,7 +488,8 @@ class MacroEvaluator:
             return None
 
         if isinstance(result, (tuple, list)):
-            result = [self.parse_one(item) for item in result if item is not None]
+            result = [self.parse_one(item)
+                      for item in result if item is not None]
 
             if (
                 len(result) == 1
@@ -392,13 +502,13 @@ class MacroEvaluator:
                  - and that output is something that _norm_var_arg_lambda() will unpack into varargs
                    > (a list containing a single item of type exp.Tuple/exp.Array)
                 then we will get inconsistent behaviour depending on if this node emits a list with a single item vs multiple items.
-                
+
                 In the first case, emitting a list containing a single array item will cause that array to get unpacked and its *members* passed to the calling macro
                 In the second case, emitting a list containing multiple array items will cause each item to get passed as-is to the calling macro
-                
+
                 To prevent this inconsistency, we wrap this node output in an exp.Array so that _norm_var_arg_lambda() can "unpack" that into the
                 actual argument we want to pass to the parent macro function
-                
+
                 Note we only do this for evaluation results that get passed as an argument to another macro, because when the final
                 result is given to something like SELECT, we still want that to be unpacked into a list of items like:
                  - SELECT ARRAY(1), ARRAY(2)
@@ -467,7 +577,8 @@ class MacroEvaluator:
         model_name = exp.to_table(normalized_model_name)
 
         columns_to_types = (
-            self._schema.find(model_name, ensure_data_types=True) if self._schema else None
+            self._schema.find(
+                model_name, ensure_data_types=True) if self._schema else None
         )
         if columns_to_types is None:
             snapshot = self.get_snapshot(model_name)
@@ -475,7 +586,8 @@ class MacroEvaluator:
                 columns_to_types = snapshot.node.columns_to_types  # type: ignore
 
         if columns_to_types is None:
-            raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
+            raise SQLMeshError(
+                f"Schema for model '{model_name}' can't be statically determined.")
 
         return columns_to_types
 
@@ -515,13 +627,15 @@ class MacroEvaluator:
         """Returns the resolved name of the surrounding model."""
         this_model = self.locals.get("this_model")
         if not this_model:
-            raise SQLMeshError("Model name is not available in the macro evaluator.")
+            raise SQLMeshError(
+                "Model name is not available in the macro evaluator.")
         return this_model.sql(dialect=self.dialect, identify=True, comments=False)
 
     @property
     def this_model_fqn(self) -> str:
         if self._model_fqn is None:
-            raise SQLMeshError("Model name is not available in the macro evaluator.")
+            raise SQLMeshError(
+                "Model name is not available in the macro evaluator.")
         return self._model_fqn
 
     @property
@@ -548,21 +662,24 @@ class MacroEvaluator:
     def this_env(self) -> str:
         """Returns the name of the current environment in before after all."""
         if "this_env" not in self.locals:
-            raise SQLMeshError("Environment name is only available in before_all and after_all")
+            raise SQLMeshError(
+                "Environment name is only available in before_all and after_all")
         return self.locals["this_env"]
 
     @property
     def schemas(self) -> t.List[str]:
         """Returns the schemas of the current environment in before after all macros."""
         if "schemas" not in self.locals:
-            raise SQLMeshError("Schemas are only available in before_all and after_all")
+            raise SQLMeshError(
+                "Schemas are only available in before_all and after_all")
         return self.locals["schemas"]
 
     @property
     def views(self) -> t.List[str]:
         """Returns the views of the current environment in before after all macros."""
         if "views" not in self.locals:
-            raise SQLMeshError("Views are only available in before_all and after_all")
+            raise SQLMeshError(
+                "Views are only available in before_all and after_all")
         return self.locals["views"]
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
@@ -659,7 +776,8 @@ def _norm_var_arg_lambda(
                     return exp.convert(evaluator.locals[name])
             if SQLMESH_MACRO_PREFIX in node.name:
                 return node.__class__(
-                    this=evaluator.template(node.name, {k: v.name for k, v in args.items()})
+                    this=evaluator.template(
+                        node.name, {k: v.name for k, v in args.items()})
                 )
         elif isinstance(node, MacroFunc):
             local_copy = evaluator.locals.copy()
@@ -687,7 +805,8 @@ def _norm_var_arg_lambda(
             {
                 expression.name.lower(): arg
                 for expression, arg in zip(
-                    func.expressions, args.expressions if isinstance(args, exp.Tuple) else [args]
+                    func.expressions, args.expressions if isinstance(
+                        args, exp.Tuple) else [args]
                 )
             },
         )
@@ -899,13 +1018,15 @@ def star(
             "The 'except_' argument in @STAR will soon be deprecated. Use 'exclude' instead."
         )
         if not isinstance(exclude, (exp.Array, exp.Tuple)):
-            raise SQLMeshError(f"Invalid exclude_ '{exclude}'. Expected an array.")
+            raise SQLMeshError(
+                f"Invalid exclude_ '{exclude}'. Expected an array.")
     if prefix and not isinstance(prefix, exp.Literal):
         raise SQLMeshError(f"Invalid prefix '{prefix}'. Expected a literal.")
     if suffix and not isinstance(suffix, exp.Literal):
         raise SQLMeshError(f"Invalid suffix '{suffix}'. Expected a literal.")
     if not isinstance(quote_identifiers, exp.Boolean):
-        raise SQLMeshError(f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean.")
+        raise SQLMeshError(
+            f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean.")
 
     excluded_names = {
         normalize_identifiers(excluded, dialect=evaluator.dialect).name
@@ -993,8 +1114,8 @@ def safe_add(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
     return (
         exp.Case()
         .when(exp.and_(*(field.is_(exp.null()) for field in fields)), exp.null())
-        .else_(reduce(lambda a, b: a + b, [exp.func("COALESCE", field, 0) for field in fields]))  # type: ignore
-    )
+        .else_(reduce(lambda a, b: a + b, [exp.func("COALESCE", field, 0) for field in fields]))
+    )  # type: ignore
 
 
 @macro()
@@ -1011,7 +1132,8 @@ def safe_sub(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
     return (
         exp.Case()
         .when(exp.and_(*(field.is_(exp.null()) for field in fields)), exp.null())
-        .else_(reduce(lambda a, b: a - b, [exp.func("COALESCE", field, 0) for field in fields]))  # type: ignore
+        # type: ignore
+        .else_(reduce(lambda a, b: a - b, [exp.func("COALESCE", field, 0) for field in fields]))
     )
 
 
@@ -1056,7 +1178,8 @@ def union(
     """
 
     if not args:
-        raise SQLMeshError("At least one table is required for the @UNION macro.")
+        raise SQLMeshError(
+            "At least one table is required for the @UNION macro.")
 
     arg_idx = 0
     # Check for condition
@@ -1064,7 +1187,8 @@ def union(
     if isinstance(condition, bool):
         arg_idx += 1
         if arg_idx >= len(args):
-            raise SQLMeshError("Expected more arguments after the condition of the `@UNION` macro.")
+            raise SQLMeshError(
+                "Expected more arguments after the condition of the `@UNION` macro.")
 
     # Check for union type
     type_ = exp.Literal.string("ALL")
@@ -1073,7 +1197,8 @@ def union(
         arg_idx += 1
     kind = type_.name.upper()
     if kind not in ("ALL", "DISTINCT"):
-        raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
+        raise SQLMeshError(
+            f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
 
     # Remaining args should be tables
     tables = [
@@ -1136,10 +1261,12 @@ def haversine_distance(
             "ASIN",
             exp.func(
                 "SQRT",
-                exp.func("POWER", exp.func("SIN", exp.func("RADIANS", (lat2 - lat1) / 2)), 2)
+                exp.func("POWER", exp.func("SIN", exp.func(
+                    "RADIANS", (lat2 - lat1) / 2)), 2)
                 + exp.func("COS", exp.func("RADIANS", lat1))
                 * exp.func("COS", exp.func("RADIANS", lat2))
-                * exp.func("POWER", exp.func("SIN", exp.func("RADIANS", (lon2 - lon1) / 2)), 2),
+                * exp.func("POWER", exp.func("SIN",
+                           exp.func("RADIANS", (lon2 - lon1) / 2)), 2),
             ),
         )
         * conversion_rate
@@ -1223,7 +1350,8 @@ def var(
 ) -> exp.Expression:
     """Returns the value of a variable or the default value if the variable is not set."""
     if not var_name.is_string:
-        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+        raise SQLMeshError(
+            f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
 
     return exp.convert(evaluator.var(var_name.this, default))
 
@@ -1276,7 +1404,8 @@ def deduplicate(
     partition_clause = exp.tuple_(*partition_by)
 
     order_expressions = [
-        evaluator.transform(parse_one(order_item, into=exp.Ordered, dialect=evaluator.dialect))
+        evaluator.transform(
+            parse_one(order_item, into=exp.Ordered, dialect=evaluator.dialect))
         for order_item in order_by
     ]
 
@@ -1331,7 +1460,8 @@ def date_spine(
 
     try:
         if start_date.is_string and end_date.is_string:
-            start_date_obj = datetime.strptime(start_date_name, "%Y-%m-%d").date()
+            start_date_obj = datetime.strptime(
+                start_date_name, "%Y-%m-%d").date()
             end_date_obj = datetime.strptime(end_date_name, "%Y-%m-%d").date()
         else:
             start_date_obj = None
@@ -1356,9 +1486,11 @@ def date_spine(
         "databricks",
         "postgres",
     ):
-        date_interval = exp.Interval(this=exp.Literal.number(3), unit=exp.var("month"))
+        date_interval = exp.Interval(
+            this=exp.Literal.number(3), unit=exp.var("month"))
     else:
-        date_interval = exp.Interval(this=exp.Literal.number(1), unit=exp.var(datepart_name))
+        date_interval = exp.Interval(
+            this=exp.Literal.number(1), unit=exp.var(datepart_name))
 
     generate_date_array = exp.func(
         "GENERATE_DATE_ARRAY",
@@ -1368,7 +1500,8 @@ def date_spine(
     )
 
     alias_name = f"date_{datepart_name}"
-    exploded = exp.alias_(exp.func("unnest", generate_date_array), "_exploded", table=[alias_name])
+    exploded = exp.alias_(
+        exp.func("unnest", generate_date_array), "_exploded", table=[alias_name])
 
     return exp.select(alias_name).from_(exploded)
 
@@ -1405,7 +1538,8 @@ def resolve_template(
         "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
     """
     if "this_model" in evaluator.locals:
-        this_model = exp.to_table(evaluator.locals["this_model"], dialect=evaluator.dialect)
+        this_model = exp.to_table(
+            evaluator.locals["this_model"], dialect=evaluator.dialect)
         template_str: str = template.this
         result = (
             template_str.replace("@{catalog_name}", this_model.catalog)
@@ -1472,9 +1606,11 @@ def call_macro(
             # https://docs.python.org/3/library/inspect.html#inspect.BoundArguments.arguments
             param = sig.parameters[arg]
             if param.kind is inspect.Parameter.VAR_POSITIONAL:
-                bound.arguments[arg] = tuple(_coerce(v, typ, dialect, path) for v in value)
+                bound.arguments[arg] = tuple(
+                    _coerce(v, typ, dialect, path) for v in value)
             elif param.kind is inspect.Parameter.VAR_KEYWORD:
-                bound.arguments[arg] = {k: _coerce(v, typ, dialect, path) for k, v in value.items()}
+                bound.arguments[arg] = {k: _coerce(
+                    v, typ, dialect, path) for k, v in value.items()}
             else:
                 bound.arguments[arg] = _coerce(value, typ, dialect, path)
 
@@ -1567,7 +1703,8 @@ def _coerce(
                     _coerce(expr, generic[i], dialect, path)
                     for i, expr in enumerate(expr.expressions)
                 )
-            raise SQLMeshError(f"{base_err_msg} Expected {len(generic)} items.")
+            raise SQLMeshError(
+                f"{base_err_msg} Expected {len(generic)} items.")
         if base is list and isinstance(expr, (exp.Array, exp.Tuple)):
             generic = t.get_args(typ)
             if not generic:
