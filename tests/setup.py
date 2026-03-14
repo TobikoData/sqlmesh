@@ -7,6 +7,8 @@ import toml  # type: ignore
 sqlmesh_pyproject = Path(__file__).parent / "sqlmesh_pyproject.toml"
 parsed = toml.load(sqlmesh_pyproject)["project"]
 install_requires = parsed["dependencies"] + parsed["optional-dependencies"]["dev"]
+# remove dbt dependencies
+install_requires = [req for req in install_requires if not req.startswith("dbt")]
 
 # this is just so we can have a dynamic install_requires, everything else is defined in pyproject.toml
 setuptools.setup(install_requires=install_requires)

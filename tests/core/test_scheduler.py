@@ -1126,3 +1126,90 @@ def test_dag_multiple_chain_transitive_deps(mocker: MockerFixture, make_snapshot
             )
         },
     }
+
+
+def test_dag_upstream_dependency_caching_with_complex_diamond(mocker: MockerFixture, make_snapshot):
+    r"""
+    Test that the upstream dependency caching correctly handles a complex diamond dependency graph.
+
+    Dependency graph:
+            A (has intervals)
+           / \
+          B   C (no intervals - transitive)
+         / \ / \
+        D   E   F (no intervals - transitive)
+         \ / \ /
+          G   H (has intervals - selected)
+
+    This creates multiple paths from G and H to A. Without caching, A's dependencies would be
+    computed multiple times (once for each path). With caching, they should be computed once
+    and reused.
+    """
+    snapshots = {}
+
+    for name in ["a", "b", "c", "d", "e", "f", "g", "h"]:
+        snapshots[name] = make_snapshot(SqlModel(name=name, query=parse_one("SELECT 1 as id")))
+        snapshots[name].categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # A is the root
+    snapshots["b"] = snapshots["b"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+    snapshots["c"] = snapshots["c"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+
+    # Middle layer: D, E, F depend on B and/or C
+    snapshots["d"] = snapshots["d"].model_copy(update={"parents": (snapshots["b"].snapshot_id,)})
+    snapshots["e"] = snapshots["e"].model_copy(
+        update={"parents": (snapshots["b"].snapshot_id, snapshots["c"].snapshot_id)}
+    )
+    snapshots["f"] = snapshots["f"].model_copy(update={"parents": (snapshots["c"].snapshot_id,)})
+
+    # Bottom layer: G and H depend on D/E and E/F respectively
+    snapshots["g"] = snapshots["g"].model_copy(
+        update={"parents": (snapshots["d"].snapshot_id, snapshots["e"].snapshot_id)}
+    )
+    snapshots["h"] = snapshots["h"].model_copy(
+        update={"parents": (snapshots["e"].snapshot_id, snapshots["f"].snapshot_id)}
+    )
+
+    scheduler = Scheduler(
+        snapshots=list(snapshots.values()),
+        snapshot_evaluator=mocker.Mock(),
+        state_sync=mocker.Mock(),
+        default_catalog=None,
+    )
+
+    batched_intervals = {
+        snapshots["a"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshots["g"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshots["h"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+    }
+
+    full_dag = snapshots_to_dag(snapshots.values())
+    dag = scheduler._dag(batched_intervals, snapshot_dag=full_dag)
+
+    # Verify the DAG structure:
+    # 1. A should be evaluated first (no dependencies)
+    # 2. Both G and H should depend on A (through transitive dependencies)
+    # 3. Transitive nodes (B, C, D, E, F) should not appear as separate evaluation nodes
+    expected_a_node = EvaluateNode(
+        snapshot_name='"a"',
+        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        batch_index=0,
+    )
+
+    expected_g_node = EvaluateNode(
+        snapshot_name='"g"',
+        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        batch_index=0,
+    )
+
+    expected_h_node = EvaluateNode(
+        snapshot_name='"h"',
+        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        batch_index=0,
+    )
+
+    assert dag.graph == {
+        expected_a_node: set(),
+        expected_g_node: {expected_a_node},
+        expected_h_node: {expected_a_node},
+    }

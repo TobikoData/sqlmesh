@@ -59,6 +59,10 @@ install-dev-dbt-%:
 		echo "Applying overrides for dbt 1.5.0"; \
 		$(PIP) install 'dbt-databricks==1.5.6' 'numpy<2' --reinstall; \
 	fi; \
+	if [ "$$version" = "1.3.0" ]; then \
+		echo "Applying overrides for dbt $$version - upgrading google-cloud-bigquery"; \
+		$(PIP) install 'google-cloud-bigquery>=3.0.0' --upgrade; \
+	fi; \
 	mv pyproject.toml.backup pyproject.toml; \
 	echo "Restored original pyproject.toml"
 
@@ -126,7 +130,7 @@ slow-test:
 	pytest -n auto -m "(fast or slow) and not cicdonly" && pytest -m "isolated" && pytest -m "registry_isolation" && pytest -m "dialect_isolated"
 
 cicd-test:
-	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml && pytest -m "isolated" && pytest -m "registry_isolation" && pytest -m "dialect_isolated"
+	pytest -n auto -m "(fast or slow) and not pyspark" --junitxml=test-results/junit-cicd.xml && pytest -m "pyspark" && pytest -m "isolated" && pytest -m "registry_isolation" && pytest -m "dialect_isolated"
 
 core-fast-test:
 	pytest -n auto -m "fast and not web and not github and not dbt and not jupyter"
@@ -162,7 +166,7 @@ web-test:
 	pytest -n auto -m "web"
 
 guard-%:
-	@ if [ "${${*}}" = "" ]; then \
+	@ if ! printenv ${*} > /dev/null 2>&1; then \
 		echo "Environment variable $* not set"; \
 		exit 1; \
 	fi
@@ -172,7 +176,7 @@ engine-%-install:
 
 engine-docker-%-up:
 	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml up -d
-	./.circleci/wait-for-db.sh ${*}
+	./.github/scripts/wait-for-db.sh ${*}
 
 engine-%-up: engine-%-install engine-docker-%-up
 	@echo "Engine '${*}' is up and running"
@@ -212,14 +216,14 @@ risingwave-test: engine-risingwave-up
 # Cloud Engines #
 #################
 
-snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAKE_DATABASE guard-SNOWFLAKE_USER guard-SNOWFLAKE_PASSWORD engine-snowflake-install
+snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAKE_DATABASE guard-SNOWFLAKE_USER engine-snowflake-install
 	pytest -n auto -m "snowflake" --reruns 3 --junitxml=test-results/junit-snowflake.xml
 
 bigquery-test: guard-BIGQUERY_KEYFILE engine-bigquery-install
 	$(PIP) install -e ".[bigframes]"
 	pytest -n auto -m "bigquery" --reruns 3 --junitxml=test-results/junit-bigquery.xml
 
-databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN guard-DATABRICKS_CONNECT_VERSION engine-databricks-install
+databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_CONNECT_VERSION engine-databricks-install
 	$(PIP) install 'databricks-connect==${DATABRICKS_CONNECT_VERSION}'
 	pytest -n auto -m "databricks" --reruns 3 --junitxml=test-results/junit-databricks.xml
 

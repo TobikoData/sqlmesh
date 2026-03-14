@@ -70,7 +70,7 @@ SQLMesh will retrieve the data warehouse connection credentials from your dlt pr
 
 ### Example
 
-Generating a SQLMesh project dlt is quite simple. In this example, we'll use the example `sushi_pipeline.py` from the [sushi-dlt project](https://github.com/TobikoData/sqlmesh/tree/main/examples/sushi_dlt).
+Generating a SQLMesh project dlt is quite simple. In this example, we'll use the example `sushi_pipeline.py` from the [sushi-dlt project](https://github.com/SQLMesh/sqlmesh/tree/main/examples/sushi_dlt).
 
 First, run the pipeline within the project directory:
 

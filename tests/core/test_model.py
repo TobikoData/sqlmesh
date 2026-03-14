@@ -464,10 +464,10 @@ def test_model_qualification(tmp_path: Path):
         ctx.upsert_model(load_sql_based_model(expressions))
         ctx.plan_builder("dev")
 
-        assert (
-            """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
-            in mock_logger.call_args[0][0]
-        )
+        warning_msg = mock_logger.call_args[0][0]
+        assert "ambiguousorinvalidcolumn:" in warning_msg
+        assert "could not be resolved" in warning_msg
+        assert "db.table" in warning_msg
 
 
 @use_terminal_console
@@ -2727,6 +2727,156 @@ def test_parse(assert_exp_eq):
     )
 
 
+def test_dialect_pattern():
+    def make_test_sql(text: str) -> str:
+        return f"""
+        MODEL (
+            name test_model,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds
+            ),
+            {text}
+        );
+    
+        SELECT 1;  
+        """
+
+    def assert_match(test_sql: str, expected_value: t.Optional[str] = "duckdb"):
+        match = d.DIALECT_PATTERN.search(test_sql)
+
+        dialect_str: t.Optional[str] = None
+        if expected_value is not None:
+            assert match
+            dialect_str = match.group("dialect")
+
+        assert dialect_str == expected_value
+
+    # single-quoted dialect
+    assert_match(
+        make_test_sql(
+            """
+            dialect 'duckdb',
+            description 'there's a dialect foo in here too!'
+            """
+        )
+    )
+
+    # bare dialect
+    assert_match(
+        make_test_sql(
+            """
+            dialect duckdb,
+            description 'there's a dialect foo in here too!'
+            """
+        )
+    )
+
+    # double-quoted dialect (allowed in BQ)
+    assert_match(
+        make_test_sql(
+            """
+            dialect "duckdb",
+            description 'there's a dialect foo in here too!'
+            """
+        )
+    )
+
+    # no dialect specified, "dialect" in description
+    test_sql = make_test_sql(
+        """
+        description 'there's a dialect foo in here too!'
+        """
+    )
+
+    matches = list(d.DIALECT_PATTERN.finditer(test_sql))
+    assert not matches
+
+    # line comment between properties
+    assert_match(
+        make_test_sql(
+            """
+            tag my_tag, -- comment
+            dialect duckdb
+            """
+        )
+    )
+
+    # block comment between properties
+    assert_match(
+        make_test_sql(
+            """
+            tag my_tag, /* comment */
+            dialect duckdb
+            """
+        )
+    )
+
+    # quoted empty dialect
+    assert_match(
+        make_test_sql(
+            """
+            dialect '',
+            tag my_tag
+            """
+        ),
+        None,
+    )
+
+    # double-quoted empty dialect
+    assert_match(
+        make_test_sql(
+            """
+            dialect "",
+            tag my_tag
+            """
+        ),
+        None,
+    )
+
+    # trailing comment after dialect value
+    assert_match(
+        make_test_sql(
+            """
+            dialect duckdb -- trailing comment
+            """
+        )
+    )
+
+    # dialect value isn't terminated by ',' or ')'
+    test_sql = make_test_sql(
+        """
+        dialect duckdb -- trailing comment
+        tag my_tag
+        """
+    )
+
+    matches = list(d.DIALECT_PATTERN.finditer(test_sql))
+    assert not matches
+
+    # dialect first
+    assert_match(
+        """
+        MODEL(
+          dialect duckdb,
+          name my_name
+        );
+        """
+    )
+
+    # full parse
+    sql = """
+    MODEL (
+        name test_model,
+        description 'this text mentions dialect foo but is not a property'
+    );
+
+    SELECT 1;
+    """
+    expressions = d.parse(sql, default_dialect="duckdb")
+    model = load_sql_based_model(expressions)
+    assert model.dialect == ""
+
+
 CONST = "bar"
 
 
@@ -3500,7 +3650,7 @@ def test_model_ctas_query():
 
     assert (
         load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
-        == 'WITH RECURSIVE "a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+        == 'WITH RECURSIVE "a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_0" WHERE FALSE) AS "_1" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
     expressions = d.parse(
@@ -3521,7 +3671,7 @@ def test_model_ctas_query():
 
     assert (
         load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
-        == 'WITH RECURSIVE "a" AS (WITH "nested_a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE) SELECT * FROM "nested_a" AS "nested_a" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+        == 'WITH RECURSIVE "a" AS (WITH "nested_a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_0" WHERE FALSE) AS "_1" WHERE FALSE) SELECT * FROM "nested_a" AS "nested_a" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
 
@@ -4845,7 +4995,7 @@ def test_model_session_properties(sushi_context):
         )
     )
     assert model.session_properties == {
-        "query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]")
+        "query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]", dialect="bigquery")
     }
 
     model = load_sql_based_model(
@@ -12158,3 +12308,37 @@ def test_grants_empty_values():
 def test_grants_table_type(kind: t.Union[str, _ModelKind], expected: DataObjectType):
     model = create_sql_model("test_table", parse_one("SELECT 1 as id"), kind=kind)
     assert model.grants_table_type == expected
+
+
+def test_model_macro_using_locals_called_from_jinja(assert_exp_eq) -> None:
+    @macro()
+    def execution_date(evaluator):
+        return f"""'{evaluator.locals.get("execution_date")}'"""
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        JINJA_QUERY_BEGIN;
+        SELECT {{ execution_date() }} AS col;
+        JINJA_END;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert_exp_eq(model.render_query(), '''SELECT '1970-01-01' AS "col"''')
+
+
+def test_audits_in_embedded_model():
+    expression = d.parse(
+        """
+        MODEL (
+            name test.embedded_with_audits,
+            kind EMBEDDED,
+            audits (not_null (columns := (id)))
+        );
+
+        SELECT 1 AS id, 'A' as value
+        """
+    )
+    with pytest.raises(ConfigError, match="Audits are not supported for embedded models"):
+        load_sql_based_model(expression).validate_definition()

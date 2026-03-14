@@ -115,6 +115,7 @@ from sqlmesh.core.test import (
     ModelTestMetadata,
     generate_test,
     run_tests,
+    filter_tests_by_patterns,
 )
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
@@ -398,6 +399,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict(
             "standaloneaudits"
         )
+        self._model_test_metadata: t.List[ModelTestMetadata] = []
+        self._model_test_metadata_path_index: t.Dict[Path, t.List[ModelTestMetadata]] = {}
+        self._model_test_metadata_fully_qualified_name_index: t.Dict[str, ModelTestMetadata] = {}
+        self._models_with_tests: t.Set[str] = set()
+
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
@@ -636,6 +642,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements.clear()
         self._linters.clear()
         self._environment_statements = []
+        self._model_test_metadata.clear()
+        self._model_test_metadata_path_index.clear()
+        self._model_test_metadata_fully_qualified_name_index.clear()
+        self._models_with_tests.clear()
 
         for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
@@ -647,6 +657,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
             self._environment_statements.extend(project.environment_statements)
+
+            self._model_test_metadata.extend(project.model_test_metadata)
+            for metadata in project.model_test_metadata:
+                if metadata.path not in self._model_test_metadata_path_index:
+                    self._model_test_metadata_path_index[metadata.path] = []
+                self._model_test_metadata_path_index[metadata.path].append(metadata)
+                self._model_test_metadata_fully_qualified_name_index[
+                    metadata.fully_qualified_test_name
+                ] = metadata
+                self._models_with_tests.add(metadata.model_name)
 
             config = loader.config
             self._linters[config.project] = Linter.from_rules(
@@ -672,8 +692,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                     if snapshot.node.project in self._projects:
                         uncached.add(snapshot.name)
                     else:
-                        store = self._standalone_audits if snapshot.is_audit else self._models
-                        store[snapshot.name] = snapshot.node  # type: ignore
+                        local_store = self._standalone_audits if snapshot.is_audit else self._models
+                        if snapshot.name in local_store:
+                            uncached.add(snapshot.name)
+                        else:
+                            local_store[snapshot.name] = snapshot.node  # type: ignore
 
         for model in self._models.values():
             self.dag.add(model.fqn, model.depends_on)
@@ -1048,6 +1071,11 @@ class GenericContext(BaseContext, t.Generic[C]):
     def standalone_audits(self) -> MappingProxyType[str, StandaloneAudit]:
         """Returns all registered standalone audits in this context."""
         return MappingProxyType(self._standalone_audits)
+
+    @property
+    def models_with_tests(self) -> t.Set[str]:
+        """Returns all models with tests in this context."""
+        return self._models_with_tests
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
@@ -1531,6 +1559,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         run = run or False
         diff_rendered = diff_rendered or False
         skip_linter = skip_linter or False
+        min_intervals = min_intervals or 0
 
         environment = environment or self.config.default_target_environment
         environment = Environment.sanitize_name(environment)
@@ -2220,7 +2249,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             pd.set_option("display.max_columns", None)
 
-        test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
+        test_meta = self.select_tests(tests=tests, patterns=match_patterns)
 
         result = run_tests(
             model_test_metadata=test_meta,
@@ -2279,6 +2308,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 snapshot=snapshot,
                 start=start,
                 end=end,
+                execution_time=execution_time,
                 snapshots=self.snapshots,
             ):
                 audit_id = f"{audit_result.audit.name}"
@@ -3016,10 +3046,17 @@ class GenericContext(BaseContext, t.Generic[C]):
         modified_model_names: t.Set[str],
         execution_time: t.Optional[TimeLike] = None,
     ) -> t.Tuple[t.Optional[int], t.Optional[int]]:
-        if not max_interval_end_per_model:
+        # exclude seeds so their stale interval ends does not become the default plan end date
+        # when they're the only ones that contain intervals in this plan
+        non_seed_interval_ends = {
+            model_fqn: end
+            for model_fqn, end in max_interval_end_per_model.items()
+            if model_fqn not in snapshots or not snapshots[model_fqn].is_seed
+        }
+        if not non_seed_interval_ends:
             return None, None
 
-        default_end = to_timestamp(max(max_interval_end_per_model.values()))
+        default_end = to_timestamp(max(non_seed_interval_ends.values()))
         default_start: t.Optional[int] = None
         # Infer the default start by finding the smallest interval start that corresponds to the default end.
         for model_name in backfill_models or modified_model_names or max_interval_end_per_model:
@@ -3192,18 +3229,34 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return all_violations
 
-    def load_model_tests(
-        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
+    def select_tests(
+        self,
+        tests: t.Optional[t.List[str]] = None,
+        patterns: t.Optional[t.List[str]] = None,
     ) -> t.List[ModelTestMetadata]:
-        # If a set of specific test path(s) are provided, we can use a single loader
-        # since it's not required to walk every tests/ folder in each repo
-        loaders = [self._loaders[0]] if tests else self._loaders
+        """Filter pre-loaded test metadata based on tests and patterns."""
 
-        model_tests = []
-        for loader in loaders:
-            model_tests.extend(loader.load_model_tests(tests=tests, patterns=patterns))
+        test_meta = self._model_test_metadata
 
-        return model_tests
+        if tests:
+            filtered_tests = []
+            for test in tests:
+                if "::" in test:
+                    if test in self._model_test_metadata_fully_qualified_name_index:
+                        filtered_tests.append(
+                            self._model_test_metadata_fully_qualified_name_index[test]
+                        )
+                else:
+                    test_path = Path(test)
+                    if test_path in self._model_test_metadata_path_index:
+                        filtered_tests.extend(self._model_test_metadata_path_index[test_path])
+
+            test_meta = filtered_tests
+
+        if patterns:
+            test_meta = filter_tests_by_patterns(test_meta, patterns)
+
+        return test_meta
 
 
 class Context(GenericContext[Config]):

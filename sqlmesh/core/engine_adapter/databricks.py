@@ -78,21 +78,21 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
     def _use_spark_session(self) -> bool:
         if self.can_access_spark_session(bool(self._extra_config.get("disable_spark_session"))):
             return True
-        return (
-            self.can_access_databricks_connect(
-                bool(self._extra_config.get("disable_databricks_connect"))
-            )
-            and (
-                {
-                    "databricks_connect_server_hostname",
-                    "databricks_connect_access_token",
-                }.issubset(self._extra_config)
-            )
-            and (
-                "databricks_connect_cluster_id" in self._extra_config
-                or "databricks_connect_use_serverless" in self._extra_config
-            )
-        )
+
+        if self.can_access_databricks_connect(
+            bool(self._extra_config.get("disable_databricks_connect"))
+        ):
+            if self._extra_config.get("databricks_connect_use_serverless"):
+                return True
+
+            if {
+                "databricks_connect_cluster_id",
+                "databricks_connect_server_hostname",
+                "databricks_connect_access_token",
+            }.issubset(self._extra_config):
+                return True
+
+        return False
 
     @property
     def is_spark_session_connection(self) -> bool:
@@ -108,7 +108,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
 
         connect_kwargs = dict(
             host=self._extra_config["databricks_connect_server_hostname"],
-            token=self._extra_config["databricks_connect_access_token"],
+            token=self._extra_config.get("databricks_connect_access_token"),
         )
         if "databricks_connect_use_serverless" in self._extra_config:
             connect_kwargs["serverless"] = True
@@ -394,3 +394,20 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
             expressions.append(clustered_by_exp)
             properties = exp.Properties(expressions=expressions)
         return properties
+
+    def _build_column_defs(
+        self,
+        target_columns_to_types: t.Dict[str, exp.DataType],
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        is_view: bool = False,
+        materialized: bool = False,
+    ) -> t.List[exp.ColumnDef]:
+        # Databricks requires column types to be specified when adding column comments
+        # in CREATE MATERIALIZED VIEW statements. Override is_view to False to force
+        # column types to be included when comments are present.
+        if is_view and materialized and column_descriptions:
+            is_view = False
+
+        return super()._build_column_defs(
+            target_columns_to_types, column_descriptions, is_view, materialized
+        )

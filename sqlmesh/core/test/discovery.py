@@ -20,6 +20,10 @@ class ModelTestMetadata(PydanticModel):
     def fully_qualified_test_name(self) -> str:
         return f"{self.path}::{self.test_name}"
 
+    @property
+    def model_name(self) -> str:
+        return self.body.get("model", "")
+
     def __hash__(self) -> int:
         return self.fully_qualified_test_name.__hash__()
 

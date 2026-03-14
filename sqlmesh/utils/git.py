@@ -16,7 +16,9 @@ class GitClient:
         )
 
     def list_uncommitted_changed_files(self) -> t.List[Path]:
-        return self._execute_list_output(["diff", "--name-only", "--diff-filter=d"], self._git_root)
+        return self._execute_list_output(
+            ["diff", "--name-only", "--diff-filter=d", "HEAD"], self._git_root
+        )
 
     def list_committed_changed_files(self, target_branch: str = "main") -> t.List[Path]:
         return self._execute_list_output(

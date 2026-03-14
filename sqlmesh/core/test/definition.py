@@ -355,11 +355,12 @@ class ModelTest(unittest.TestCase):
                         for df in _split_df_by_column_pairs(diff)
                     )
                 else:
-                    from pandas import MultiIndex
+                    from pandas import DataFrame, MultiIndex
 
                     levels = t.cast(MultiIndex, diff.columns).levels[0]
                     for col in levels:
-                        col_diff = diff[col]
+                        # diff[col] returns a DataFrame when columns is a MultiIndex
+                        col_diff = t.cast(DataFrame, diff[col])
                         if not col_diff.empty:
                             table = df_to_table(
                                 f"[bold red]Column '{col}' mismatch{failed_subtest}[/bold red]",
@@ -710,7 +711,7 @@ class SqlModelTest(ModelTest):
             query = self._render_model_query()
             sql = query.sql(self._test_adapter_dialect, pretty=self.engine_adapter._pretty_sql)
 
-        with_clause = query.args.get("with")
+        with_clause = query.args.get("with_")
 
         if with_clause:
             self.test_ctes(
@@ -807,7 +808,7 @@ class PythonModelTest(ModelTest):
             actual_df.reset_index(drop=True, inplace=True)
             expected = self._create_df(values, columns=self.model.columns_to_types, partial=partial)
 
-            self.assert_equal(expected, actual_df, sort=False, partial=partial)
+            self.assert_equal(expected, actual_df, sort=True, partial=partial)
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
@@ -904,7 +905,7 @@ def generate_test(
     if isinstance(model, SqlModel):
         assert isinstance(test, SqlModelTest)
         model_query = test._render_model_query()
-        with_clause = model_query.args.get("with")
+        with_clause = model_query.args.get("with_")
 
         if with_clause and include_ctes:
             ctes = {}

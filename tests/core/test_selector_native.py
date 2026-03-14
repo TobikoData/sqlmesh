@@ -6,6 +6,7 @@ from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
+import subprocess
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
@@ -16,6 +17,7 @@ from sqlmesh.core.selector import NativeSelector
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.date import now_timestamp
+from sqlmesh.utils.git import GitClient
 
 
 @pytest.mark.parametrize(
@@ -632,6 +634,92 @@ def test_expand_git_selection(
     git_client_mock.list_committed_changed_files.assert_called_once_with(target_branch="main")
     git_client_mock.list_uncommitted_changed_files.assert_called_once()
     git_client_mock.list_untracked_files.assert_called_once()
+
+
+def test_expand_git_selection_integration(tmp_path: Path, mocker: MockerFixture):
+    repo_path = tmp_path / "test_repo"
+    repo_path.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo_path, check=True, capture_output=True)
+
+    models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    model_a_path = repo_path / "model_a.sql"
+    model_a_path.write_text("SELECT 1 AS a")
+    model_a = SqlModel(name="test_model_a", query=d.parse_one("SELECT 1 AS a"))
+    model_a._path = model_a_path
+    models[model_a.fqn] = model_a
+
+    model_b_path = repo_path / "model_b.sql"
+    model_b_path.write_text("SELECT 2 AS b")
+    model_b = SqlModel(name="test_model_b", query=d.parse_one("SELECT 2 AS b"))
+    model_b._path = model_b_path
+    models[model_b.fqn] = model_b
+
+    subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+
+    # no changes should select nothing
+    git_client = GitClient(repo_path)
+    selector = NativeSelector(mocker.Mock(), models)
+    selector._git_client = git_client
+    assert selector.expand_model_selections([f"git:main"]) == set()
+
+    # modify A but dont stage it, should be only selected
+    model_a_path.write_text("SELECT 10 AS a")
+    assert selector.expand_model_selections([f"git:main"]) == {'"test_model_a"'}
+
+    # stage model A, should still select it
+    subprocess.run(["git", "add", "model_a.sql"], cwd=repo_path, check=True, capture_output=True)
+    assert selector.expand_model_selections([f"git:main"]) == {'"test_model_a"'}
+
+    # now add unstaged change to B and both should be selected
+    model_b_path.write_text("SELECT 20 AS b")
+    assert selector.expand_model_selections([f"git:main"]) == {
+        '"test_model_a"',
+        '"test_model_b"',
+    }
+
+    subprocess.run(
+        ["git", "checkout", "-b", "dev"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Max",
+            "-c",
+            "user.email=max@rb.com",
+            "commit",
+            "-m",
+            "Update model_a",
+        ],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+
+    # now A is committed in the dev branch and B unstaged but should both be selected
+    assert selector.expand_model_selections([f"git:main"]) == {
+        '"test_model_a"',
+        '"test_model_b"',
+    }
 
 
 def test_select_models_with_external_parent(mocker: MockerFixture):

@@ -352,7 +352,8 @@ def build_env(
                     walk(base, base.__qualname__, is_metadata)
 
                 for k, v in obj.__dict__.items():
-                    if k.startswith("__"):
+                    # skip dunder methods bar __init__ as it might contain user defined logic with cross class references
+                    if k.startswith("__") and k != "__init__":
                         continue
 
                     # Traverse methods in a class to find global references
@@ -362,10 +363,14 @@ def build_env(
                     if callable(v):
                         # Walk the method if it's part of the object, else it's a global function and we just store it
                         if v.__qualname__.startswith(obj.__qualname__):
-                            for k, v in func_globals(v).items():
-                                walk(v, k, is_metadata)
-                        else:
-                            walk(v, v.__name__, is_metadata)
+                            try:
+                                for k, v in func_globals(v).items():
+                                    walk(v, k, is_metadata)
+                            except (OSError, TypeError):
+                                # __init__ may come from built-ins or wrapped callables
+                                pass
+                    else:
+                        walk(v, k, is_metadata)
             elif callable(obj):
                 for k, v in func_globals(obj).items():
                     walk(v, k, is_metadata)
