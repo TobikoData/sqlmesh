@@ -128,6 +128,7 @@ gateways:
       warehouse: {{ env_var('SNOWFLAKE_WAREHOUSE') }}
       database: {{ env_var('SNOWFLAKE_DATABASE') }}
       user: {{ env_var('SNOWFLAKE_USER') }}
+      authenticator: SNOWFLAKE_JWT
       private_key_path: {{ env_var('SNOWFLAKE_PRIVATE_KEY_FILE', 'tests/fixtures/snowflake/rsa_key_no_pass.p8') }}
       check_import: false
     state_connection:
