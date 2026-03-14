@@ -291,7 +291,7 @@ class PlanBuilder:
         dag = self._build_dag()
         directly_modified, indirectly_modified = self._build_directly_and_indirectly_modified(dag)
 
-        self._check_destructive_additive_changes(directly_modified)
+        self._check_destructive_additive_changes(directly_modified, indirectly_modified)
         self._categorize_snapshots(dag, indirectly_modified)
         self._adjust_snapshot_intervals()
 
@@ -547,7 +547,11 @@ class PlanBuilder:
                     if new.is_forward_only:
                         new.dev_intervals = new.intervals.copy()
 
-    def _check_destructive_additive_changes(self, directly_modified: t.Set[SnapshotId]) -> None:
+    def _check_destructive_additive_changes(
+        self,
+        directly_modified: t.Set[SnapshotId],
+        indirectly_modified: SnapshotMapping,
+    ) -> None:
         for s_id in sorted(directly_modified):
             if s_id.name not in self._context_diff.modified_snapshots:
                 continue
@@ -566,49 +570,86 @@ class PlanBuilder:
                 continue
 
             new, old = self._context_diff.modified_snapshots[snapshot.name]
+            self._check_schema_change(
+                snapshot, new, old, needs_destructive_check, needs_additive_check
+            )
 
-            # we must know all columns_to_types to determine whether a change is destructive
-            old_columns_to_types = old.model.columns_to_types or {}
-            new_columns_to_types = new.model.columns_to_types or {}
+        # Also check indirectly modified forward-only snapshots.
+        # These inherit schema changes from upstream and the evaluator-level check
+        # (in MigrateSchemasStage) is skipped for dev plans.
+        for _parent_id, downstream_ids in indirectly_modified.items():
+            for s_id in sorted(downstream_ids):
+                if s_id.name not in self._context_diff.modified_snapshots:
+                    continue
 
-            if columns_to_types_all_known(old_columns_to_types) and columns_to_types_all_known(
-                new_columns_to_types
-            ):
-                alter_operations = t.cast(
-                    t.List[TableAlterOperation],
-                    get_schema_differ(snapshot.model.dialect).compare_columns(
-                        new.name,
-                        old_columns_to_types,
-                        new_columns_to_types,
-                        ignore_destructive=new.model.on_destructive_change.is_ignore,
-                        ignore_additive=new.model.on_additive_change.is_ignore,
-                    ),
+                snapshot = self._context_diff.snapshots[s_id]
+                if not snapshot.is_model:
+                    continue
+
+                is_forward_only = self._is_forward_only_change(s_id) or self._forward_only
+                if not is_forward_only:
+                    continue
+
+                needs_destructive_check = snapshot.needs_destructive_check(
+                    self._allow_destructive_models
+                )
+                needs_additive_check = snapshot.needs_additive_check(self._allow_additive_models)
+                if not needs_destructive_check and not needs_additive_check:
+                    continue
+
+                new, old = self._context_diff.modified_snapshots[snapshot.name]
+                self._check_schema_change(
+                    snapshot, new, old, needs_destructive_check, needs_additive_check
                 )
 
-                snapshot_name = snapshot.name
-                model_dialect = snapshot.model.dialect
+    def _check_schema_change(
+        self,
+        snapshot: Snapshot,
+        new: Snapshot,
+        old: Snapshot,
+        needs_destructive_check: bool,
+        needs_additive_check: bool,
+    ) -> None:
+        # we must know all columns_to_types to determine whether a change is destructive
+        old_columns_to_types = old.model.columns_to_types or {}
+        new_columns_to_types = new.model.columns_to_types or {}
 
-                if needs_destructive_check and has_drop_alteration(alter_operations):
-                    self._console.log_destructive_change(
-                        snapshot_name,
-                        alter_operations,
-                        model_dialect,
-                        error=not snapshot.model.on_destructive_change.is_warn,
-                    )
-                    if snapshot.model.on_destructive_change.is_error:
-                        raise PlanError(
-                            "Plan requires a destructive change to a forward-only model."
-                        )
+        if columns_to_types_all_known(old_columns_to_types) and columns_to_types_all_known(
+            new_columns_to_types
+        ):
+            alter_operations = t.cast(
+                t.List[TableAlterOperation],
+                get_schema_differ(snapshot.model.dialect).compare_columns(
+                    new.name,
+                    old_columns_to_types,
+                    new_columns_to_types,
+                    ignore_destructive=new.model.on_destructive_change.is_ignore,
+                    ignore_additive=new.model.on_additive_change.is_ignore,
+                ),
+            )
 
-                if needs_additive_check and has_additive_alteration(alter_operations):
-                    self._console.log_additive_change(
-                        snapshot_name,
-                        alter_operations,
-                        model_dialect,
-                        error=not snapshot.model.on_additive_change.is_warn,
-                    )
-                    if snapshot.model.on_additive_change.is_error:
-                        raise PlanError("Plan requires an additive change to a forward-only model.")
+            snapshot_name = snapshot.name
+            model_dialect = snapshot.model.dialect
+
+            if needs_destructive_check and has_drop_alteration(alter_operations):
+                self._console.log_destructive_change(
+                    snapshot_name,
+                    alter_operations,
+                    model_dialect,
+                    error=not snapshot.model.on_destructive_change.is_warn,
+                )
+                if snapshot.model.on_destructive_change.is_error:
+                    raise PlanError("Plan requires a destructive change to a forward-only model.")
+
+            if needs_additive_check and has_additive_alteration(alter_operations):
+                self._console.log_additive_change(
+                    snapshot_name,
+                    alter_operations,
+                    model_dialect,
+                    error=not snapshot.model.on_additive_change.is_warn,
+                )
+                if snapshot.model.on_additive_change.is_error:
+                    raise PlanError("Plan requires an additive change to a forward-only model.")
 
     def _categorize_snapshots(
         self, dag: DAG[SnapshotId], indirectly_modified: SnapshotMapping

@@ -774,6 +774,242 @@ def test_forward_only_model_on_destructive_change_no_column_types(
         assert mock_logger.call_count == 0
 
 
+def test_forward_only_destructive_change_dev_plan(
+    make_snapshot_on_destructive_change,
+):
+    """Issue #5719: Destructive schema changes on forward-only models must be
+    caught during dev plans, not just prod plans."""
+    snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change()
+
+    context_diff = ContextDiff(
+        environment="dev",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a_old)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a, snapshot_a_old.snapshot_id: snapshot_a_old},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    # Should raise PlanError during dev plan too
+    with pytest.raises(
+        PlanError, match="Plan requires a destructive change to a forward-only model"
+    ):
+        PlanBuilder(context_diff, forward_only=False, is_dev=True).build()
+
+
+def test_forward_only_destructive_change_dev_plan_warn(
+    mocker,
+    make_snapshot_on_destructive_change,
+):
+    """Issue #5719: Destructive schema changes with on_destructive_change=WARN
+    should log a warning during dev plans."""
+    snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change(
+        on_destructive_change=OnDestructiveChange.WARN
+    )
+
+    context_diff = ContextDiff(
+        environment="dev",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a_old)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a, snapshot_a_old.snapshot_id: snapshot_a_old},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    console = TerminalConsole()
+    log_destructive_spy = mocker.spy(console, "log_destructive_change")
+
+    # Should NOT raise, but should log a warning
+    PlanBuilder(context_diff, forward_only=False, is_dev=True, console=console).build()
+    assert log_destructive_spy.call_count == 1
+
+
+def test_forward_only_destructive_change_dev_plan_allow(
+    make_snapshot_on_destructive_change,
+):
+    """Issue #5719: Destructive schema changes with on_destructive_change=ALLOW
+    should pass silently during dev plans."""
+    snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change(
+        on_destructive_change=OnDestructiveChange.ALLOW
+    )
+
+    context_diff = ContextDiff(
+        environment="dev",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a_old)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a, snapshot_a_old.snapshot_id: snapshot_a_old},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    # Should build successfully
+    PlanBuilder(context_diff, forward_only=False, is_dev=True).build()
+
+
+def test_forward_only_indirect_destructive_change_dev_plan(
+    make_snapshot,
+    make_snapshot_on_destructive_change,
+):
+    """Issue #5719: Indirectly modified downstream forward-only models should
+    also be checked for destructive schema changes during dev plans.
+    In this case, A has ALLOW so its check passes, and B is only indirectly
+    modified with no schema change of its own, so the plan should succeed."""
+    # A is directly modified with ALLOW so it passes its own check
+    snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change(
+        on_destructive_change=OnDestructiveChange.ALLOW,
+        old_query="select '1' as one, '2' as two, '2022-01-01' ds",
+        new_query="select '1' as one, '2022-01-01' ds",
+    )
+
+    # B is a downstream forward-only model — same query in both versions
+    b_query = "select one, '2022-01-01' ds from a"
+
+    snapshot_b_old = make_snapshot(
+        SqlModel(
+            name="b",
+            dialect="duckdb",
+            query=parse_one(b_query),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        ),
+        nodes={'"a"': snapshot_a_old.model},
+    )
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            dialect="duckdb",
+            query=parse_one(b_query),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        ),
+        nodes={'"a"': snapshot_a.model},
+    )
+    snapshot_b.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="test_data_hash_b",
+                metadata_hash="test_metadata_hash_b",
+            ),
+            version="test_version_b",
+            dev_table_suffix="dev",
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="dev",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a.name: (snapshot_a, snapshot_a_old),
+            snapshot_b.name: (snapshot_b, snapshot_b_old),
+        },
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    # B's schema didn't change from its own query perspective, so plan succeeds
+    PlanBuilder(context_diff, forward_only=False, is_dev=True).build()
+
+
+def test_forward_only_flag_destructive_change_dev_plan(
+    make_snapshot,
+):
+    """Issue #5719: When using the --forward-only flag on a dev plan, destructive
+    schema changes should be caught at plan-build time."""
+    snapshot_old = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select '1' as one, '2' as two, '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select 1 as one, 2 as two, '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    context_diff = ContextDiff(
+        environment="dev",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot.name: (snapshot, snapshot_old)},
+        snapshots={snapshot.snapshot_id: snapshot, snapshot_old.snapshot_id: snapshot_old},
+        new_snapshots={snapshot.snapshot_id: snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    # forward_only=True flag + is_dev=True should still catch destructive type changes
+    with pytest.raises(
+        PlanError, match="Plan requires a destructive change to a forward-only model"
+    ):
+        PlanBuilder(context_diff, forward_only=True, is_dev=True).build()
+
+
 def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SqlModel(
