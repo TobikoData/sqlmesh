@@ -1081,10 +1081,14 @@ class SnapshotEvaluator:
 
         try:
             logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
+            clone_kwargs: t.Dict[str, t.Any] = {}
+            if snapshot.model.table_format:
+                clone_kwargs["table_format"] = snapshot.model.table_format
             adapter.clone_table(
                 target_table_name,
                 snapshot.table_name(),
                 rendered_physical_properties=rendered_physical_properties,
+                **clone_kwargs,
             )
             self._migrate_target_table(
                 target_table_name=target_table_name,
@@ -2108,7 +2112,10 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         _check_additive_schema_change(
             snapshot, alter_operations, kwargs["allow_additive_snapshots"]
         )
-        self.adapter.alter_table(alter_operations)
+        alter_kwargs: t.Dict[str, t.Any] = {}
+        if snapshot.model.table_format:
+            alter_kwargs["table_format"] = snapshot.model.table_format
+        self.adapter.alter_table(alter_operations, **alter_kwargs)
 
         # Apply grants after schema migration
         deployability_index = kwargs.get("deployability_index")
