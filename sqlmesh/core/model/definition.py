@@ -215,7 +215,7 @@ class _Model(ModelMeta, frozen=True):
         include_python: bool = True,
         include_defaults: bool = False,
         render_query: bool = False,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         """Returns the original list of sql expressions comprising the model definition.
 
         Args:
@@ -366,7 +366,7 @@ class _Model(ModelMeta, frozen=True):
         engine_adapter: t.Optional[EngineAdapter] = None,
         inside_transaction: t.Optional[bool] = True,
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         """Renders pre-statements for a model.
 
         Pre-statements are statements that preceded the model's SELECT query.
@@ -413,7 +413,7 @@ class _Model(ModelMeta, frozen=True):
         engine_adapter: t.Optional[EngineAdapter] = None,
         inside_transaction: t.Optional[bool] = True,
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         """Renders post-statements for a model.
 
         Post-statements are statements that follow after the model's SELECT query.
@@ -460,7 +460,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         return self._render_statements(
             self.on_virtual_update,
             start=start,
@@ -552,15 +552,15 @@ class _Model(ModelMeta, frozen=True):
         return rendered_query
 
     @property
-    def pre_statements(self) -> t.List[exp.Expression]:
+    def pre_statements(self) -> t.List[exp.Expr]:
         return self._get_parsed_statements("pre_statements_")
 
     @property
-    def post_statements(self) -> t.List[exp.Expression]:
+    def post_statements(self) -> t.List[exp.Expr]:
         return self._get_parsed_statements("post_statements_")
 
     @property
-    def on_virtual_update(self) -> t.List[exp.Expression]:
+    def on_virtual_update(self) -> t.List[exp.Expr]:
         return self._get_parsed_statements("on_virtual_update_")
 
     @property
@@ -572,7 +572,7 @@ class _Model(ModelMeta, frozen=True):
             if isinstance(s, d.MacroDef)
         ]
 
-    def _get_parsed_statements(self, attr_name: str) -> t.List[exp.Expression]:
+    def _get_parsed_statements(self, attr_name: str) -> t.List[exp.Expr]:
         value = getattr(self, attr_name)
         if not value:
             return []
@@ -587,9 +587,9 @@ class _Model(ModelMeta, frozen=True):
 
     def _render_statements(
         self,
-        statements: t.Iterable[exp.Expression],
+        statements: t.Iterable[exp.Expr],
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         rendered = (
             self._statement_renderer(statement).render(**kwargs)
             for statement in statements
@@ -597,7 +597,7 @@ class _Model(ModelMeta, frozen=True):
         )
         return [r for expressions in rendered if expressions for r in expressions]
 
-    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+    def _statement_renderer(self, expression: exp.Expr) -> ExpressionRenderer:
         expression_key = id(expression)
         if expression_key not in self._statement_renderer_cache:
             self._statement_renderer_cache[expression_key] = ExpressionRenderer(
@@ -631,7 +631,7 @@ class _Model(ModelMeta, frozen=True):
             The list of rendered expressions.
         """
 
-        def _render(e: exp.Expression) -> str | int | float | bool:
+        def _render(e: exp.Expr) -> str | int | float | bool:
             rendered_exprs = (
                 self._create_renderer(e).render(start=start, end=end, execution_time=execution_time)
                 or []
@@ -676,7 +676,7 @@ class _Model(ModelMeta, frozen=True):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-    ) -> t.Optional[exp.Expression]:
+    ) -> t.Optional[exp.Expr]:
         if self.merge_filter is None:
             return None
         rendered_exprs = (
@@ -690,9 +690,9 @@ class _Model(ModelMeta, frozen=True):
         return rendered_exprs[0].transform(d.replace_merge_table_aliases, dialect=self.dialect)
 
     def _render_properties(
-        self, properties: t.Dict[str, exp.Expression] | SessionProperties, **render_kwargs: t.Any
+        self, properties: t.Dict[str, exp.Expr] | SessionProperties, **render_kwargs: t.Any
     ) -> t.Dict[str, t.Any]:
-        def _render(expression: exp.Expression) -> exp.Expression | None:
+        def _render(expression: exp.Expr) -> exp.Expr | None:
             # note: we use the _statement_renderer instead of _create_renderer because it sets model_fqn which
             # in turn makes @this_model available in the evaluation context
             rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
@@ -714,7 +714,7 @@ class _Model(ModelMeta, frozen=True):
         return {
             k: rendered
             for k, v in properties.items()
-            if (rendered := (_render(v) if isinstance(v, exp.Expression) else v))
+            if (rendered := (_render(v) if isinstance(v, exp.Expr) else v))
         }
 
     def render_physical_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
@@ -726,7 +726,7 @@ class _Model(ModelMeta, frozen=True):
     def render_session_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
         return self._render_properties(properties=self.session_properties, **render_kwargs)
 
-    def _create_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+    def _create_renderer(self, expression: exp.Expr) -> ExpressionRenderer:
         return ExpressionRenderer(
             expression,
             self.dialect,
@@ -822,7 +822,7 @@ class _Model(ModelMeta, frozen=True):
 
     def convert_to_time_column(
         self, time: TimeLike, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> exp.Expression:
+    ) -> exp.Expr:
         """Convert a TimeLike object to the same time format and type as the model's time column."""
         if self.time_column:
             if columns_to_types is None:
@@ -970,7 +970,7 @@ class _Model(ModelMeta, frozen=True):
                     col.name
                     for expr in values
                     for col in t.cast(
-                        exp.Expression, exp.maybe_parse(expr, dialect=self.dialect)
+                        exp.Expr, exp.maybe_parse(expr, dialect=self.dialect)
                     ).find_all(exp.Column)
                 ]
 
@@ -1266,7 +1266,7 @@ class _Model(ModelMeta, frozen=True):
 
         return additional_metadata
 
-    def _is_metadata_statement(self, statement: exp.Expression) -> bool:
+    def _is_metadata_statement(self, statement: exp.Expr) -> bool:
         if isinstance(statement, d.MacroDef):
             return True
         if isinstance(statement, d.MacroFunc):
@@ -1295,7 +1295,7 @@ class _Model(ModelMeta, frozen=True):
         return self._full_depends_on
 
     @property
-    def partitioned_by(self) -> t.List[exp.Expression]:
+    def partitioned_by(self) -> t.List[exp.Expr]:
         """Columns to partition the model by, including the time column if it is not already included."""
         if self.time_column and not self._is_time_column_in_partitioned_by:
             # This allows the user to opt out of automatic time_column injection
@@ -1323,7 +1323,7 @@ class _Model(ModelMeta, frozen=True):
         return None
 
     @property
-    def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expression]]]:
+    def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expr]]]:
         from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
 
         audits_by_name = {**BUILT_IN_AUDITS, **self.audit_definitions}
@@ -1422,8 +1422,8 @@ class SqlModel(_Model):
         include_python: bool = True,
         include_defaults: bool = False,
         render_query: bool = False,
-    ) -> t.List[exp.Expression]:
-        result = super().render_definition(
+    ) -> t.List[exp.Expr]:
+        result: t.List[exp.Expr] = super().render_definition(
             include_python=include_python, include_defaults=include_defaults
         )
 
@@ -1946,7 +1946,7 @@ class PythonModel(_Model):
         include_python: bool = True,
         include_defaults: bool = False,
         render_query: bool = False,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         # Ignore the provided value for the include_python flag, since the Pyhon model's
         # definition without Python code is meaningless.
         return super().render_definition(
@@ -2001,7 +2001,7 @@ class AuditResult(PydanticModel):
     """The model this audit is for."""
     count: t.Optional[int] = None
     """The number of records returned by the audit query. This could be None if the audit was skipped."""
-    query: t.Optional[exp.Expression] = None
+    query: t.Optional[exp.Expr] = None
     """The rendered query used by the audit. This could be None if the audit was skipped."""
     skipped: bool = False
     """Whether or not the audit was blocking. This can be overriden by the user."""
@@ -2009,7 +2009,7 @@ class AuditResult(PydanticModel):
 
 
 class EvaluatableSignals(PydanticModel):
-    signals_to_kwargs: t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]
+    signals_to_kwargs: t.Dict[str, t.Dict[str, t.Optional[exp.Expr]]]
     """A mapping of signal names to the kwargs passed to the signal."""
     python_env: t.Dict[str, Executable]
     """The Python environment that should be used to evaluated the rendered signal calls."""
@@ -2054,7 +2054,7 @@ def _extract_blueprint_variables(blueprint: t.Any, path: Path) -> t.Dict[str, t.
 
 
 def create_models_from_blueprints(
-    gateway: t.Optional[str | exp.Expression],
+    gateway: t.Optional[str | exp.Expr],
     blueprints: t.Any,
     get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
     loader: t.Callable[..., Model],
@@ -2105,7 +2105,7 @@ def create_models_from_blueprints(
 
 
 def load_sql_based_models(
-    expressions: t.List[exp.Expression],
+    expressions: t.List[exp.Expr],
     get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
     path: Path = Path(),
     module_path: Path = Path(),
@@ -2113,8 +2113,8 @@ def load_sql_based_models(
     default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None,
     **loader_kwargs: t.Any,
 ) -> t.List[Model]:
-    gateway: t.Optional[exp.Expression] = None
-    blueprints: t.Optional[exp.Expression] = None
+    gateway: t.Optional[exp.Expr] = None
+    blueprints: t.Optional[exp.Expr] = None
 
     model_meta = seq_get(expressions, 0)
     for prop in (isinstance(model_meta, d.Model) and model_meta.expressions) or []:
@@ -2160,7 +2160,7 @@ def load_sql_based_models(
 
 
 def load_sql_based_model(
-    expressions: t.List[exp.Expression],
+    expressions: t.List[exp.Expr],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: t.Optional[Path] = None,
@@ -2306,7 +2306,7 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
             if kind_prop.name.lower() == "merge_filter":
                 meta_fields["kind"].expressions[idx] = unrendered_merge_filter
 
-    if isinstance(meta_fields.get("dialect"), exp.Expression):
+    if isinstance(meta_fields.get("dialect"), exp.Expr):
         meta_fields["dialect"] = meta_fields["dialect"].name
 
     # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
@@ -2367,7 +2367,7 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
 
 def create_sql_model(
     name: TableName,
-    query: t.Optional[exp.Expression],
+    query: t.Optional[exp.Expr],
     **kwargs: t.Any,
 ) -> Model:
     """Creates a SQL model.
@@ -2492,7 +2492,7 @@ def create_python_model(
         )
         depends_on = {
             dep.sql(dialect=dialect)
-            for dep in t.cast(t.List[exp.Expression], depends_on_rendered)[0].expressions
+            for dep in t.cast(t.List[exp.Expr], depends_on_rendered)[0].expressions
         }
 
     used_variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
@@ -2597,7 +2597,7 @@ def _create_model(
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
 
-    statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
+    statements: t.List[t.Union[exp.Expr, t.Tuple[exp.Expr, bool]]] = []
 
     if "query" in kwargs:
         statements.append(kwargs["query"])
@@ -2636,11 +2636,11 @@ def _create_model(
         if isinstance(property_values, exp.Tuple):
             statements.extend(property_values.expressions)
 
-    if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
+    if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expr):
         statements.append(kwargs["kind"].merge_filter)
 
     jinja_macro_references, referenced_variables = extract_macro_references_and_variables(
-        *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
+        *(gen(e if isinstance(e, exp.Expr) else e[0]) for e in statements)
     )
 
     if jinja_macros:
@@ -2687,7 +2687,7 @@ def _create_model(
     model.audit_definitions.update(audit_definitions)
 
     # Any macro referenced in audits or signals needs to be treated as metadata-only
-    statements.extend((audit.query, True) for audit in audit_definitions.values())
+    statements.extend((audit.query, True) for audit in audit_definitions.values())  # type: ignore[misc]
 
     # Ensure that all audits referenced in the model are defined
     from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
@@ -2743,14 +2743,14 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 
 def _split_sql_model_statements(
-    expressions: t.List[exp.Expression],
+    expressions: t.List[exp.Expr],
     path: t.Optional[Path],
     dialect: t.Optional[str] = None,
 ) -> t.Tuple[
-    t.Optional[exp.Expression],
-    t.List[exp.Expression],
-    t.List[exp.Expression],
-    t.List[exp.Expression],
+    t.Optional[exp.Expr],
+    t.List[exp.Expr],
+    t.List[exp.Expr],
+    t.List[exp.Expr],
     UniqueKeyDict[str, ModelAudit],
 ]:
     """Extracts the SELECT query from a sequence of expressions.
@@ -2811,8 +2811,8 @@ def _split_sql_model_statements(
 
 def _resolve_properties(
     default: t.Optional[t.Dict[str, t.Any]],
-    provided: t.Optional[exp.Expression | t.Dict[str, t.Any]],
-) -> t.Optional[exp.Expression]:
+    provided: t.Optional[exp.Expr | t.Dict[str, t.Any]],
+) -> t.Optional[exp.Expr]:
     if isinstance(provided, dict):
         properties = {k: exp.Literal.string(k).eq(v) for k, v in provided.items()}
     elif provided:
@@ -2834,7 +2834,7 @@ def _resolve_properties(
     return None
 
 
-def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expression:
+def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expr:
     return exp.Tuple(
         expressions=[
             exp.Anonymous(
@@ -2849,16 +2849,16 @@ def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> ex
     )
 
 
-def _is_projection(expr: exp.Expression) -> bool:
+def _is_projection(expr: exp.Expr) -> bool:
     parent = expr.parent
     return isinstance(parent, exp.Select) and expr.arg_key == "expressions"
 
 
-def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression | exp.Tuple:
+def _single_expr_or_tuple(values: t.Sequence[exp.Expr]) -> exp.Expr | exp.Tuple:
     return values[0] if len(values) == 1 else exp.Tuple(expressions=values)
 
 
-def _refs_to_sql(values: t.Any) -> exp.Expression:
+def _refs_to_sql(values: t.Any) -> exp.Expr:
     return exp.Tuple(expressions=values)
 
 
@@ -2874,7 +2874,7 @@ def render_meta_fields(
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> t.Dict[str, t.Any]:
     def render_field_value(value: t.Any) -> t.Any:
-        if isinstance(value, exp.Expression) or (isinstance(value, str) and "@" in value):
+        if isinstance(value, exp.Expr) or (isinstance(value, str) and "@" in value):
             expression = exp.maybe_parse(value, dialect=dialect)
             rendered_expr = render_expression(
                 expression=expression,
@@ -3011,7 +3011,7 @@ def parse_defaults_properties(
 
 
 def render_expression(
-    expression: exp.Expression,
+    expression: exp.Expr,
     module_path: Path,
     path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
@@ -3020,7 +3020,7 @@ def render_expression(
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     default_catalog: t.Optional[str] = None,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
-) -> t.Optional[t.List[exp.Expression]]:
+) -> t.Optional[t.List[exp.Expr]]:
     meta_python_env = make_python_env(
         expressions=expression,
         jinja_macro_references=None,
@@ -3092,8 +3092,8 @@ def get_model_name(path: Path) -> str:
 
 # function applied to time column when automatically used for partitioning in INCREMENTAL_BY_TIME_RANGE models
 def clickhouse_partition_func(
-    column: exp.Expression, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
-) -> exp.Expression:
+    column: exp.Expr, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
+) -> exp.Expr:
     # `toMonday()` function accepts a Date or DateTime type column
 
     col_type = (columns_to_types and columns_to_types.get(column.name)) or exp.DataType.build(

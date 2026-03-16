@@ -6011,7 +6011,7 @@ def test_when_matched_normalization() -> None:
     assert isinstance(model.kind, IncrementalByUniqueKeyKind)
     assert isinstance(model.kind.when_matched, exp.Whens)
     first_expression = model.kind.when_matched.expressions[0]
-    assert isinstance(first_expression, exp.Expression)
+    assert isinstance(first_expression, exp.Expr)
     assert (
         first_expression.sql(dialect="snowflake")
         == 'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."KEY_A" = "__MERGE_SOURCE__"."KEY_A", "__MERGE_TARGET__"."KEY_B" = "__MERGE_SOURCE__"."KEY_B"'
@@ -6039,7 +6039,7 @@ def test_when_matched_normalization() -> None:
     assert isinstance(model.kind, IncrementalByUniqueKeyKind)
     assert isinstance(model.kind.when_matched, exp.Whens)
     first_expression = model.kind.when_matched.expressions[0]
-    assert isinstance(first_expression, exp.Expression)
+    assert isinstance(first_expression, exp.Expr)
     assert (
         first_expression.sql(dialect="snowflake")
         == 'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."kEy_A" = "__MERGE_SOURCE__"."kEy_A", "__MERGE_TARGET__"."kEY_b" = "__MERGE_SOURCE__"."KEY_B"'
@@ -6447,7 +6447,7 @@ def test_end_no_start():
 
 def test_variables():
     @macro()
-    def test_macro_var(evaluator) -> exp.Expression:
+    def test_macro_var(evaluator) -> exp.Expr:
         return exp.convert(evaluator.var("TEST_VAR_D") + 10)
 
     expressions = parse(
@@ -6946,7 +6946,7 @@ def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
     # merge_filter will stay unrendered as well
     assert model.unique_key[0] == exp.column("a", quoted=True)
     assert (
-        t.cast(exp.Expression, model.merge_filter).sql()
+        t.cast(exp.Expr, model.merge_filter).sql()
         == '"__MERGE_SOURCE__"."id" > 0 AND "__MERGE_TARGET__"."updated_at" < @end_ds AND "__MERGE_SOURCE__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
@@ -7149,7 +7149,7 @@ def test_gateway_macro() -> None:
     assert model.render_query_or_raise().sql() == "SELECT 'in_memory' AS \"gateway\""
 
     @macro()
-    def macro_uses_gateway(evaluator) -> exp.Expression:
+    def macro_uses_gateway(evaluator) -> exp.Expr:
         return exp.convert(evaluator.gateway + "_from_macro")
 
     model = load_sql_based_model(
@@ -8729,7 +8729,7 @@ def test_merge_filter_macro():
     def predicate(
         evaluator: MacroEvaluator,
         cluster_column: exp.Column,
-    ) -> exp.Expression:
+    ) -> exp.Expr:
         return parse_one(f"source.{cluster_column} > dateadd(day, -7, target.{cluster_column})")
 
     expressions = d.parse(
@@ -9904,7 +9904,7 @@ def entrypoint(evaluator):
         {"customer": SqlValue(sql="customer1"), "customer_field": SqlValue(sql="'bar'")}
     )
 
-    assert t.cast(exp.Expression, customer1_model.render_query()).sql() == (
+    assert t.cast(exp.Expr, customer1_model.render_query()).sql() == (
         """SELECT 'bar' AS "foo", "bar" AS "foo2", 'bar' AS "foo3" FROM "db"."customer1"."my_source" AS "my_source\""""
     )
 
@@ -9917,7 +9917,7 @@ def entrypoint(evaluator):
         {"customer": SqlValue(sql="customer2"), "customer_field": SqlValue(sql="qux")}
     )
 
-    assert t.cast(exp.Expression, customer2_model.render_query()).sql() == (
+    assert t.cast(exp.Expr, customer2_model.render_query()).sql() == (
         '''SELECT "qux" AS "foo", "qux" AS "foo2", "qux" AS "foo3" FROM "db"."customer2"."my_source" AS "my_source"'''
     )
 
@@ -10703,12 +10703,12 @@ def m4_non_metadata_references_v6(evaluator):
     query_with_vars = macro_evaluator.transform(
         parse_one("SELECT " + ", ".join(f"@v{var}, @VAR('v{var}')" for var in [1, 2, 3, 6]))
     )
-    assert t.cast(exp.Expression, query_with_vars).sql() == "SELECT 1, 1, 2, 2, 3, 3, 6, 6"
+    assert t.cast(exp.Expr, query_with_vars).sql() == "SELECT 1, 1, 2, 2, 3, 3, 6, 6"
 
     query_with_blueprint_vars = macro_evaluator.transform(
         parse_one("SELECT " + ", ".join(f"@v{var}, @BLUEPRINT_VAR('v{var}')" for var in [4, 5]))
     )
-    assert t.cast(exp.Expression, query_with_blueprint_vars).sql() == "SELECT 4, 4, 5, 5"
+    assert t.cast(exp.Expr, query_with_blueprint_vars).sql() == "SELECT 4, 4, 5, 5"
 
 
 def test_variable_mentioned_in_both_metadata_and_non_metadata_macro(tmp_path: Path) -> None:

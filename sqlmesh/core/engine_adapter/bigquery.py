@@ -67,7 +67,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
     SUPPORTS_GRANTS = True
-    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expression = exp.func("session_user")
+    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expr = exp.func("session_user")
     SUPPORTS_MULTIPLE_GRANT_PRINCIPALS = True
     USE_CATALOG_IN_GRANTS = True
     GRANT_INFORMATION_SCHEMA_TABLE_NAME = "OBJECT_PRIVILEGES"
@@ -288,7 +288,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
         schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
-        properties: t.List[exp.Expression] = [],
+        properties: t.List[exp.Expr] = [],
     ) -> None:
         """Create a schema from a name or qualified table name."""
         from google.api_core.exceptions import Conflict
@@ -433,7 +433,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
     def fetchone(
         self,
-        query: t.Union[exp.Expression, str],
+        query: t.Union[exp.Expr, str],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
     ) -> t.Optional[t.Tuple]:
@@ -453,7 +453,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
     def fetchall(
         self,
-        query: t.Union[exp.Expression, str],
+        query: t.Union[exp.Expr, str],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
     ) -> t.List[t.Tuple]:
@@ -689,7 +689,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
         self,
         table_name: TableName,
         query_or_df: QueryOrDF,
-        partitioned_by: t.List[exp.Expression],
+        partitioned_by: t.List[exp.Expr],
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
@@ -803,7 +803,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
         return ".".join(part.name for part in exp.to_table(table_name).parts)
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> DF:
         self.execute(query, quote_identifiers=quote_identifiers)
         query_job = self._query_job
@@ -863,7 +863,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
     def _build_partitioned_by_exp(
         self,
-        partitioned_by: t.List[exp.Expression],
+        partitioned_by: t.List[exp.Expr],
         *,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -909,16 +909,16 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
         catalog_name: t.Optional[str] = None,
         table_format: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
-        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expr]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[exp.Expression]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        clustered_by: t.Optional[t.List[exp.Expr]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
-        properties: t.List[exp.Expression] = []
+        properties: t.List[exp.Expr] = []
 
         if partitioned_by and (
             partitioned_by_prop := self._build_partitioned_by_exp(
@@ -1025,12 +1025,12 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
     def _build_view_properties_exp(
         self,
-        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         table_description: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
-        properties: t.List[exp.Expression] = []
+        properties: t.List[exp.Expr] = []
 
         if table_description:
             properties.append(
@@ -1257,10 +1257,10 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
                 )
             )
 
-    def _normalize_decimal_value(self, col: exp.Expression, precision: int) -> exp.Expression:
+    def _normalize_decimal_value(self, col: exp.Expr, precision: int) -> exp.Expr:
         return exp.func("FORMAT", exp.Literal.string(f"%.{precision}f"), col)
 
-    def _normalize_nested_value(self, col: exp.Expression) -> exp.Expression:
+    def _normalize_nested_value(self, col: exp.Expr) -> exp.Expr:
         return exp.func("TO_JSON_STRING", col, dialect=self.dialect)
 
     @t.overload
@@ -1338,7 +1338,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
     def _get_bq_dataset_location(self, project: str, dataset: str) -> str:
         return self._db_call(self.client.get_dataset, dataset_ref=f"{project}.{dataset}").location
 
-    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expr:
         if not table.db:
             raise ValueError(
                 f"Table {table.sql(dialect=self.dialect)} does not have a schema (dataset)"
@@ -1392,8 +1392,8 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
         table: exp.Table,
         grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        expressions: t.List[exp.Expression] = []
+    ) -> t.List[exp.Expr]:
+        expressions: t.List[exp.Expr] = []
         if not grants_config:
             return expressions
 

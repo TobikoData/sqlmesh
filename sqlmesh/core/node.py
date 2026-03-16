@@ -215,7 +215,7 @@ class DbtNodeInfo(PydanticModel):
             self.alias = None
         return self
 
-    def to_expression(self) -> exp.Expression:
+    def to_expression(self) -> exp.Expr:
         """Produce a SQLGlot expression representing this object, for use in things like the model/audit definition renderers"""
         return exp.tuple_(
             *(
@@ -324,7 +324,7 @@ class _Node(DbtInfoMixin, PydanticModel):
     def _name_validator(cls, v: t.Any) -> t.Optional[str]:
         if v is None:
             return None
-        if isinstance(v, exp.Expression):
+        if isinstance(v, exp.Expr):
             return v.meta["sql"]
         return str(v)
 
@@ -352,7 +352,7 @@ class _Node(DbtInfoMixin, PydanticModel):
     @field_validator("start", "end", mode="before")
     @classmethod
     def _date_validator(cls, v: t.Any) -> t.Optional[TimeLike]:
-        if isinstance(v, exp.Expression):
+        if isinstance(v, exp.Expr):
             v = v.name
         if v and not to_datetime(v):
             raise ConfigError(f"'{v}' needs to be time-like: https://pypi.org/project/dateparser")
@@ -555,6 +555,6 @@ class NodeType(str, Enum):
 
 
 def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:
-    if isinstance(v, exp.Expression):
+    if isinstance(v, exp.Expr):
         return v.name
     return str(v) if v is not None else None

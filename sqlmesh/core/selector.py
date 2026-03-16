@@ -191,7 +191,7 @@ class Selector(abc.ABC):
                 models_by_tags.setdefault(tag, set())
                 models_by_tags[tag].add(model.fqn)
 
-        def evaluate(node: exp.Expression) -> t.Set[str]:
+        def evaluate(node: exp.Expr) -> t.Set[str]:
             if isinstance(node, exp.Var):
                 pattern = node.this
                 if "*" in pattern:
@@ -400,7 +400,7 @@ class Direction(exp.Expression):
     pass
 
 
-def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
+def parse(selector: str, dialect: DialectType = None) -> exp.Expr:
     tokens = SelectorDialect().tokenize(selector)
     i = 0
 
@@ -444,7 +444,7 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
             return True
         return False
 
-    def _parse_var() -> exp.Expression:
+    def _parse_var() -> exp.Expr:
         upstream = _match(TokenType.PLUS)
         downstream = None
         tag = _parse_kind("tag")
@@ -457,7 +457,7 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
             name = _prev().text
             rstar = "*" if _match(TokenType.STAR) else ""
             downstream = _match(TokenType.PLUS)
-            this: exp.Expression = exp.Var(this=f"{lstar}{name}{rstar}")
+            this: exp.Expr = exp.Var(this=f"{lstar}{name}{rstar}")
 
         elif _match(TokenType.L_PAREN):
             this = exp.Paren(this=_parse_conjunction())
@@ -483,12 +483,12 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
             this = Direction(this=this, **directions)
         return this
 
-    def _parse_unary() -> exp.Expression:
+    def _parse_unary() -> exp.Expr:
         if _match(TokenType.CARET):
             return exp.Not(this=_parse_unary())
         return _parse_var()
 
-    def _parse_conjunction() -> exp.Expression:
+    def _parse_conjunction() -> exp.Expr:
         this = _parse_unary()
 
         if _match(TokenType.AMP):

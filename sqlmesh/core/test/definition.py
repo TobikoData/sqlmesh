@@ -674,7 +674,7 @@ class ModelTest(unittest.TestCase):
 
 
 class SqlModelTest(ModelTest):
-    def test_ctes(self, ctes: t.Dict[str, exp.Expression], recursive: bool = False) -> None:
+    def test_ctes(self, ctes: t.Dict[str, exp.Expr], recursive: bool = False) -> None:
         """Run CTE queries and compare output to expected output"""
         for cte_name, values in self.body["outputs"].get("ctes", {}).items():
             with self.subTest(cte=cte_name):
@@ -819,7 +819,7 @@ class PythonModelTest(ModelTest):
             time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
             df = next(self.model.render(context=self.context, variables=variables, **time_kwargs))
 
-        assert not isinstance(df, exp.Expression)
+        assert not isinstance(df, exp.Expr)
         return df if isinstance(df, pd.DataFrame) else df.toPandas()
 
 

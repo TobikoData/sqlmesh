@@ -444,6 +444,42 @@ class Executable(PydanticModel):
         )
 
 
+def _resolve_import_module(obj: t.Any, name: str) -> str:
+    """Resolve the most appropriate module path for importing an object.
+
+    When a callable's ``__module__`` points to a submodule of a known public
+    module (e.g. ``sqlglot.expressions.builders`` is a submodule of
+    ``sqlglot.expressions``), and the object is re-exported from that public
+    parent module, prefer the public parent so that generated import statements
+    remain stable across internal restructurings of third-party packages.
+
+    Args:
+        obj: The callable to resolve.
+        name: The name under which the object will be imported.
+
+    Returns:
+        The module path to use in the ``from <module> import <name>`` statement.
+    """
+    module_name = getattr(obj, "__module__", None) or ""
+    parts = module_name.split(".")
+
+    # Walk from the immediate parent up to (but not including) the top-level
+    # package, stopping at the first ancestor that also exports the object.
+    # We stop before the top-level package to avoid over-normalizing
+    # (e.g. ``sqlglot`` re-exports everything, but callers expect the more
+    # specific ``sqlglot.expressions`` when that is where the object lives).
+    for i in range(len(parts) - 1, 1, -1):
+        parent = ".".join(parts[:i])
+        try:
+            parent_module = sys.modules.get(parent) or importlib.import_module(parent)
+            if getattr(parent_module, name, None) is obj:
+                return parent
+        except Exception:
+            continue
+
+    return module_name
+
+
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
     """Serializes a python function into a self contained dictionary.
 
@@ -512,7 +548,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                 )
             else:
                 serialized[k] = Executable(
-                    payload=f"from {v.__module__} import {name}",
+                    payload=f"from {_resolve_import_module(v, name)} import {name}",
                     kind=ExecutableKind.IMPORT,
                     is_metadata=is_metadata,
                 )
