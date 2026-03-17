@@ -1860,10 +1860,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         source: str,
         target: str,
-        on: t.Optional[t.List[str] | exp.Condition] = None,
+        on: t.Optional[t.List[str] | exp.Expr] = None,
         skip_columns: t.Optional[t.List[str]] = None,
         select_models: t.Optional[t.Collection[str]] = None,
-        where: t.Optional[str | exp.Condition] = None,
+        where: t.Optional[str | exp.Expr] = None,
         limit: int = 20,
         show: bool = True,
         show_sample: bool = True,
@@ -1922,7 +1922,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 raise SQLMeshError(e)
 
             models_to_diff: t.List[
-                t.Tuple[Model, EngineAdapter, str, str, t.Optional[t.List[str] | exp.Condition]]
+                t.Tuple[Model, EngineAdapter, str, str, t.Optional[t.List[str] | exp.Expr]]
             ] = []
             models_without_grain: t.List[Model] = []
             source_snapshots_to_name = {
@@ -2041,9 +2041,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         target_alias: str,
         limit: int,
         decimals: int,
-        on: t.Optional[t.List[str] | exp.Condition] = None,
+        on: t.Optional[t.List[str] | exp.Expr] = None,
         skip_columns: t.Optional[t.List[str]] = None,
-        where: t.Optional[str | exp.Condition] = None,
+        where: t.Optional[str | exp.Expr] = None,
         show: bool = True,
         temp_schema: t.Optional[str] = None,
         skip_grain_check: bool = False,
@@ -2083,10 +2083,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         limit: int,
         decimals: int,
         adapter: EngineAdapter,
-        on: t.Optional[t.List[str] | exp.Condition] = None,
+        on: t.Optional[t.List[str] | exp.Expr] = None,
         model: t.Optional[Model] = None,
         skip_columns: t.Optional[t.List[str]] = None,
-        where: t.Optional[str | exp.Condition] = None,
+        where: t.Optional[str | exp.Expr] = None,
         schema_diff_ignore_case: bool = False,
     ) -> TableDiff:
         if not on:

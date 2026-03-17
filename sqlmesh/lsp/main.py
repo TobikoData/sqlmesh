@@ -374,7 +374,7 @@ class SQLMeshLanguageServer:
                     table_diffs = context.context.table_diff(
                         source=source,
                         target=target,
-                        on=t.cast(exp.Condition, exp.condition(on)) if on else None,
+                        on=exp.condition(on) if on else None,
                         select_models={model_or_snapshot} if model_or_snapshot else None,
                         where=where,
                         limit=limit,
