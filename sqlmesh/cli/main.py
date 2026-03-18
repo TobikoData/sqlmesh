@@ -246,7 +246,7 @@ Next steps:
 Need help?
 • Docs:   https://sqlmesh.readthedocs.io
 • Slack:  https://www.tobikodata.com/slack
-• GitHub: https://github.com/TobikoData/sqlmesh/issues
+• GitHub: https://github.com/SQLMesh/sqlmesh/issues
 """)
 
 
@@ -535,7 +535,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 )
 @click.option(
     "--min-intervals",
-    default=0,
+    default=None,
     help="For every model, ensure at least this many intervals are covered by a missing intervals check regardless of the plan start date",
 )
 @opt.verbose

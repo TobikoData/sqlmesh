@@ -714,7 +714,7 @@ class SnapshotEvaluator:
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
         target_table_name = snapshot.table_name(is_deployable=is_snapshot_deployable)
-        # https://github.com/TobikoData/sqlmesh/issues/2609
+        # https://github.com/SQLMesh/sqlmesh/issues/2609
         # If there are no existing intervals yet; only consider this a first insert for the first snapshot in the batch
         if target_table_exists is None:
             target_table_exists = adapter.table_exists(target_table_name)

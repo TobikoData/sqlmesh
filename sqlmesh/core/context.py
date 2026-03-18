@@ -692,8 +692,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                     if snapshot.node.project in self._projects:
                         uncached.add(snapshot.name)
                     else:
-                        store = self._standalone_audits if snapshot.is_audit else self._models
-                        store[snapshot.name] = snapshot.node  # type: ignore
+                        local_store = self._standalone_audits if snapshot.is_audit else self._models
+                        if snapshot.name in local_store:
+                            uncached.add(snapshot.name)
+                        else:
+                            local_store[snapshot.name] = snapshot.node  # type: ignore
 
         for model in self._models.values():
             self.dag.add(model.fqn, model.depends_on)
@@ -1556,6 +1559,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         run = run or False
         diff_rendered = diff_rendered or False
         skip_linter = skip_linter or False
+        min_intervals = min_intervals or 0
 
         environment = environment or self.config.default_target_environment
         environment = Environment.sanitize_name(environment)
@@ -3042,10 +3046,17 @@ class GenericContext(BaseContext, t.Generic[C]):
         modified_model_names: t.Set[str],
         execution_time: t.Optional[TimeLike] = None,
     ) -> t.Tuple[t.Optional[int], t.Optional[int]]:
-        if not max_interval_end_per_model:
+        # exclude seeds so their stale interval ends does not become the default plan end date
+        # when they're the only ones that contain intervals in this plan
+        non_seed_interval_ends = {
+            model_fqn: end
+            for model_fqn, end in max_interval_end_per_model.items()
+            if model_fqn not in snapshots or not snapshots[model_fqn].is_seed
+        }
+        if not non_seed_interval_ends:
             return None, None
 
-        default_end = to_timestamp(max(max_interval_end_per_model.values()))
+        default_end = to_timestamp(max(non_seed_interval_ends.values()))
         default_start: t.Optional[int] = None
         # Infer the default start by finding the smallest interval start that corresponds to the default end.
         for model_name in backfill_models or modified_model_names or max_interval_end_per_model:

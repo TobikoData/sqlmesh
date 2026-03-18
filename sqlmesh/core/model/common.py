@@ -255,7 +255,7 @@ def _add_variables_to_python_env(
     # - appear in metadata-only expressions, such as `audits (...)`, virtual statements, etc
     # - appear in the ASTs or definitions of metadata-only macros
     #
-    # See also: https://github.com/TobikoData/sqlmesh/pull/4936#issuecomment-3136339936,
+    # See also: https://github.com/SQLMesh/sqlmesh/pull/4936#issuecomment-3136339936,
     # specifically the "Terminology" and "Observations" section.
     metadata_used_variables = {
         var_name for var_name, is_metadata in used_variables.items() if is_metadata
@@ -275,7 +275,7 @@ def _add_variables_to_python_env(
     if overlapping_variables := (non_metadata_used_variables & metadata_used_variables):
         raise ConfigError(
             f"Variables {', '.join(overlapping_variables)} are both metadata and non-metadata, "
-            "which is unexpected. Please file an issue at https://github.com/TobikoData/sqlmesh/issues/new."
+            "which is unexpected. Please file an issue at https://github.com/SQLMesh/sqlmesh/issues/new."
         )
 
     metadata_variables = {
