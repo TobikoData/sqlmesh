@@ -463,12 +463,11 @@ def _resolve_import_module(obj: t.Any, name: str) -> str:
     module_name = getattr(obj, "__module__", None) or ""
     parts = module_name.split(".")
 
-    # Walk from the immediate parent up to (but not including) the top-level
-    # package, stopping at the first ancestor that also exports the object.
-    # We stop before the top-level package to avoid over-normalizing
-    # (e.g. ``sqlglot`` re-exports everything, but callers expect the more
-    # specific ``sqlglot.expressions`` when that is where the object lives).
-    for i in range(len(parts) - 1, 1, -1):
+    # Walk from the shallowest ancestor (excluding the top-level package) up to
+    # the immediate parent, returning the shallowest one that re-exports the object.
+    # We skip the top-level package to avoid over-normalizing (e.g. ``sqlglot``
+    # re-exports everything, but callers expect ``sqlglot.expressions``).
+    for i in range(2, len(parts)):
         parent = ".".join(parts[:i])
         try:
             parent_module = sys.modules.get(parent) or importlib.import_module(parent)
