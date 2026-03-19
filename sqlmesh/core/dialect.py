@@ -529,7 +529,7 @@ def _parse_table_parts(
             )
         ):
             self._retreat(index)
-            return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
+            return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)  # type: ignore[return-value]
 
         table_arg.replace(MacroVar(this=name[1:]))
         return StagedFilePath(**table.args)
