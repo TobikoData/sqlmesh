@@ -3683,7 +3683,7 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
     custom_insert_kind = None
 
     class TestCustomKind(CustomKind):
-        _primary_key: t.List[exp.Expression]  # type: ignore[no-untyped-def]
+        _primary_key: t.List[exp.Expr]  # type: ignore[no-untyped-def]
 
         @model_validator(mode="after")
         def _validate_model(self) -> Self:
@@ -3695,7 +3695,7 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
             return self
 
         @property
-        def primary_key(self) -> t.List[exp.Expression]:
+        def primary_key(self) -> t.List[exp.Expr]:
             return self._primary_key
 
     class TestCustomMaterializationStrategy(CustomMaterialization[TestCustomKind]):

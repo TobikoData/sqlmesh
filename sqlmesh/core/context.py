@@ -234,7 +234,7 @@ class BaseContext(abc.ABC):
         )
 
     def fetchdf(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
         """Fetches a dataframe given a sql string or sqlglot expression.
 
@@ -248,7 +248,7 @@ class BaseContext(abc.ABC):
         return self.engine_adapter.fetchdf(query, quote_identifiers=quote_identifiers)
 
     def fetch_pyspark_df(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> PySparkDataFrame:
         """Fetches a PySpark dataframe given a sql string or sqlglot expression.
 
@@ -1105,7 +1105,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         execution_time: t.Optional[TimeLike] = None,
         expand: t.Union[bool, t.Iterable[str]] = False,
         **kwargs: t.Any,
-    ) -> exp.Expression:
+    ) -> exp.Expr:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -1860,10 +1860,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         source: str,
         target: str,
-        on: t.Optional[t.List[str] | exp.Condition] = None,
+        on: t.Optional[t.List[str] | exp.Expr] = None,
         skip_columns: t.Optional[t.List[str]] = None,
         select_models: t.Optional[t.Collection[str]] = None,
-        where: t.Optional[str | exp.Condition] = None,
+        where: t.Optional[str | exp.Expr] = None,
         limit: int = 20,
         show: bool = True,
         show_sample: bool = True,
@@ -1922,7 +1922,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 raise SQLMeshError(e)
 
             models_to_diff: t.List[
-                t.Tuple[Model, EngineAdapter, str, str, t.Optional[t.List[str] | exp.Condition]]
+                t.Tuple[Model, EngineAdapter, str, str, t.Optional[t.List[str] | exp.Expr]]
             ] = []
             models_without_grain: t.List[Model] = []
             source_snapshots_to_name = {
@@ -2041,9 +2041,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         target_alias: str,
         limit: int,
         decimals: int,
-        on: t.Optional[t.List[str] | exp.Condition] = None,
+        on: t.Optional[t.List[str] | exp.Expr] = None,
         skip_columns: t.Optional[t.List[str]] = None,
-        where: t.Optional[str | exp.Condition] = None,
+        where: t.Optional[str | exp.Expr] = None,
         show: bool = True,
         temp_schema: t.Optional[str] = None,
         skip_grain_check: bool = False,
@@ -2083,10 +2083,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         limit: int,
         decimals: int,
         adapter: EngineAdapter,
-        on: t.Optional[t.List[str] | exp.Condition] = None,
+        on: t.Optional[t.List[str] | exp.Expr] = None,
         model: t.Optional[Model] = None,
         skip_columns: t.Optional[t.List[str]] = None,
-        where: t.Optional[str | exp.Condition] = None,
+        where: t.Optional[str | exp.Expr] = None,
         schema_diff_ignore_case: bool = False,
     ) -> TableDiff:
         if not on:
@@ -2344,7 +2344,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         return not errors
 
     @python_api_analytics
-    def rewrite(self, sql: str, dialect: str = "") -> exp.Expression:
+    def rewrite(self, sql: str, dialect: str = "") -> exp.Expr:
         """Rewrite a sql expression with semantic references into an executable query.
 
         https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/

@@ -163,7 +163,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
             return "MATERIALIZED VIEW"
         return "TABLE"
 
-    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expr:
         # We only care about explicitly granted privileges and not inherited ones
         # if this is removed you would see grants inherited from the catalog get returned
         expression = super()._get_grant_expression(table)
@@ -210,7 +210,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
         return [SourceQuery(query_factory=query_factory)]
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         if self.is_spark_session_connection:
@@ -223,7 +223,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
         return self.cursor.fetchall_arrow().to_pandas()
 
     def fetchdf(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
         """
         Returns a Pandas DataFrame from a query or expression.
@@ -364,10 +364,10 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
         catalog_name: t.Optional[str] = None,
         table_format: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
-        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expr]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[exp.Expression]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        clustered_by: t.Optional[t.List[exp.Expr]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,

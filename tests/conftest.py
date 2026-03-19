@@ -381,7 +381,7 @@ def init_and_plan_context(copy_to_temp_path, mocker) -> t.Callable:
 @pytest.fixture
 def assert_exp_eq() -> t.Callable:
     def _assert_exp_eq(
-        source: exp.Expression | str, expected: exp.Expression | str, dialect: DialectType = None
+        source: exp.Expr | str, expected: exp.Expr | str, dialect: DialectType = None
     ) -> None:
         source_exp = maybe_parse(source, dialect=dialect)
         expected_exp = maybe_parse(expected, dialect=dialect)

@@ -14,6 +14,7 @@ from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects import DuckDB, Snowflake, TSQL
 import sqlglot.dialects.athena as athena
+from sqlglot.parsers.athena import AthenaTrinoParser
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -52,7 +53,7 @@ class Metric(exp.Expression):
     arg_types = {"expressions": True}
 
 
-class Jinja(exp.Func):
+class Jinja(exp.Expression, exp.Func):
     arg_types = {"this": True}
 
 
@@ -76,7 +77,7 @@ class MacroVar(exp.Var):
     pass
 
 
-class MacroFunc(exp.Func):
+class MacroFunc(exp.Expression, exp.Func):
     @property
     def name(self) -> str:
         return self.this.name
@@ -102,7 +103,7 @@ class DColonCast(exp.Cast):
     pass
 
 
-class MetricAgg(exp.AggFunc):
+class MetricAgg(exp.Expression, exp.AggFunc):
     """Used for computing metrics."""
 
     arg_types = {"this": True}
@@ -118,7 +119,7 @@ class StagedFilePath(exp.Expression):
     arg_types = exp.Table.arg_types.copy()
 
 
-def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_statement(self: Parser) -> t.Optional[exp.Expr]:
     if self._curr is None:
         return None
 
@@ -152,7 +153,7 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         raise
 
 
-def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expression]:
+def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expr]:
     node = self.__parse_lambda(alias=alias)  # type: ignore
     if isinstance(node, exp.Lambda):
         node.set("this", self._parse_alias(node.this))
@@ -163,7 +164,7 @@ def _parse_id_var(
     self: Parser,
     any_token: bool = True,
     tokens: t.Optional[t.Collection[TokenType]] = None,
-) -> t.Optional[exp.Expression]:
+) -> t.Optional[exp.Expr]:
     if self._prev and self._prev.text == SQLMESH_MACRO_PREFIX and self._match(TokenType.L_BRACE):
         identifier = self.__parse_id_var(any_token=any_token, tokens=tokens)  # type: ignore
         if not self._match(TokenType.R_BRACE):
@@ -207,12 +208,12 @@ def _parse_id_var(
             else:
                 self.raise_error("Expecting }")
 
-        identifier = self.expression(exp.Identifier, this=this, quoted=identifier.quoted)
+        identifier = self.expression(exp.Identifier(this=this, quoted=identifier.quoted))
 
     return identifier
 
 
-def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
+def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expr]:
     if self._prev.text != SQLMESH_MACRO_PREFIX:
         return self._parse_parameter()
 
@@ -220,7 +221,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
     index = self._index
     field = self._parse_primary() or self._parse_function(functions={}) or self._parse_id_var()
 
-    def _build_macro(field: t.Optional[exp.Expression]) -> t.Optional[exp.Expression]:
+    def _build_macro(field: t.Optional[exp.Expr]) -> t.Optional[exp.Expr]:
         if isinstance(field, exp.Func):
             macro_name = field.name.upper()
             if macro_name != keyword_macro and macro_name in KEYWORD_MACROS:
@@ -230,37 +231,39 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
             if isinstance(field, exp.Anonymous):
                 if macro_name == "DEF":
                     return self.expression(
-                        MacroDef,
-                        this=field.expressions[0],
-                        expression=field.expressions[1],
+                        MacroDef(
+                            this=field.expressions[0],
+                            expression=field.expressions[1],
+                        ),
                         comments=comments,
                     )
                 if macro_name == "SQL":
                     into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
                     return self.expression(
-                        MacroSQL, this=field.expressions[0], into=into, comments=comments
+                        MacroSQL(this=field.expressions[0], into=into), comments=comments
                     )
             else:
                 field = self.expression(
-                    exp.Anonymous,
-                    this=field.sql_name(),
-                    expressions=list(field.args.values()),
+                    exp.Anonymous(
+                        this=field.sql_name(),
+                        expressions=list(field.args.values()),
+                    ),
                     comments=comments,
                 )
 
-            return self.expression(MacroFunc, this=field, comments=comments)
+            return self.expression(MacroFunc(this=field), comments=comments)
 
         if field is None:
             return None
 
         if field.is_string or (isinstance(field, exp.Identifier) and field.quoted):
             return self.expression(
-                MacroStrReplace, this=exp.Literal.string(field.this), comments=comments
+                MacroStrReplace(this=exp.Literal.string(field.this)), comments=comments
             )
 
         if "@" in field.this:
-            return field
-        return self.expression(MacroVar, this=field.this, comments=comments)
+            return field  # type: ignore[return-value]
+        return self.expression(MacroVar(this=field.this), comments=comments)
 
     if isinstance(field, (exp.Window, exp.IgnoreNulls, exp.RespectNulls)):
         field.set("this", _build_macro(field.this))
@@ -273,7 +276,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
 KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY", "LIMIT"}
 
 
-def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expression]:
+def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expr]:
     if not self._match_pair(TokenType.PARAMETER, TokenType.VAR, advance=False) or (
         self._next and self._next.text.upper() != name.upper()
     ):
@@ -283,7 +286,7 @@ def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expression]
     return _parse_macro(self, keyword_macro=name)
 
 
-def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expression]]:
+def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expr]]:
     name = self._next and self._next.text.upper()
 
     if name == "JOIN":
@@ -301,7 +304,7 @@ def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expression]]:
     return ("", None)
 
 
-def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.Expression]:
+def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.Expr]:
     macro = _parse_matching_macro(self, "WITH")
     if not macro:
         return self.__parse_with(skip_with_token=skip_with_token)  # type: ignore
@@ -312,7 +315,7 @@ def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.E
 
 def _parse_join(
     self: Parser, skip_join_token: bool = False, parse_bracket: bool = False
-) -> t.Optional[exp.Expression]:
+) -> t.Optional[exp.Expr]:
     index = self._index
     method, side, kind = self._parse_join_parts()
     macro = _parse_matching_macro(self, "JOIN")
@@ -351,7 +354,7 @@ def _parse_select(
     parse_set_operation: bool = True,
     consume_pipe: bool = True,
     from_: t.Optional[exp.From] = None,
-) -> t.Optional[exp.Expression]:
+) -> t.Optional[exp.Expr]:
     select = self.__parse_select(  # type: ignore
         nested=nested,
         table=table,
@@ -372,7 +375,7 @@ def _parse_select(
     return select
 
 
-def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp.Expression]:
+def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp.Expr]:
     macro = _parse_matching_macro(self, "WHERE")
     if not macro:
         return self.__parse_where(skip_where_token=skip_where_token)  # type: ignore
@@ -381,7 +384,7 @@ def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp
     return macro
 
 
-def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[exp.Expression]:
+def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[exp.Expr]:
     macro = _parse_matching_macro(self, "GROUP_BY")
     if not macro:
         return self.__parse_group(skip_group_by_token=skip_group_by_token)  # type: ignore
@@ -390,7 +393,7 @@ def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[
     return macro
 
 
-def _parse_having(self: Parser, skip_having_token: bool = False) -> t.Optional[exp.Expression]:
+def _parse_having(self: Parser, skip_having_token: bool = False) -> t.Optional[exp.Expr]:
     macro = _parse_matching_macro(self, "HAVING")
     if not macro:
         return self.__parse_having(skip_having_token=skip_having_token)  # type: ignore
@@ -400,8 +403,8 @@ def _parse_having(self: Parser, skip_having_token: bool = False) -> t.Optional[e
 
 
 def _parse_order(
-    self: Parser, this: t.Optional[exp.Expression] = None, skip_order_token: bool = False
-) -> t.Optional[exp.Expression]:
+    self: Parser, this: t.Optional[exp.Expr] = None, skip_order_token: bool = False
+) -> t.Optional[exp.Expr]:
     macro = _parse_matching_macro(self, "ORDER_BY")
     if not macro:
         return self.__parse_order(this, skip_order_token=skip_order_token)  # type: ignore
@@ -412,10 +415,10 @@ def _parse_order(
 
 def _parse_limit(
     self: Parser,
-    this: t.Optional[exp.Expression] = None,
+    this: t.Optional[exp.Expr] = None,
     top: bool = False,
     skip_limit_token: bool = False,
-) -> t.Optional[exp.Expression]:
+) -> t.Optional[exp.Expr]:
     macro = _parse_matching_macro(self, "TOP" if top else "LIMIT")
     if not macro:
         return self.__parse_limit(this, top=top, skip_limit_token=skip_limit_token)  # type: ignore
@@ -424,7 +427,7 @@ def _parse_limit(
     return macro
 
 
-def _parse_value(self: Parser, values: bool = True) -> t.Optional[exp.Expression]:
+def _parse_value(self: Parser, values: bool = True) -> t.Optional[exp.Expr]:
     wrapped = self._match(TokenType.L_PAREN, advance=False)
 
     # The base _parse_value method always constructs a Tuple instance. This is problematic when
@@ -438,11 +441,11 @@ def _parse_value(self: Parser, values: bool = True) -> t.Optional[exp.Expression
     return expr
 
 
-def _parse_macro_or_clause(self: Parser, parser: t.Callable) -> t.Optional[exp.Expression]:
+def _parse_macro_or_clause(self: Parser, parser: t.Callable) -> t.Optional[exp.Expr]:
     return _parse_macro(self) if self._match(TokenType.PARAMETER) else parser()
 
 
-def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_props(self: Parser) -> t.Optional[exp.Expr]:
     key = self._parse_id_var(any_token=True)
     if not key:
         return None
@@ -460,7 +463,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     elif name == "merge_filter":
         value = self._parse_conjunction()
     elif self._match(TokenType.L_PAREN):
-        value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))
+        value = self.expression(exp.Tuple(expressions=self._parse_csv(self._parse_equality)))
         self._match_r_paren()
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
@@ -469,7 +472,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
         # Make sure if we get a windows path that it is converted to posix
         value = exp.Literal.string(value.this.replace("\\", "/"))  # type: ignore
 
-    return self.expression(exp.Property, this=name, value=value)
+    return self.expression(exp.Property(this=name, value=value))
 
 
 def _parse_types(
@@ -477,7 +480,7 @@ def _parse_types(
     check_func: bool = False,
     schema: bool = False,
     allow_identifiers: bool = True,
-) -> t.Optional[exp.Expression]:
+) -> t.Optional[exp.Expr]:
     start = self._curr
     parsed_type = self.__parse_types(  # type: ignore
         check_func=check_func, schema=schema, allow_identifiers=allow_identifiers
@@ -534,7 +537,7 @@ def _parse_table_parts(
     return table
 
 
-def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_if(self: Parser) -> t.Optional[exp.Expr]:
     # If we fail to parse an IF function with expressions as arguments, we then try
     # to parse a statement / command to support the macro @IF(condition, statement)
     index = self._index
@@ -566,11 +569,11 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
         return exp.Anonymous(this="IF", expressions=[cond, stmt])
 
 
-def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
-    def parse(self: Parser) -> t.Optional[exp.Expression]:
+def _create_parser(expression_type: t.Type[exp.Expr], table_keys: t.List[str]) -> t.Callable:
+    def parse(self: Parser) -> t.Optional[exp.Expr]:
         from sqlmesh.core.model.kind import ModelKindName
 
-        expressions: t.List[exp.Expression] = []
+        expressions: t.List[exp.Expr] = []
 
         while True:
             prev_property = seq_get(expressions, -1)
@@ -589,7 +592,7 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
             key = key_expression.name.lower()
 
             start = self._curr
-            value: t.Optional[exp.Expression | str]
+            value: t.Optional[exp.Expr | str]
 
             if key in table_keys:
                 value = self._parse_table_parts()
@@ -629,7 +632,7 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
                     else:
                         props = None
 
-                    value = self.expression(ModelKind, this=kind.value, expressions=props)
+                    value = self.expression(ModelKind(this=kind.value, expressions=props))
             elif key == "expression":
                 value = self._parse_conjunction()
             elif key == "partitioned_by":
@@ -641,12 +644,12 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
-            if isinstance(value, exp.Expression):
+            if isinstance(value, exp.Expr):
                 value.meta["sql"] = self._find_sql(start, self._prev)
 
-            expressions.append(self.expression(exp.Property, this=key, value=value))
+            expressions.append(self.expression(exp.Property(this=key, value=value)))
 
-        return self.expression(expression_type, expressions=expressions)
+        return self.expression(expression_type(expressions=expressions))
 
     return parse
 
@@ -658,7 +661,7 @@ PARSERS = {
 }
 
 
-def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
+def _props_sql(self: Generator, expressions: t.List[exp.Expr]) -> str:
     props = []
     size = len(expressions)
 
@@ -676,7 +679,7 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
     return "\n".join(props)
 
 
-def _on_virtual_update_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
+def _on_virtual_update_sql(self: Generator, expressions: t.List[exp.Expr]) -> str:
     statements = "\n".join(
         self.sql(expression)
         if isinstance(expression, JinjaStatement)
@@ -697,7 +700,7 @@ def _model_kind_sql(self: Generator, expression: ModelKind) -> str:
     return expression.name.upper()
 
 
-def _macro_keyword_func_sql(self: Generator, expression: exp.Expression) -> str:
+def _macro_keyword_func_sql(self: Generator, expression: exp.Expr) -> str:
     name = expression.name
     keyword = name.replace("_", " ")
     *args, clause = expression.expressions
@@ -731,7 +734,7 @@ def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
 
 
 def format_model_expressions(
-    expressions: t.List[exp.Expression],
+    expressions: t.List[exp.Expr],
     dialect: t.Optional[str] = None,
     rewrite_casts: bool = True,
     **kwargs: t.Any,
@@ -752,7 +755,7 @@ def format_model_expressions(
 
     if rewrite_casts:
 
-        def cast_to_colon(node: exp.Expression) -> exp.Expression:
+        def cast_to_colon(node: exp.Expr) -> exp.Expr:
             if isinstance(node, exp.Cast) and not any(
                 # Only convert CAST into :: if it doesn't have additional args set, otherwise this
                 # conversion could alter the semantics (eg. changing SAFE_CAST in BigQuery to CAST)
@@ -784,8 +787,8 @@ def format_model_expressions(
 
 
 def text_diff(
-    a: t.List[exp.Expression],
-    b: t.List[exp.Expression],
+    a: t.List[exp.Expr],
+    b: t.List[exp.Expr],
     a_dialect: t.Optional[str] = None,
     b_dialect: t.Optional[str] = None,
 ) -> str:
@@ -860,7 +863,7 @@ def _is_virtual_statement_end(tokens: t.List[Token], pos: int) -> bool:
     return _is_command_statement(ON_VIRTUAL_UPDATE_END, tokens, pos)
 
 
-def virtual_statement(statements: t.List[exp.Expression]) -> VirtualUpdateStatement:
+def virtual_statement(statements: t.List[exp.Expr]) -> VirtualUpdateStatement:
     return VirtualUpdateStatement(expressions=statements)
 
 
@@ -874,7 +877,7 @@ class ChunkType(Enum):
 
 def parse_one(
     sql: str, dialect: t.Optional[str] = None, into: t.Optional[exp.IntoType] = None
-) -> exp.Expression:
+) -> exp.Expr:
     expressions = parse(sql, default_dialect=dialect, match_dialect=False, into=into)
     if not expressions:
         raise SQLMeshError(f"No expressions found in '{sql}'")
@@ -888,7 +891,7 @@ def parse(
     default_dialect: t.Optional[str] = None,
     match_dialect: bool = True,
     into: t.Optional[exp.IntoType] = None,
-) -> t.List[exp.Expression]:
+) -> t.List[exp.Expr]:
     """Parse a sql string.
 
     Supports parsing model definition.
@@ -952,10 +955,10 @@ def parse(
             pos += 1
 
     parser = dialect.parser()
-    expressions: t.List[exp.Expression] = []
+    expressions: t.List[exp.Expr] = []
 
-    def parse_sql_chunk(chunk: t.List[Token], meta_sql: bool = True) -> t.List[exp.Expression]:
-        parsed_expressions: t.List[t.Optional[exp.Expression]] = (
+    def parse_sql_chunk(chunk: t.List[Token], meta_sql: bool = True) -> t.List[exp.Expr]:
+        parsed_expressions: t.List[t.Optional[exp.Expr]] = (
             parser.parse(chunk, sql) if into is None else parser.parse_into(into, chunk, sql)
         )
         expressions = []
@@ -966,7 +969,7 @@ def parse(
                 expressions.append(expression)
         return expressions
 
-    def parse_jinja_chunk(chunk: t.List[Token], meta_sql: bool = True) -> exp.Expression:
+    def parse_jinja_chunk(chunk: t.List[Token], meta_sql: bool = True) -> exp.Expr:
         start, *_, end = chunk
         segment = sql[start.end + 2 : end.start - 1]
         factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
@@ -977,9 +980,9 @@ def parse(
 
     def parse_virtual_statement(
         chunks: t.List[t.Tuple[t.List[Token], ChunkType]], pos: int
-    ) -> t.Tuple[t.List[exp.Expression], int]:
+    ) -> t.Tuple[t.List[exp.Expr], int]:
         # For virtual statements we need to handle both SQL and Jinja nested blocks within the chunk
-        virtual_update_statements = []
+        virtual_update_statements: t.List[exp.Expr] = []
         start = chunks[pos][0][0].start
 
         while (
@@ -1031,7 +1034,7 @@ def extend_sqlglot() -> None:
         # so this ensures that the extra ones it defines are also extended
         if dialect == athena.Athena:
             tokenizers.add(athena._TrinoTokenizer)
-            parsers.add(athena._TrinoParser)
+            parsers.add(AthenaTrinoParser)
             generators.add(athena._TrinoGenerator)
             generators.add(athena._HiveGenerator)
 
@@ -1251,7 +1254,7 @@ def normalize_model_name(
 
 
 def find_tables(
-    expression: exp.Expression, default_catalog: t.Optional[str], dialect: DialectType = None
+    expression: exp.Expr, default_catalog: t.Optional[str], dialect: DialectType = None
 ) -> t.Set[str]:
     """Find all tables referenced in a query.
 
@@ -1274,10 +1277,10 @@ def find_tables(
     return expression.meta[TABLES_META]
 
 
-def add_table(node: exp.Expression, table: str) -> exp.Expression:
+def add_table(node: exp.Expr, table: str) -> exp.Expr:
     """Add a table to all columns in an expression."""
 
-    def _transform(node: exp.Expression) -> exp.Expression:
+    def _transform(node: exp.Expr) -> exp.Expr:
         if isinstance(node, exp.Column) and not node.table:
             return exp.column(node.this, table=table)
         if isinstance(node, exp.Identifier):
@@ -1387,7 +1390,7 @@ def normalize_and_quote(
         quote_identifiers(query, dialect=dialect)
 
 
-def interpret_expression(e: exp.Expression) -> exp.Expression | str | int | float | bool:
+def interpret_expression(e: exp.Expr) -> exp.Expr | str | int | float | bool:
     if e.is_int:
         return int(e.this)
     if e.is_number:
@@ -1399,13 +1402,13 @@ def interpret_expression(e: exp.Expression) -> exp.Expression | str | int | floa
 
 def interpret_key_value_pairs(
     e: exp.Tuple,
-) -> t.Dict[str, exp.Expression | str | int | float | bool]:
+) -> t.Dict[str, exp.Expr | str | int | float | bool]:
     return {i.this.name: interpret_expression(i.expression) for i in e.expressions}
 
 
 def extract_func_call(
-    v: exp.Expression, allow_tuples: bool = False
-) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
+    v: exp.Expr, allow_tuples: bool = False
+) -> t.Tuple[str, t.Dict[str, exp.Expr]]:
     kwargs = {}
 
     if isinstance(v, exp.Anonymous):
@@ -1442,7 +1445,7 @@ def extract_function_calls(func_calls: t.Any, allow_tuples: bool = False) -> t.A
         return [extract_func_call(i, allow_tuples=allow_tuples) for i in func_calls.expressions]
     if isinstance(func_calls, exp.Paren):
         return [extract_func_call(func_calls.this, allow_tuples=allow_tuples)]
-    if isinstance(func_calls, exp.Expression):
+    if isinstance(func_calls, exp.Expr):
         return [extract_func_call(func_calls, allow_tuples=allow_tuples)]
     if isinstance(func_calls, list):
         function_calls = []
@@ -1474,9 +1477,7 @@ def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
 
 
-def replace_merge_table_aliases(
-    expression: exp.Expression, dialect: t.Optional[str] = None
-) -> exp.Expression:
+def replace_merge_table_aliases(expression: exp.Expr, dialect: t.Optional[str] = None) -> exp.Expr:
     """
     Resolves references from the "source" and "target" tables (or their DBT equivalents)
     with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)

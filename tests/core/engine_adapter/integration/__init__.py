@@ -276,7 +276,7 @@ class TestContext:
         return lambda x, _: exp.Literal.string(to_ds(x))
 
     @property
-    def partitioned_by(self) -> t.List[exp.Expression]:
+    def partitioned_by(self) -> t.List[exp.Expr]:
         return [parse_one(self.time_column)]
 
     @property
@@ -388,8 +388,8 @@ class TestContext:
         )
 
     def physical_properties(
-        self, properties_for_dialect: t.Dict[str, t.Dict[str, str | exp.Expression]]
-    ) -> t.Dict[str, exp.Expression]:
+        self, properties_for_dialect: t.Dict[str, t.Dict[str, str | exp.Expr]]
+    ) -> t.Dict[str, exp.Expr]:
         if props := properties_for_dialect.get(self.dialect):
             return {k: exp.Literal.string(v) if isinstance(v, str) else v for k, v in props.items()}
         return {}

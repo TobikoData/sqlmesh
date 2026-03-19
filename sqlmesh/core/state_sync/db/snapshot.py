@@ -623,7 +623,7 @@ class SnapshotState:
         self,
         snapshot_ids: t.Iterable[SnapshotIdLike],
         lock_for_update: bool = False,
-    ) -> t.Iterator[exp.Expression]:
+    ) -> t.Iterator[exp.Expr]:
         for where in snapshot_id_filter(
             self.engine_adapter,
             snapshot_ids,

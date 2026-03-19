@@ -444,6 +444,41 @@ class Executable(PydanticModel):
         )
 
 
+def _resolve_import_module(obj: t.Any, name: str) -> str:
+    """Resolve the most appropriate module path for importing an object.
+
+    When a callable's ``__module__`` points to a submodule of a known public
+    module (e.g. ``sqlglot.expressions.builders`` is a submodule of
+    ``sqlglot.expressions``), and the object is re-exported from that public
+    parent module, prefer the public parent so that generated import statements
+    remain stable across internal restructurings of third-party packages.
+
+    Args:
+        obj: The callable to resolve.
+        name: The name under which the object will be imported.
+
+    Returns:
+        The module path to use in the ``from <module> import <name>`` statement.
+    """
+    module_name = getattr(obj, "__module__", None) or ""
+    parts = module_name.split(".")
+
+    # Walk from the shallowest ancestor (excluding the top-level package) up to
+    # the immediate parent, returning the shallowest one that re-exports the object.
+    # We skip the top-level package to avoid over-normalizing (e.g. ``sqlglot``
+    # re-exports everything, but callers expect ``sqlglot.expressions``).
+    for i in range(2, len(parts)):
+        parent = ".".join(parts[:i])
+        try:
+            parent_module = sys.modules.get(parent) or importlib.import_module(parent)
+            if getattr(parent_module, name, None) is obj:
+                return parent
+        except Exception:
+            continue
+
+    return module_name
+
+
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
     """Serializes a python function into a self contained dictionary.
 
@@ -512,7 +547,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                 )
             else:
                 serialized[k] = Executable(
-                    payload=f"from {v.__module__} import {name}",
+                    payload=f"from {_resolve_import_module(v, name)} import {name}",
                     kind=ExecutableKind.IMPORT,
                     is_metadata=is_metadata,
                 )

@@ -143,7 +143,7 @@ class RedshiftEngineAdapter(
         return cursor
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         import pandas as pd
@@ -217,7 +217,7 @@ class RedshiftEngineAdapter(
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
@@ -227,7 +227,7 @@ class RedshiftEngineAdapter(
         swap tables out from under views. Therefore, we create the view as non-binding.
         """
         no_schema_binding = True
-        if isinstance(query_or_df, exp.Expression):
+        if isinstance(query_or_df, exp.Expr):
             # We can't include NO SCHEMA BINDING if the query has a recursive CTE
             has_recursive_cte = any(
                 w.args.get("recursive", False) for w in query_or_df.find_all(exp.With)
@@ -367,9 +367,9 @@ class RedshiftEngineAdapter(
         target_table: TableName,
         source_table: QueryOrDF,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[exp.Expression],
+        unique_key: t.Sequence[exp.Expr],
         when_matched: t.Optional[exp.Whens] = None,
-        merge_filter: t.Optional[exp.Expression] = None,
+        merge_filter: t.Optional[exp.Expr] = None,
         source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
@@ -400,12 +400,12 @@ class RedshiftEngineAdapter(
         self,
         target_table: TableName,
         query: Query,
-        on: exp.Expression,
+        on: exp.Expr,
         whens: exp.Whens,
     ) -> None:
         # Redshift does not support table aliases in the target table of a MERGE statement.
         # So we must use the actual table name instead of an alias, as we do with the source table.
-        def resolve_target_table(expression: exp.Expression) -> exp.Expression:
+        def resolve_target_table(expression: exp.Expr) -> exp.Expr:
             if (
                 isinstance(expression, exp.Column)
                 and expression.table.upper() == MERGE_TARGET_ALIAS
@@ -436,7 +436,7 @@ class RedshiftEngineAdapter(
             track_rows_processed=True,
         )
 
-    def _normalize_decimal_value(self, expr: exp.Expression, precision: int) -> exp.Expression:
+    def _normalize_decimal_value(self, expr: exp.Expr, precision: int) -> exp.Expr:
         # Redshift is finicky. It truncates when the data is already in a table, but rounds when the data is generated as part of a SELECT.
         #
         # The following works:

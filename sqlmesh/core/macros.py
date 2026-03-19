@@ -110,7 +110,7 @@ def _macro_sql(sql: str, into: t.Optional[str] = None) -> str:
     return f"self.parse_one({', '.join(args)})"
 
 
-def _macro_func_sql(self: Generator, e: exp.Expression) -> str:
+def _macro_func_sql(self: Generator, e: exp.Expr) -> str:
     func = e.this
 
     if isinstance(func, exp.Anonymous):
@@ -178,7 +178,7 @@ class MacroEvaluator:
         schema: t.Optional[MappingSchema] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         resolve_table: t.Optional[t.Callable[[str | exp.Table], str]] = None,
-        resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
+        resolve_tables: t.Optional[t.Callable[[exp.Expr], exp.Expr]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
         path: t.Optional[Path] = None,
@@ -237,7 +237,7 @@ class MacroEvaluator:
 
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
-    ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
+    ) -> t.Union[None, exp.Expr, t.List[exp.Expr]]:
         func = self.macros.get(normalize_macro_name(name))
 
         if not callable(func):
@@ -253,14 +253,12 @@ class MacroEvaluator:
                 + format_evaluated_code_exception(e, self.python_env)
             )
 
-    def transform(
-        self, expression: exp.Expression
-    ) -> exp.Expression | t.List[exp.Expression] | None:
+    def transform(self, expression: exp.Expr) -> exp.Expr | t.List[exp.Expr] | None:
         changed = False
 
         def evaluate_macros(
-            node: exp.Expression,
-        ) -> exp.Expression | t.List[exp.Expression] | None:
+            node: exp.Expr,
+        ) -> exp.Expr | t.List[exp.Expr] | None:
             nonlocal changed
 
             if isinstance(node, MacroVar):
@@ -281,14 +279,10 @@ class MacroEvaluator:
                 value = self.locals.get(var_name, variables.get(var_name))
                 if isinstance(value, list):
                     return exp.convert(
-                        tuple(
-                            self.transform(v) if isinstance(v, exp.Expression) else v for v in value
-                        )
+                        tuple(self.transform(v) if isinstance(v, exp.Expr) else v for v in value)
                     )
 
-                return exp.convert(
-                    self.transform(value) if isinstance(value, exp.Expression) else value
-                )
+                return exp.convert(self.transform(value) if isinstance(value, exp.Expr) else value)
             if isinstance(node, exp.Identifier) and "@" in node.this:
                 text = self.template(node.this, {})
                 if node.this != text:
@@ -311,7 +305,7 @@ class MacroEvaluator:
                     self.parse_one(node.sql(dialect=self.dialect, copy=False))
                     for node in transformed
                 ]
-            if isinstance(transformed, exp.Expression):
+            if isinstance(transformed, exp.Expr):
                 return self.parse_one(transformed.sql(dialect=self.dialect, copy=False))
 
         return transformed
@@ -339,7 +333,7 @@ class MacroEvaluator:
         }
         return MacroStrTemplate(str(text)).safe_substitute(CaseInsensitiveMapping(base_mapping))
 
-    def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
+    def evaluate(self, node: MacroFunc) -> exp.Expr | t.List[exp.Expr] | None:
         if isinstance(node, MacroDef):
             if isinstance(node.expression, exp.Lambda):
                 _, fn = _norm_var_arg_lambda(self, node.expression)
@@ -353,7 +347,7 @@ class MacroEvaluator:
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):
-            result: t.Optional[exp.Expression | t.List[exp.Expression]] = exp.convert(
+            result: t.Optional[exp.Expr | t.List[exp.Expr]] = exp.convert(
                 self.eval_expression(node)
             )
         else:
@@ -421,7 +415,7 @@ class MacroEvaluator:
         Returns:
             The return value of the evaled Python Code.
         """
-        if not isinstance(node, exp.Expression):
+        if not isinstance(node, exp.Expr):
             return node
         code = node.sql()
         try:
@@ -434,8 +428,8 @@ class MacroEvaluator:
             )
 
     def parse_one(
-        self, sql: str | exp.Expression, into: t.Optional[exp.IntoType] = None, **opts: t.Any
-    ) -> exp.Expression:
+        self, sql: str | exp.Expr, into: t.Optional[exp.IntoType] = None, **opts: t.Any
+    ) -> exp.Expr:
         """Parses the given SQL string and returns a syntax tree for the first
         parsed SQL statement.
 
@@ -497,7 +491,7 @@ class MacroEvaluator:
             )
         return self._resolve_table(table)
 
-    def resolve_tables(self, query: exp.Expression) -> exp.Expression:
+    def resolve_tables(self, query: exp.Expr) -> exp.Expr:
         """Resolves queries with references to SQLMesh model names to their physical tables."""
         if not self._resolve_tables:
             raise SQLMeshError(
@@ -588,7 +582,7 @@ class MacroEvaluator:
             **self.locals.get(c.SQLMESH_BLUEPRINT_VARS_METADATA, {}),
         }
 
-    def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:
+    def _coerce(self, expr: exp.Expr, typ: t.Any, strict: bool = False) -> t.Any:
         """Coerces the given expression to the specified type on a best-effort basis."""
         return _coerce(expr, typ, self.dialect, self._path, strict)
 
@@ -648,8 +642,8 @@ def _norm_var_arg_lambda(
     """
 
     def substitute(
-        node: exp.Expression, args: t.Dict[str, exp.Expression]
-    ) -> exp.Expression | t.List[exp.Expression] | None:
+        node: exp.Expr, args: t.Dict[str, exp.Expr]
+    ) -> exp.Expr | t.List[exp.Expr] | None:
         if isinstance(node, (exp.Identifier, exp.Var)):
             if not isinstance(node.parent, exp.Column):
                 name = node.name.lower()
@@ -798,8 +792,8 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
 def _optional_expression(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
-    expression: exp.Expression,
-) -> t.Optional[exp.Expression]:
+    expression: exp.Expr,
+) -> t.Optional[exp.Expr]:
     """Inserts expression when the condition is True
 
     The following examples express the usage of this function in the context of the macros which wrap it.
@@ -864,7 +858,7 @@ def star(
     suffix: exp.Literal = exp.Literal.string(""),
     quote_identifiers: exp.Boolean = exp.true(),
     except_: t.Union[exp.Array, exp.Tuple] = exp.Tuple(expressions=[]),
-) -> t.List[exp.Alias]:
+) -> t.List[exp.Expr]:
     """Returns a list of projections for the given relation.
 
     Args:
@@ -939,7 +933,7 @@ def star(
 @macro()
 def generate_surrogate_key(
     evaluator: MacroEvaluator,
-    *fields: exp.Expression,
+    *fields: exp.Expr,
     hash_function: exp.Literal = exp.Literal.string("MD5"),
 ) -> exp.Func:
     """Generates a surrogate key (string) for the given fields.
@@ -956,7 +950,7 @@ def generate_surrogate_key(
         >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql, dialect="bigquery")).sql("bigquery")
         "SELECT SHA256(CONCAT(COALESCE(CAST(a AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS STRING), '_sqlmesh_surrogate_key_null_'))) FROM foo"
     """
-    string_fields: t.List[exp.Expression] = []
+    string_fields: t.List[exp.Expr] = []
     for i, field in enumerate(fields):
         if i > 0:
             string_fields.append(exp.Literal.string("|"))
@@ -980,7 +974,7 @@ def generate_surrogate_key(
 
 
 @macro()
-def safe_add(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
+def safe_add(_: MacroEvaluator, *fields: exp.Expr) -> exp.Case:
     """Adds numbers together, substitutes nulls for 0s and only returns null if all fields are null.
 
     Example:
@@ -998,7 +992,7 @@ def safe_add(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
 
 
 @macro()
-def safe_sub(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
+def safe_sub(_: MacroEvaluator, *fields: exp.Expr) -> exp.Case:
     """Subtract numbers, substitutes nulls for 0s and only returns null if all fields are null.
 
     Example:
@@ -1016,7 +1010,7 @@ def safe_sub(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
 
 
 @macro()
-def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expression) -> exp.Div:
+def safe_div(_: MacroEvaluator, numerator: exp.Expr, denominator: exp.Expr) -> exp.Div:
     """Divides numbers, returns null if the denominator is 0.
 
     Example:
@@ -1032,7 +1026,7 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
 @macro()
 def union(
     evaluator: MacroEvaluator,
-    *args: exp.Expression,
+    *args: exp.Expr,
 ) -> exp.Query:
     """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
 
@@ -1107,10 +1101,10 @@ def union(
 @macro()
 def haversine_distance(
     _: MacroEvaluator,
-    lat1: exp.Expression,
-    lon1: exp.Expression,
-    lat2: exp.Expression,
-    lon2: exp.Expression,
+    lat1: exp.Expr,
+    lon1: exp.Expr,
+    lat2: exp.Expr,
+    lon2: exp.Expr,
     unit: exp.Literal = exp.Literal.string("mi"),
 ) -> exp.Mul:
     """Returns the haversine distance between two points.
@@ -1150,17 +1144,17 @@ def haversine_distance(
 def pivot(
     evaluator: MacroEvaluator,
     column: SQL,
-    values: t.List[exp.Expression],
+    values: t.List[exp.Expr],
     alias: bool = True,
-    agg: exp.Expression = exp.Literal.string("SUM"),
-    cmp: exp.Expression = exp.Literal.string("="),
-    prefix: exp.Expression = exp.Literal.string(""),
-    suffix: exp.Expression = exp.Literal.string(""),
+    agg: exp.Expr = exp.Literal.string("SUM"),
+    cmp: exp.Expr = exp.Literal.string("="),
+    prefix: exp.Expr = exp.Literal.string(""),
+    suffix: exp.Expr = exp.Literal.string(""),
     then_value: SQL = SQL("1"),
     else_value: SQL = SQL("0"),
     quote: bool = True,
     distinct: bool = False,
-) -> t.List[exp.Expression]:
+) -> t.List[exp.Expr]:
     """Returns a list of projections as a result of pivoting the given column on the given values.
 
     Example:
@@ -1173,14 +1167,14 @@ def pivot(
         >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql)).sql("bigquery")
         "SELECT SUM(CASE WHEN a = 'v' THEN tv ELSE 0 END) AS v_sfx"
     """
-    aggregates: t.List[exp.Expression] = []
+    aggregates: t.List[exp.Expr] = []
     for value in values:
         proj = f"{agg.name}("
         if distinct:
             proj += "DISTINCT "
 
         proj += f"CASE WHEN {column} {cmp.name} {value.sql(evaluator.dialect)} THEN {then_value} ELSE {else_value} END) "
-        node = evaluator.parse_one(proj)
+        node: exp.Expr = evaluator.parse_one(proj)
 
         if alias:
             node = node.as_(
@@ -1196,7 +1190,7 @@ def pivot(
 
 
 @macro("AND")
-def and_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) -> exp.Condition:
+def and_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expr]) -> exp.Condition:
     """Returns an AND statement filtering out any NULL expressions."""
     conditions = [e for e in expressions if not isinstance(e, exp.Null)]
 
@@ -1207,7 +1201,7 @@ def and_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) ->
 
 
 @macro("OR")
-def or_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) -> exp.Condition:
+def or_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expr]) -> exp.Condition:
     """Returns an OR statement filtering out any NULL expressions."""
     conditions = [e for e in expressions if not isinstance(e, exp.Null)]
 
@@ -1219,8 +1213,8 @@ def or_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) -> 
 
 @macro("VAR")
 def var(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
-) -> exp.Expression:
+    evaluator: MacroEvaluator, var_name: exp.Expr, default: t.Optional[exp.Expr] = None
+) -> exp.Expr:
     """Returns the value of a variable or the default value if the variable is not set."""
     if not var_name.is_string:
         raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
@@ -1230,8 +1224,8 @@ def var(
 
 @macro("BLUEPRINT_VAR")
 def blueprint_var(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
-) -> exp.Expression:
+    evaluator: MacroEvaluator, var_name: exp.Expr, default: t.Optional[exp.Expr] = None
+) -> exp.Expr:
     """Returns the value of a blueprint variable or the default value if the variable is not set."""
     if not var_name.is_string:
         raise SQLMeshError(
@@ -1244,8 +1238,8 @@ def blueprint_var(
 @macro()
 def deduplicate(
     evaluator: MacroEvaluator,
-    relation: exp.Expression,
-    partition_by: t.List[exp.Expression],
+    relation: exp.Expr,
+    partition_by: t.List[exp.Expr],
     order_by: t.List[str],
 ) -> exp.Query:
     """Returns a QUERY to deduplicate rows within a table
@@ -1301,9 +1295,9 @@ def deduplicate(
 @macro()
 def date_spine(
     evaluator: MacroEvaluator,
-    datepart: exp.Expression,
-    start_date: exp.Expression,
-    end_date: exp.Expression,
+    datepart: exp.Expr,
+    start_date: exp.Expr,
+    end_date: exp.Expr,
 ) -> exp.Select:
     """Returns a query that produces a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
 
@@ -1491,7 +1485,7 @@ def _coerce(
     """Coerces the given expression to the specified type on a best-effort basis."""
     base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
     try:
-        if typ is None or typ is t.Any or not isinstance(expr, exp.Expression):
+        if typ is None or typ is t.Any or not isinstance(expr, exp.Expr):
             return expr
         base = t.get_origin(typ) or typ
 
@@ -1503,7 +1497,7 @@ def _coerce(
                 except Exception:
                     pass
             raise SQLMeshError(base_err_msg)
-        if base is SQL and isinstance(expr, exp.Expression):
+        if base is SQL and isinstance(expr, exp.Expr):
             return expr.sql(dialect)
 
         if base is t.Literal:
@@ -1528,7 +1522,7 @@ def _coerce(
 
         if isinstance(expr, base):
             return expr
-        if issubclass(base, exp.Expression):
+        if issubclass(base, exp.Expr):
             d = Dialect.get_or_raise(dialect)
             into = base if base in d.parser_class.EXPRESSION_PARSERS else None
             if into is None:
@@ -1603,7 +1597,7 @@ def _convert_sql(v: t.Any, dialect: DialectType) -> t.Any:
         except Exception:
             pass
 
-    if isinstance(v, exp.Expression):
+    if isinstance(v, exp.Expr):
         if (isinstance(v, exp.Column) and not v.table) or (
             isinstance(v, exp.Identifier) or v.is_string
         ):

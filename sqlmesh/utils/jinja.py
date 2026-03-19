@@ -12,7 +12,8 @@ from traceback import walk_tb
 
 from jinja2 import Environment, Template, nodes, UndefinedError
 from jinja2.runtime import Macro
-from sqlglot import Dialect, Expression, Parser, TokenType
+from sqlglot import Dialect, Parser, TokenType
+from sqlglot.expressions import Expression
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d

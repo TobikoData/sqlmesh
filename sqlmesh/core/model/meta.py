@@ -50,7 +50,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import CustomMaterializationProperties, SessionProperties
     from sqlmesh.core.engine_adapter._typing import GrantsConfig
 
-FunctionCall = t.Tuple[str, t.Dict[str, exp.Expression]]
+FunctionCall = t.Tuple[str, t.Dict[str, exp.Expr]]
 
 
 class GrantsTargetLayer(str, Enum):
@@ -92,8 +92,8 @@ class ModelMeta(_Node):
     retention: t.Optional[int] = None  # not implemented yet
     table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
-    partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
-    clustered_by: t.List[exp.Expression] = []
+    partitioned_by_: t.List[exp.Expr] = Field(default=[], alias="partitioned_by")
+    clustered_by: t.List[exp.Expr] = []
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
@@ -101,8 +101,8 @@ class ModelMeta(_Node):
         default=None, alias="column_descriptions"
     )
     audits: t.List[FunctionCall] = []
-    grains: t.List[exp.Expression] = []
-    references: t.List[exp.Expression] = []
+    grains: t.List[exp.Expr] = []
+    references: t.List[exp.Expr] = []
     physical_schema_override: t.Optional[str] = None
     physical_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="physical_properties")
     virtual_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="virtual_properties")
@@ -151,11 +151,11 @@ class ModelMeta(_Node):
 
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [_normalize(e).name for e in v.expressions]
-        if isinstance(v, exp.Expression):
+        if isinstance(v, exp.Expr):
             return _normalize(v).name
         if isinstance(v, str):
             value = _normalize(v)
-            return value.name if isinstance(value, exp.Expression) else value
+            return value.name if isinstance(value, exp.Expr) else value
         if isinstance(v, (list, tuple)):
             return [cls._validate_value_or_tuple(elm, data, normalize=normalize) for elm in v]
 
@@ -163,7 +163,7 @@ class ModelMeta(_Node):
 
     @field_validator("table_format", "storage_format", mode="before")
     def _format_validator(cls, v: t.Any, info: ValidationInfo) -> t.Optional[str]:
-        if isinstance(v, exp.Expression) and not (isinstance(v, (exp.Literal, exp.Identifier))):
+        if isinstance(v, exp.Expr) and not (isinstance(v, (exp.Literal, exp.Identifier))):
             return v.sql(info.data.get("dialect"))
         return str_or_exp_to_str(v)
 
@@ -188,9 +188,7 @@ class ModelMeta(_Node):
         return gateway and gateway.lower()
 
     @field_validator("partitioned_by_", "clustered_by", mode="before")
-    def _partition_and_cluster_validator(
-        cls, v: t.Any, info: ValidationInfo
-    ) -> t.List[exp.Expression]:
+    def _partition_and_cluster_validator(cls, v: t.Any, info: ValidationInfo) -> t.List[exp.Expr]:
         if (
             isinstance(v, list)
             and all(isinstance(i, str) for i in v)
@@ -244,9 +242,33 @@ class ModelMeta(_Node):
             return columns_to_types
 
         if isinstance(v, dict):
-            udt = Dialect.get_or_raise(dialect).SUPPORTS_USER_DEFINED_TYPES
+            dialect_obj = Dialect.get_or_raise(dialect)
+            udt = dialect_obj.SUPPORTS_USER_DEFINED_TYPES
             for k, data_type in v.items():
+                is_string_type = isinstance(data_type, str)
                 expr = exp.DataType.build(data_type, dialect=dialect, udt=udt)
+                # When deserializing from a string (e.g. JSON roundtrip), normalize the type
+                # through the dialect's type system so that aliases (e.g. INT in BigQuery,
+                # which is an alias for INT64/BIGINT) are resolved to their canonical form.
+                # This ensures stable data hash computation across serialization/deserialization
+                # roundtrips. We skip this for DataType objects passed directly (Python API)
+                # since those should be used as-is.
+                if (
+                    is_string_type
+                    and dialect
+                    and expr.this
+                    not in (
+                        exp.DataType.Type.USERDEFINED,
+                        exp.DataType.Type.UNKNOWN,
+                    )
+                ):
+                    sql_repr = expr.sql(dialect=dialect)
+                    try:
+                        normalized = parse_one(sql_repr, read=dialect, into=exp.DataType)
+                        if normalized is not None:
+                            expr = normalized
+                    except Exception:
+                        pass
                 expr.meta["dialect"] = dialect
                 columns_to_types[normalize_identifiers(k, dialect=dialect).name] = expr
 
@@ -295,7 +317,7 @@ class ModelMeta(_Node):
         return col_descriptions
 
     @field_validator("grains", "references", mode="before")
-    def _refs_validator(cls, vs: t.Any, info: ValidationInfo) -> t.List[exp.Expression]:
+    def _refs_validator(cls, vs: t.Any, info: ValidationInfo) -> t.List[exp.Expr]:
         dialect = info.data.get("dialect")
 
         if isinstance(vs, exp.Paren):
@@ -349,7 +371,7 @@ class ModelMeta(_Node):
                         "Invalid value for `session_properties.query_label`. Must be an array or tuple."
                     )
 
-                label_tuples: t.List[exp.Expression] = (
+                label_tuples: t.List[exp.Expr] = (
                     [query_label.unnest()]
                     if isinstance(query_label, exp.Paren)
                     else query_label.expressions
@@ -449,7 +471,7 @@ class ModelMeta(_Node):
         return getattr(self.kind, "time_column", None)
 
     @property
-    def unique_key(self) -> t.List[exp.Expression]:
+    def unique_key(self) -> t.List[exp.Expr]:
         if isinstance(
             self.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind, IncrementalByUniqueKeyKind)
         ):
@@ -485,14 +507,14 @@ class ModelMeta(_Node):
         return getattr(self.kind, "batch_concurrency", None)
 
     @cached_property
-    def physical_properties(self) -> t.Dict[str, exp.Expression]:
+    def physical_properties(self) -> t.Dict[str, exp.Expr]:
         """A dictionary of properties that will be applied to the physical layer. It replaces table_properties which is deprecated."""
         if self.physical_properties_:
             return {e.this.name: e.expression for e in self.physical_properties_.expressions}
         return {}
 
     @cached_property
-    def virtual_properties(self) -> t.Dict[str, exp.Expression]:
+    def virtual_properties(self) -> t.Dict[str, exp.Expr]:
         """A dictionary of properties that will be applied to the virtual layer."""
         if self.virtual_properties_:
             return {e.this.name: e.expression for e in self.virtual_properties_.expressions}
@@ -568,7 +590,7 @@ class ModelMeta(_Node):
         return None
 
     @property
-    def merge_filter(self) -> t.Optional[exp.Expression]:
+    def merge_filter(self) -> t.Optional[exp.Expr]:
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
             return self.kind.merge_filter
         return None
@@ -601,7 +623,7 @@ class ModelMeta(_Node):
     def ignored_rules(self) -> t.Set[str]:
         return self.ignored_rules_ or set()
 
-    def _validate_config_expression(self, expr: exp.Expression) -> str:
+    def _validate_config_expression(self, expr: exp.Expr) -> str:
         if isinstance(expr, (d.MacroFunc, d.MacroVar)):
             raise ConfigError(f"Unresolved macro: {expr.sql(dialect=self.dialect)}")
 
@@ -614,10 +636,10 @@ class ModelMeta(_Node):
             return expr.name
         return expr.sql(dialect=self.dialect).strip()
 
-    def _validate_nested_config_values(self, value_expr: exp.Expression) -> t.List[str]:
+    def _validate_nested_config_values(self, value_expr: exp.Expr) -> t.List[str]:
         result = []
 
-        def flatten_expr(expr: exp.Expression) -> None:
+        def flatten_expr(expr: exp.Expr) -> None:
             if isinstance(expr, exp.Array):
                 for elem in expr.expressions:
                     flatten_expr(elem)
