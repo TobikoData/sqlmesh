@@ -499,12 +499,19 @@ def _parse_types(
 #
 # See: https://docs.snowflake.com/en/user-guide/querying-stage
 def _parse_table_parts(
-    self: Parser, schema: bool = False, is_db_reference: bool = False, wildcard: bool = False
+    self: Parser,
+    schema: bool = False,
+    is_db_reference: bool = False,
+    wildcard: bool = False,
+    fast: bool = False,
 ) -> exp.Table | StagedFilePath:
     index = self._index
     table = self.__parse_table_parts(  # type: ignore
-        schema=schema, is_db_reference=is_db_reference, wildcard=wildcard
+        schema=schema, is_db_reference=is_db_reference, wildcard=wildcard, fast=fast
     )
+
+    if table is None:
+        return table  # type: ignore[return-value]
 
     table_arg = table.this
     name = table_arg.name if isinstance(table_arg, exp.Var) else ""
@@ -529,7 +536,9 @@ def _parse_table_parts(
             )
         ):
             self._retreat(index)
-            return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
+            return Parser._parse_table_parts(
+                self, schema=schema, is_db_reference=is_db_reference, fast=fast
+            )  # type: ignore[return-value]
 
         table_arg.replace(MacroVar(this=name[1:]))
         return StagedFilePath(**table.args)
