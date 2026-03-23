@@ -566,6 +566,10 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expr]:
         if last_token.token_type == TokenType.R_PAREN:
             self._tokens[-2].comments.extend(last_token.comments)
             self._tokens.pop()
+            if hasattr(self, "_tokens_size"):
+                # keep _tokens_size in sync sqlglot 30.0.3 caches len(_tokens)
+                # _advance() tries to read tokens[index + 1] past the new end
+                self._tokens_size -= 1
         else:
             self.raise_error("Expecting )")
 
