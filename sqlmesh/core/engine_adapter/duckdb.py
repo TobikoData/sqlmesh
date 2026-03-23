@@ -182,8 +182,22 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
         catalog_type = catalog_type_tuple[0] if catalog_type_tuple else None
 
         partitioned_by_exps = None
+        should_insert_after_create = False
+        insert_expression = expression
+        table_name = (
+            table_name_or_schema.this
+            if isinstance(table_name_or_schema, exp.Schema)
+            else table_name_or_schema
+        )
         if catalog_type == "ducklake":
             partitioned_by_exps = kwargs.pop("partitioned_by", None)
+            if partitioned_by_exps and expression is not None and target_columns_to_types is not None:
+                should_insert_after_create = replace or not self.table_exists(table_name)
+                # Avoid CTAS-first writes so DuckLake partitioning applies to initial files.
+                expression = None
+                table_name_or_schema = self._build_schema_exp(
+                    exp.to_table(table_name), target_columns_to_types
+                )
 
         super()._create_table(
             table_name_or_schema,
@@ -200,11 +214,6 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
 
         if partitioned_by_exps:
             # Schema object contains column definitions, so we extract Table
-            table_name = (
-                table_name_or_schema.this
-                if isinstance(table_name_or_schema, exp.Schema)
-                else table_name_or_schema
-            )
             table_name_str = (
                 table_name.sql(dialect=self.dialect)
                 if isinstance(table_name, exp.Table)
@@ -214,6 +223,9 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
                 expr.sql(dialect=self.dialect) for expr in partitioned_by_exps
             )
             self.execute(f"ALTER TABLE {table_name_str} SET PARTITIONED BY ({partitioned_by_str});")
+
+            if should_insert_after_create and insert_expression is not None:
+                self.execute(exp.insert(insert_expression, exp.to_table(table_name)))
 
     @property
     def _is_motherduck(self) -> bool:

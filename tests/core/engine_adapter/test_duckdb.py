@@ -154,3 +154,38 @@ def test_ducklake_partitioning(adapter: EngineAdapter, duck_conn, tmp_path):
         f"SELECT * FROM __ducklake_metadata_{catalog}.main.ducklake_partition_info"
     ).fetchdf()
     assert partition_info.shape[0] == 1
+
+
+def test_ducklake_partitioning_on_initial_replace_query(
+    adapter: EngineAdapter, duck_conn, tmp_path
+):
+    catalog = "ducklake_initial_partition_db"
+
+    duck_conn.install_extension("ducklake")
+    duck_conn.load_extension("ducklake")
+    duck_conn.execute(
+        f"ATTACH 'ducklake:{tmp_path}/{catalog}.ducklake' AS {catalog} (DATA_PATH '{tmp_path}', DATA_INLINING_ROW_LIMIT 0);"
+    )
+
+    adapter.set_current_catalog(catalog)
+    adapter.create_schema("test_schema")
+
+    adapter.replace_query(
+        "test_schema.test_table",
+        parse_one("SELECT 1 AS id, DATE '2000-01-01' AS ds UNION ALL SELECT 2, DATE '2000-01-02'"),
+        {"id": exp.DataType.build("INT"), "ds": exp.DataType.build("DATE")},
+        partitioned_by=[exp.to_column("ds")],
+    )
+
+    partition_id_stats = duck_conn.execute(
+        f"""
+        SELECT
+            SUM(CASE WHEN partition_id IS NULL THEN 1 ELSE 0 END) AS null_partition_rows,
+            COUNT(*) AS total_rows
+        FROM __ducklake_metadata_{catalog}.main.ducklake_data_file
+        """
+    ).fetchone()
+    assert partition_id_stats is not None
+    assert partition_id_stats[1] > 0
+    assert partition_id_stats[0] == 0
+
