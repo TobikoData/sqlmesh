@@ -141,6 +141,8 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
         for gateway, adapter in context.engine_adapters.items():
             if catalog := adapter.default_catalog:
                 default_catalogs_per_gateway[gateway] = catalog
+            elif adapter.catalog_support.is_unsupported:
+                default_catalogs_per_gateway[gateway] = ""
         return default_catalogs_per_gateway
 
 

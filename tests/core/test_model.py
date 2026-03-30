@@ -7186,6 +7186,70 @@ def test_gateway_macro_jinja() -> None:
     assert model.render_query_or_raise().sql() == "SELECT 'in_memory' AS \"gateway_jinja\""
 
 
+def test_default_catalog_not_leaked_to_unsupported_gateway() -> None:
+    """Regression test for https://github.com/SQLMesh/sqlmesh/issues/5748.
+
+    When a model targets a gateway that does not support catalogs (e.g. ClickHouse),
+    the default gateway's catalog must not leak into the model's FQN. The scheduler
+    registers such gateways with empty string in default_catalog_per_gateway, and
+    the model loader should use that to override the global default_catalog.
+    """
+    expressions = d.parse(
+        """
+        MODEL (
+            name my_schema.my_model,
+            kind VIEW,
+            gateway clickhouse_gw,
+            dialect clickhouse,
+        );
+        SELECT 1 AS id
+        """
+    )
+
+    # Simulate a multi-gateway setup: default gateway has catalog "example_catalog",
+    # but clickhouse_gw is catalog-unsupported (registered with empty string).
+    models = load_sql_based_models(
+        expressions,
+        get_variables=lambda gw: {},
+        dialect="clickhouse",
+        default_catalog="example_catalog",
+        default_catalog_per_gateway={
+            "default_gw": "example_catalog",
+            "clickhouse_gw": "",
+        },
+    )
+
+    assert len(models) == 1
+    model_result = models[0]
+    # The catalog should be empty — not the leaked "example_catalog"
+    assert model_result.catalog != "example_catalog"
+    # The FQN should be a two-part name, not three-part with the leaked catalog
+    assert "example_catalog" not in model_result.fqn
+
+    # Verify the positive case: without the per-gateway override, catalog leaks
+    models_leaked = load_sql_based_models(
+        d.parse(
+            """
+            MODEL (
+                name my_schema.my_model2,
+                kind VIEW,
+                gateway clickhouse_gw,
+                dialect clickhouse,
+            );
+            SELECT 1 AS id
+            """
+        ),
+        get_variables=lambda gw: {},
+        dialect="clickhouse",
+        default_catalog="example_catalog",
+        # No entry for clickhouse_gw — catalog will leak
+        default_catalog_per_gateway={"default_gw": "example_catalog"},
+    )
+    assert len(models_leaked) == 1
+    # Without the fix, example_catalog leaks into the model name
+    assert "example_catalog" in models_leaked[0].fqn
+
+
 def test_gateway_python_model(mocker: MockerFixture) -> None:
     @model(
         "test_gateway_python_model",
