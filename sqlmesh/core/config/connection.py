@@ -2094,6 +2094,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     https_proxy: t.Optional[str] = None
     server_host_name: t.Optional[str] = None
     tls_mode: t.Optional[str] = None
+    secure: bool = False
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -2130,6 +2131,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             "https_proxy",
             "server_host_name",
             "tls_mode",
+            "secure",
         }
         return kwargs
 
