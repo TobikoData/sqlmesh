@@ -2065,7 +2065,9 @@ def create_models_from_blueprints(
     **loader_kwargs: t.Any,
 ) -> t.List[Model]:
     model_blueprints: t.List[Model] = []
+    original_default_catalog = loader_kwargs.get("default_catalog")
     for blueprint in _extract_blueprints(blueprints, path):
+        loader_kwargs["default_catalog"] = original_default_catalog
         blueprint_variables = _extract_blueprint_variables(blueprint, path)
 
         if gateway:
@@ -2083,12 +2085,15 @@ def create_models_from_blueprints(
         else:
             gateway_name = None
 
-        if (
-            default_catalog_per_gateway
-            and gateway_name
-            and (catalog := default_catalog_per_gateway.get(gateway_name)) is not None
-        ):
-            loader_kwargs["default_catalog"] = catalog
+        if default_catalog_per_gateway and gateway_name:
+            catalog = default_catalog_per_gateway.get(gateway_name)
+            if catalog is not None:
+                loader_kwargs["default_catalog"] = catalog
+            else:
+                # Gateway exists but has no entry in the dict (e.g., catalog-unsupported
+                # engines like ClickHouse). Clear the default catalog so the global
+                # default from the primary gateway doesn't leak into this model's name.
+                loader_kwargs["default_catalog"] = None
 
         model_blueprints.append(
             loader(
