@@ -1049,7 +1049,7 @@ def extend_sqlglot() -> None:
         if dialect == athena.Athena:
             tokenizers.add(athena._TrinoTokenizer)
             parsers.add(AthenaTrinoParser)
-            generators.add(athena_generators.TrinoGenerator)
+            generators.add(athena_generators.AthenaTrinoGenerator)
             generators.add(athena_generators._HiveGenerator)
 
         if hasattr(dialect, "Tokenizer"):
