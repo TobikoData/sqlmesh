@@ -151,7 +151,7 @@ def test_model_to_sqlmesh_fields(dbt_dummy_postgres_config: PostgresConfig):
     assert kind.on_additive_change == OnAdditiveChange.ALLOW
     assert (
         kind.merge_filter.sql(dialect=model.dialect)  # type: ignore
-        == """55 > "__MERGE_SOURCE__"."b" AND "__MERGE_TARGET__"."session_start" > CURRENT_DATE + INTERVAL '7'"""
+        == """55 > "__MERGE_SOURCE__"."b" AND "__MERGE_TARGET__"."session_start" > CURRENT_DATE + INTERVAL '7 DAY'"""
     )
 
     model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)
