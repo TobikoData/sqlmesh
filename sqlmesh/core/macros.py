@@ -294,7 +294,9 @@ class MacroEvaluator:
             return node
 
         transformed = exp.replace_tree(
-            expression.copy(), evaluate_macros, prune=lambda n: isinstance(n, exp.Lambda)
+            expression.copy(),
+            evaluate_macros,  # type: ignore[arg-type]
+            prune=lambda n: isinstance(n, exp.Lambda),
         )
 
         if changed:

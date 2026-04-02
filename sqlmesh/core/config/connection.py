@@ -2341,23 +2341,20 @@ class RisingwaveConnectionConfig(ConnectionConfig):
         return init
 
 
+_CONNECTION_CONFIG_EXCLUDE: t.Set[t.Type[ConnectionConfig]] = {
+    ConnectionConfig,  # type: ignore[type-abstract]
+    BaseDuckDBConnectionConfig,  # type: ignore[type-abstract]
+}
+
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
-    for tpe in subclasses(
-        __name__,
-        ConnectionConfig,
-        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
-    )
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=_CONNECTION_CONFIG_EXCLUDE)
 }
 
 DIALECT_TO_TYPE = {
     tpe.all_field_infos()["type_"].default: tpe.DIALECT
-    for tpe in subclasses(
-        __name__,
-        ConnectionConfig,
-        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
-    )
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=_CONNECTION_CONFIG_EXCLUDE)
 }
 
 INIT_DISPLAY_INFO_TO_TYPE = {
@@ -2365,11 +2362,7 @@ INIT_DISPLAY_INFO_TO_TYPE = {
         tpe.DISPLAY_ORDER,
         tpe.DISPLAY_NAME,
     )
-    for tpe in subclasses(
-        __name__,
-        ConnectionConfig,
-        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
-    )
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=_CONNECTION_CONFIG_EXCLUDE)
 }
 
 
