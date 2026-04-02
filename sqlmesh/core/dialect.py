@@ -14,6 +14,7 @@ from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects import DuckDB, Snowflake, TSQL
 import sqlglot.dialects.athena as athena
+import sqlglot.generators.athena as athena_generators
 from sqlglot.parsers.athena import AthenaTrinoParser
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -1048,8 +1049,8 @@ def extend_sqlglot() -> None:
         if dialect == athena.Athena:
             tokenizers.add(athena._TrinoTokenizer)
             parsers.add(AthenaTrinoParser)
-            generators.add(athena._TrinoGenerator)
-            generators.add(athena._HiveGenerator)
+            generators.add(athena_generators.AthenaTrinoGenerator)
+            generators.add(athena_generators._HiveGenerator)
 
         if hasattr(dialect, "Tokenizer"):
             tokenizers.add(dialect.Tokenizer)
