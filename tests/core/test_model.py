@@ -1665,6 +1665,37 @@ def test_audits():
     assert model.tags == ["foo"]
 
 
+def test_custom_audit_arg_changes_affect_fingerprint():
+    def make_model(min_val: int) -> t.Any:
+        expressions = d.parse(
+            f"""
+            MODEL (
+                name db.model,
+                audits (check_count(min := {min_val}))
+            );
+            SELECT 1 AS id;
+            """
+        )
+        audit_definitions = {
+            "check_count": load_audit(
+                d.parse(
+                    "AUDIT (name check_count); SELECT * FROM @this_model HAVING COUNT(*) < @min"
+                ),
+                dialect="duckdb",
+            )
+        }
+        return load_sql_based_model(
+            expressions,
+            path=Path("./examples/sushi/models/test_model.sql"),
+            audit_definitions=audit_definitions,
+        )
+
+    model_a = make_model(33111)
+    model_b = make_model(5142)
+
+    assert model_a.audit_metadata_hash() != model_b.audit_metadata_hash()
+
+
 def test_enable_audits_from_model_defaults():
     expressions = d.parse(
         """
