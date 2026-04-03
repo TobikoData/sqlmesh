@@ -1365,7 +1365,7 @@ def test_exchange_tables(
     # The EXCHANGE TABLES call errored, so we RENAME TABLE instead
     assert [
         quote_identifiers(call.args[0]).sql("clickhouse")
-        if isinstance(call.args[0], exp.Expression)
+        if isinstance(call.args[0], exp.Expr)
         else call.args[0]
         for call in execute_mock.call_args_list
     ] == [

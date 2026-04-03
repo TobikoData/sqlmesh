@@ -123,7 +123,7 @@ def test_get_data_objects_lowercases_columns(
 def test_session(
     mocker: MockerFixture,
     make_mocked_engine_adapter: t.Callable,
-    current_warehouse: t.Union[str, exp.Expression],
+    current_warehouse: t.Union[str, exp.Expr],
     current_warehouse_exp: str,
     configured_warehouse: t.Optional[str],
     configured_warehouse_exp: t.Optional[str],

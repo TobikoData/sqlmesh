@@ -1062,6 +1062,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     job_retry_deadline_seconds: t.Optional[int] = None
     priority: t.Optional[BigQueryPriority] = None
     maximum_bytes_billed: t.Optional[int] = None
+    reservation: t.Optional[str] = None
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1171,6 +1172,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
                 "job_retry_deadline_seconds",
                 "priority",
                 "maximum_bytes_billed",
+                "reservation",
             }
         }
 
@@ -2013,7 +2015,17 @@ class TrinoConnectionConfig(ConnectionConfig):
             OAuth2Authentication,
         )
 
+        auth: t.Optional[
+            t.Union[
+                BasicAuthentication,
+                KerberosAuthentication,
+                OAuth2Authentication,
+                JWTAuthentication,
+                CertificateAuthentication,
+            ]
+        ] = None
         if self.method.is_basic or self.method.is_ldap:
+            assert self.password is not None  # for mypy since validator already checks this
             auth = BasicAuthentication(self.user, self.password)
         elif self.method.is_kerberos:
             if self.keytab:
@@ -2032,11 +2044,12 @@ class TrinoConnectionConfig(ConnectionConfig):
         elif self.method.is_oauth:
             auth = OAuth2Authentication()
         elif self.method.is_jwt:
+            assert self.jwt_token is not None
             auth = JWTAuthentication(self.jwt_token)
         elif self.method.is_certificate:
+            assert self.client_certificate is not None
+            assert self.client_private_key is not None
             auth = CertificateAuthentication(self.client_certificate, self.client_private_key)
-        else:
-            auth = None
 
         return {
             "auth": auth,
@@ -2328,23 +2341,20 @@ class RisingwaveConnectionConfig(ConnectionConfig):
         return init
 
 
+_CONNECTION_CONFIG_EXCLUDE: t.Set[t.Type[ConnectionConfig]] = {
+    ConnectionConfig,  # type: ignore[type-abstract]
+    BaseDuckDBConnectionConfig,  # type: ignore[type-abstract]
+}
+
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
-    for tpe in subclasses(
-        __name__,
-        ConnectionConfig,
-        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
-    )
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=_CONNECTION_CONFIG_EXCLUDE)
 }
 
 DIALECT_TO_TYPE = {
     tpe.all_field_infos()["type_"].default: tpe.DIALECT
-    for tpe in subclasses(
-        __name__,
-        ConnectionConfig,
-        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
-    )
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=_CONNECTION_CONFIG_EXCLUDE)
 }
 
 INIT_DISPLAY_INFO_TO_TYPE = {
@@ -2352,11 +2362,7 @@ INIT_DISPLAY_INFO_TO_TYPE = {
         tpe.DISPLAY_ORDER,
         tpe.DISPLAY_NAME,
     )
-    for tpe in subclasses(
-        __name__,
-        ConnectionConfig,
-        exclude={ConnectionConfig, BaseDuckDBConnectionConfig},
-    )
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=_CONNECTION_CONFIG_EXCLUDE)
 }
 
 

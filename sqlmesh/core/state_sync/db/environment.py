@@ -296,7 +296,7 @@ class EnvironmentState:
 
     def _environments_query(
         self,
-        where: t.Optional[str | exp.Expression] = None,
+        where: t.Optional[str | exp.Expr] = None,
         lock_for_update: bool = False,
         required_fields: t.Optional[t.List[str]] = None,
     ) -> exp.Select:
@@ -310,7 +310,7 @@ class EnvironmentState:
             return query.lock(copy=False)
         return query
 
-    def _create_expiration_filter_expr(self, current_ts: int) -> exp.Expression:
+    def _create_expiration_filter_expr(self, current_ts: int) -> exp.Expr:
         """Creates a SQLGlot filter expression to find expired environments.
 
         Args:
@@ -322,7 +322,7 @@ class EnvironmentState:
         )
 
     def _fetch_environment_summaries(
-        self, where: t.Optional[str | exp.Expression] = None
+        self, where: t.Optional[str | exp.Expr] = None
     ) -> t.List[EnvironmentSummary]:
         return [
             self._environment_summmary_from_row(row)

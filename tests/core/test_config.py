@@ -570,7 +570,8 @@ def test_variables():
     assert config.get_gateway("local").variables == {"uppercase_var": 2}
 
     with pytest.raises(
-        ConfigError, match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>"
+        ConfigError,
+        match=r"Unsupported variable value type: <class 'sqlglot\.expressions\.\w*\.?Column'>",
     ):
         Config(variables={"invalid_var": exp.column("sqlglot_expr")})
 
@@ -1050,7 +1051,7 @@ def test_environment_statements_config(tmp_path):
     ]
 
 
-# https://github.com/TobikoData/sqlmesh/pull/4049
+# https://github.com/SQLMesh/sqlmesh/pull/4049
 def test_pydantic_import_error() -> None:
     class TestConfig(DuckDBConnectionConfig):
         pass

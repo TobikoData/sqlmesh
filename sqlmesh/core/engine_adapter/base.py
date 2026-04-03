@@ -236,7 +236,7 @@ class EngineAdapter:
         cls,
         target_columns_to_types: t.Dict[str, exp.DataType],
         source_columns: t.Optional[t.List[str]] = None,
-    ) -> t.List[exp.Alias]:
+    ) -> t.List[exp.Expr]:
         source_columns_lookup = set(source_columns or target_columns_to_types)
         return [
             exp.alias_(
@@ -591,7 +591,7 @@ class EngineAdapter:
 
     def _pop_creatable_type_from_properties(
         self,
-        properties: t.Dict[str, exp.Expression],
+        properties: t.Dict[str, exp.Expr],
     ) -> t.Optional[exp.Property]:
         """Pop out the creatable_type from the properties dictionary (if exists (return it/remove it) else return none).
         It also checks that none of the expressions are MATERIALIZE as that conflicts with the `materialize` parameter.
@@ -652,9 +652,9 @@ class EngineAdapter:
         table_name: TableName,
         query: Query,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
-        clustered_by: t.Optional[t.List[exp.Expression]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expr]] = None,
+        clustered_by: t.Optional[t.List[exp.Expr]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         source_columns: t.Optional[t.List[str]] = None,
@@ -964,7 +964,7 @@ class EngineAdapter:
     def _create_table(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
-        expression: t.Optional[exp.Expression],
+        expression: t.Optional[exp.Expr],
         exists: bool = True,
         replace: bool = False,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1002,7 +1002,7 @@ class EngineAdapter:
     def _build_create_table_exp(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
-        expression: t.Optional[exp.Expression],
+        expression: t.Optional[exp.Expr],
         exists: bool = True,
         replace: bool = False,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1203,7 +1203,7 @@ class EngineAdapter:
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
@@ -1382,7 +1382,7 @@ class EngineAdapter:
         schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
-        properties: t.Optional[t.List[exp.Expression]] = None,
+        properties: t.Optional[t.List[exp.Expr]] = None,
     ) -> None:
         properties = properties or []
         return self._create_schema(
@@ -1398,7 +1398,7 @@ class EngineAdapter:
         schema_name: SchemaName,
         ignore_if_exists: bool,
         warn_on_error: bool,
-        properties: t.List[exp.Expression],
+        properties: t.List[exp.Expr],
         kind: str,
     ) -> None:
         """Create a schema from a name or qualified table name."""
@@ -1423,7 +1423,7 @@ class EngineAdapter:
         schema_name: SchemaName,
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
-        **drop_args: t.Dict[str, exp.Expression],
+        **drop_args: t.Dict[str, exp.Expr],
     ) -> None:
         return self._drop_object(
             name=schema_name,
@@ -1494,7 +1494,7 @@ class EngineAdapter:
         except Exception:
             return False
 
-    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
+    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expr]) -> None:
         self.execute(exp.delete(table_name, where))
 
     def insert_append(
@@ -1552,7 +1552,7 @@ class EngineAdapter:
         self,
         table_name: TableName,
         query_or_df: QueryOrDF,
-        partitioned_by: t.List[exp.Expression],
+        partitioned_by: t.List[exp.Expr],
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
@@ -1583,10 +1583,8 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         start: TimeLike,
         end: TimeLike,
-        time_formatter: t.Callable[
-            [TimeLike, t.Optional[t.Dict[str, exp.DataType]]], exp.Expression
-        ],
-        time_column: TimeColumn | exp.Expression | str,
+        time_formatter: t.Callable[[TimeLike, t.Optional[t.Dict[str, exp.DataType]]], exp.Expr],
+        time_column: TimeColumn | exp.Expr | str,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
@@ -1726,7 +1724,7 @@ class EngineAdapter:
         self,
         target_table: TableName,
         query: Query,
-        on: exp.Expression,
+        on: exp.Expr,
         whens: exp.Whens,
     ) -> None:
         this = exp.alias_(exp.to_table(target_table), alias=MERGE_TARGET_ALIAS, table=True)
@@ -1741,7 +1739,7 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        unique_key: t.Sequence[exp.Expression],
+        unique_key: t.Sequence[exp.Expr],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
         execution_time: t.Union[TimeLike, exp.Column],
@@ -1777,11 +1775,11 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        unique_key: t.Sequence[exp.Expression],
+        unique_key: t.Sequence[exp.Expr],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
         execution_time: t.Union[TimeLike, exp.Column],
-        check_columns: t.Union[exp.Star, t.Sequence[exp.Expression]],
+        check_columns: t.Union[exp.Star, t.Sequence[exp.Expr]],
         invalidate_hard_deletes: bool = True,
         execution_time_as_valid_from: bool = False,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1813,13 +1811,13 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        unique_key: t.Sequence[exp.Expression],
+        unique_key: t.Sequence[exp.Expr],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
-        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Expression]]] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Expr]]] = None,
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1908,7 +1906,7 @@ class EngineAdapter:
                 raise SQLMeshError(
                     "Cannot use `updated_at_as_valid_from` without `updated_at_name` for SCD Type 2"
                 )
-            update_valid_from_start: t.Union[str, exp.Expression] = updated_at_col
+            update_valid_from_start: t.Union[str, exp.Expr] = updated_at_col
         # If using check_columns and the user doesn't always want execution_time for valid from
         # then we only use epoch 0 if we are truncating the table and loading rows for the first time.
         # All future new rows should have execution time.
@@ -2207,9 +2205,9 @@ class EngineAdapter:
         target_table: TableName,
         source_table: QueryOrDF,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[exp.Expression],
+        unique_key: t.Sequence[exp.Expr],
         when_matched: t.Optional[exp.Whens] = None,
-        merge_filter: t.Optional[exp.Expression] = None,
+        merge_filter: t.Optional[exp.Expr] = None,
         source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
@@ -2382,7 +2380,7 @@ class EngineAdapter:
 
     def fetchone(
         self,
-        query: t.Union[exp.Expression, str],
+        query: t.Union[exp.Expr, str],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
     ) -> t.Optional[t.Tuple]:
@@ -2396,7 +2394,7 @@ class EngineAdapter:
 
     def fetchall(
         self,
-        query: t.Union[exp.Expression, str],
+        query: t.Union[exp.Expr, str],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
     ) -> t.List[t.Tuple]:
@@ -2409,7 +2407,7 @@ class EngineAdapter:
             return self.cursor.fetchall()
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         with self.transaction():
@@ -2432,7 +2430,7 @@ class EngineAdapter:
         raise NotImplementedError(f"Unable to convert {type(query_or_df)} to Pandas")
 
     def fetchdf(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         import pandas as pd
@@ -2445,7 +2443,7 @@ class EngineAdapter:
         return df
 
     def fetch_pyspark_df(
-        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+        self, query: t.Union[exp.Expr, str], quote_identifiers: bool = False
     ) -> PySparkDataFrame:
         """Fetches a PySpark DataFrame from the cursor"""
         raise NotImplementedError(f"Engine does not support PySpark DataFrames: {type(self)}")
@@ -2575,7 +2573,7 @@ class EngineAdapter:
 
     def execute(
         self,
-        expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
+        expressions: t.Union[str, exp.Expr, t.Sequence[exp.Expr]],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = True,
         track_rows_processed: bool = False,
@@ -2587,7 +2585,7 @@ class EngineAdapter:
         )
         with self.transaction():
             for e in ensure_list(expressions):
-                if isinstance(e, exp.Expression):
+                if isinstance(e, exp.Expr):
                     self._check_identifier_length(e)
                     sql = self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
                 else:
@@ -2597,7 +2595,7 @@ class EngineAdapter:
 
                 self._log_sql(
                     sql,
-                    expression=e if isinstance(e, exp.Expression) else None,
+                    expression=e if isinstance(e, exp.Expr) else None,
                     quote_identifiers=quote_identifiers,
                 )
                 self._execute(sql, track_rows_processed, **kwargs)
@@ -2610,7 +2608,7 @@ class EngineAdapter:
     def _log_sql(
         self,
         sql: str,
-        expression: t.Optional[exp.Expression] = None,
+        expression: t.Optional[exp.Expr] = None,
         quote_identifiers: bool = True,
     ) -> None:
         if not logger.isEnabledFor(self._execute_log_level):
@@ -2702,7 +2700,7 @@ class EngineAdapter:
                 self.drop_table(table)
 
     def _table_or_view_properties_to_expressions(
-        self, table_or_view_properties: t.Optional[t.Dict[str, exp.Expression]] = None
+        self, table_or_view_properties: t.Optional[t.Dict[str, exp.Expr]] = None
     ) -> t.List[exp.Property]:
         """Converts model properties (either physical or virtual) to a list of property expressions."""
         if not table_or_view_properties:
@@ -2714,7 +2712,7 @@ class EngineAdapter:
 
     def _build_partitioned_by_exp(
         self,
-        partitioned_by: t.List[exp.Expression],
+        partitioned_by: t.List[exp.Expr],
         *,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -2725,7 +2723,7 @@ class EngineAdapter:
 
     def _build_clustered_by_exp(
         self,
-        clustered_by: t.List[exp.Expression],
+        clustered_by: t.List[exp.Expr],
         **kwargs: t.Any,
     ) -> t.Optional[exp.Cluster]:
         return None
@@ -2735,17 +2733,17 @@ class EngineAdapter:
         catalog_name: t.Optional[str] = None,
         table_format: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
-        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expr]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[exp.Expression]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        clustered_by: t.Optional[t.List[exp.Expr]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
-        properties: t.List[exp.Expression] = []
+        properties: t.List[exp.Expr] = []
 
         if table_description:
             properties.append(
@@ -2764,12 +2762,12 @@ class EngineAdapter:
 
     def _build_view_properties_exp(
         self,
-        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expr]] = None,
         table_description: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
-        properties: t.List[exp.Expression] = []
+        properties: t.List[exp.Expr] = []
 
         if table_description:
             properties.append(
@@ -2791,7 +2789,7 @@ class EngineAdapter:
     def _truncate_column_comment(self, comment: str) -> str:
         return self._truncate_comment(comment, self.MAX_COLUMN_COMMENT_LENGTH)
 
-    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
+    def _to_sql(self, expression: exp.Expr, quote: bool = True, **kwargs: t.Any) -> str:
         """
         Converts an expression to a SQL string. Has a set of default kwargs to apply, and then default
         kwargs defined for the given dialect, and then kwargs provided by the user when defining the engine
@@ -2852,7 +2850,7 @@ class EngineAdapter:
         self,
         query: Query,
         target_columns_to_types: t.Dict[str, exp.DataType],
-        where: t.Optional[exp.Expression] = None,
+        where: t.Optional[exp.Expr] = None,
         coerce_types: bool = False,
     ) -> Query:
         if not isinstance(query, exp.Query) or (
@@ -2863,7 +2861,7 @@ class EngineAdapter:
         query = t.cast(exp.Query, query.copy())
         with_ = query.args.pop("with_", None)
 
-        select_exprs: t.List[exp.Expression] = [
+        select_exprs: t.List[exp.Expr] = [
             exp.column(c, quoted=True) for c in target_columns_to_types
         ]
         if coerce_types and columns_to_types_all_known(target_columns_to_types):
@@ -2914,7 +2912,7 @@ class EngineAdapter:
         target_table: TableName,
         source_table: QueryOrDF,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        key: t.Sequence[exp.Expression],
+        key: t.Sequence[exp.Expr],
         is_unique_key: bool,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
@@ -3055,7 +3053,7 @@ class EngineAdapter:
             )
         )
 
-    def _check_identifier_length(self, expression: exp.Expression) -> None:
+    def _check_identifier_length(self, expression: exp.Expr) -> None:
         if self.MAX_IDENTIFIER_LENGTH is None or not isinstance(expression, exp.DDL):
             return
 
@@ -3147,7 +3145,7 @@ class EngineAdapter:
         table: exp.Table,
         grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         """Returns SQLGlot Grant expressions to apply grants to a table.
 
         Args:
@@ -3170,7 +3168,7 @@ class EngineAdapter:
         table: exp.Table,
         grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[exp.Expr]:
         """Returns SQLGlot expressions to revoke grants from a table.
 
         Args:

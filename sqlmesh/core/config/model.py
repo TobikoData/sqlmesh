@@ -71,9 +71,9 @@ class ModelDefaultsConfig(BaseConfig):
     enabled: t.Optional[t.Union[str, bool]] = None
     formatting: t.Optional[t.Union[str, bool]] = None
     batch_concurrency: t.Optional[int] = None
-    pre_statements: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
-    post_statements: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
-    on_virtual_update: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
+    pre_statements: t.Optional[t.List[t.Union[str, exp.Expr]]] = None
+    post_statements: t.Optional[t.List[t.Union[str, exp.Expr]]] = None
+    on_virtual_update: t.Optional[t.List[t.Union[str, exp.Expr]]] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator

@@ -141,8 +141,8 @@ class ExpiredBatchRange(PydanticModel):
         cls,
         columns: t.List[exp.Column],
         values: t.List[t.Union[exp.Literal, exp.Neg]],
-        operator: t.Type[exp.Expression],
-    ) -> exp.Expression:
+        operator: t.Type[exp.Expr],
+    ) -> exp.Condition:
         """Generate expanded tuple comparison that works across all SQL engines.
 
         Converts tuple comparisons like (a, b, c) OP (x, y, z) into an expanded form
@@ -177,8 +177,8 @@ class ExpiredBatchRange(PydanticModel):
         # e.g., (a, b) <= (x, y) becomes: a < x OR (a = x AND b <= y)
         # For < and >, we use the strict operator throughout
         # e.g., (a, b) > (x, y) becomes: a > x OR (a = x AND b > x)
-        strict_operator: t.Type[exp.Expression]
-        final_operator: t.Type[exp.Expression]
+        strict_operator: t.Type[exp.Expr]
+        final_operator: t.Type[exp.Expr]
 
         if operator in (exp.LTE, exp.GTE):
             # For inclusive operators (<=, >=), use strict form for intermediate columns
@@ -190,7 +190,7 @@ class ExpiredBatchRange(PydanticModel):
             strict_operator = operator
             final_operator = operator
 
-        conditions: t.List[exp.Expression] = []
+        conditions: t.List[exp.Expr] = []
         for i in range(len(columns)):
             # Build equality conditions for all columns before current
             equality_conditions = [exp.EQ(this=columns[j], expression=values[j]) for j in range(i)]
@@ -204,10 +204,10 @@ class ExpiredBatchRange(PydanticModel):
             else:
                 conditions.append(comparison_condition)
 
-        return exp.or_(*conditions) if len(conditions) > 1 else conditions[0]
+        return exp.or_(*conditions) if len(conditions) > 1 else t.cast(exp.Condition, conditions[0])
 
     @property
-    def where_filter(self) -> exp.Expression:
+    def where_filter(self) -> exp.Condition:
         # Use expanded tuple comparisons for cross-engine compatibility
         # Native tuple comparisons like (a, b) > (x, y) don't work reliably across all SQL engines
         columns = [
@@ -223,7 +223,7 @@ class ExpiredBatchRange(PydanticModel):
 
         start_condition = self._expanded_tuple_comparison(columns, start_values, exp.GT)
 
-        range_filter: exp.Expression
+        range_filter: exp.Condition
         if isinstance(self.end, RowBoundary):
             end_values = [
                 exp.Literal.number(self.end.updated_ts),

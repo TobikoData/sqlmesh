@@ -249,7 +249,7 @@ class SnapshotEvaluator:
         query_or_df = next(queries_or_dfs)
         if isinstance(query_or_df, pd.DataFrame):
             return query_or_df.head(limit)
-        if not isinstance(query_or_df, exp.Expression):
+        if not isinstance(query_or_df, exp.Expr):
             # We assume that if this branch is reached, `query_or_df` is a pyspark / snowpark / bigframe dataframe,
             # so we use `limit` instead of `head` to get back a dataframe instead of List[Row]
             # https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.DataFrame.head.html#pyspark.sql.DataFrame.head
@@ -714,7 +714,7 @@ class SnapshotEvaluator:
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
         target_table_name = snapshot.table_name(is_deployable=is_snapshot_deployable)
-        # https://github.com/TobikoData/sqlmesh/issues/2609
+        # https://github.com/SQLMesh/sqlmesh/issues/2609
         # If there are no existing intervals yet; only consider this a first insert for the first snapshot in the batch
         if target_table_exists is None:
             target_table_exists = adapter.table_exists(target_table_name)
@@ -940,7 +940,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         render_kwargs: t.Dict[str, t.Any],
         create_render_kwargs: t.Dict[str, t.Any],
-        rendered_physical_properties: t.Dict[str, exp.Expression],
+        rendered_physical_properties: t.Dict[str, exp.Expr],
         deployability_index: DeployabilityIndex,
         target_table_name: str,
         is_first_insert: bool,
@@ -1069,7 +1069,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
         render_kwargs: t.Dict[str, t.Any],
-        rendered_physical_properties: t.Dict[str, exp.Expression],
+        rendered_physical_properties: t.Dict[str, exp.Expr],
         allow_destructive_snapshots: t.Set[str],
         allow_additive_snapshots: t.Set[str],
         run_pre_post_statements: bool = False,
@@ -1186,7 +1186,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
         render_kwargs: t.Dict[str, t.Any],
-        rendered_physical_properties: t.Dict[str, exp.Expression],
+        rendered_physical_properties: t.Dict[str, exp.Expr],
         allow_destructive_snapshots: t.Set[str],
         allow_additive_snapshots: t.Set[str],
         run_pre_post_statements: bool = False,
@@ -1472,7 +1472,7 @@ class SnapshotEvaluator:
         is_table_deployable: bool,
         deployability_index: DeployabilityIndex,
         create_render_kwargs: t.Dict[str, t.Any],
-        rendered_physical_properties: t.Dict[str, exp.Expression],
+        rendered_physical_properties: t.Dict[str, exp.Expr],
         dry_run: bool,
         run_pre_post_statements: bool = True,
         skip_grants: bool = False,
@@ -3106,7 +3106,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 query=model.render_query_or_raise(**render_kwargs),
                 target_columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
-                clustered_by=model.clustered_by,
+                clustered_by=model.clustered_by,  # type: ignore[arg-type]
                 table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
@@ -3151,7 +3151,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 query=query_or_df,  # type: ignore
                 target_columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
-                clustered_by=model.clustered_by,
+                clustered_by=model.clustered_by,  # type: ignore[arg-type]
                 table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,

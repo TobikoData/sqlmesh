@@ -23,6 +23,7 @@ from sqlmesh.utils.metaprogramming import (
     Executable,
     ExecutableKind,
     _dict_sort,
+    _resolve_import_module,
     build_env,
     func_globals,
     normalize_source,
@@ -49,7 +50,7 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = r"""  File ".*?.tests.utils.test_metaprogramming\.py", line 48, in test_print_exception
+    expected_message = r"""  File ".*?.tests.utils.test_metaprogramming\.py", line 49, in test_print_exception
     eval\("test_fun\(\)", env\).*
 
   File '/test/path.py' \(or imported file\), line 2, in test_fun
@@ -638,3 +639,18 @@ def test_dict_sort_executable_integration():
     # non-deterministic repr should not change the payload
     exec3 = Executable.value(variables1)
     assert exec3.payload == "{'env': 'dev', 'debug': True, 'timeout': 30}"
+
+
+def test_resolve_import_module():
+    """Test that _resolve_import_module finds the shallowest public re-exporting module."""
+    # to_table lives in sqlglot.expressions.builders but is re-exported from sqlglot.expressions
+    assert _resolve_import_module(to_table, "to_table") == "sqlglot.expressions"
+
+    # Objects whose __module__ is already the public module should be returned as-is
+    assert _resolve_import_module(exp.Column, "Column") == "sqlglot.expressions"
+
+    # Objects not re-exported by any parent should return the original module
+    class _Local:
+        __module__ = "some.deep.internal.module"
+
+    assert _resolve_import_module(_Local, "_Local") == "some.deep.internal.module"
