@@ -1158,11 +1158,7 @@ class _Model(ModelMeta, frozen=True):
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
             metadata.append(audit_name)
-            if audit_name in BUILT_IN_AUDITS:
-                for arg_name, arg_value in audit_args.items():
-                    metadata.append(arg_name)
-                    metadata.append(gen(arg_value))
-            else:
+            if audit_name not in BUILT_IN_AUDITS:
                 audit = self.audit_definitions[audit_name]
                 metadata.extend(
                     [
@@ -1172,6 +1168,9 @@ class _Model(ModelMeta, frozen=True):
                         str(audit.blocking),
                     ]
                 )
+            for arg_name, arg_value in audit_args.items():
+                metadata.append(arg_name)
+                metadata.append(gen(arg_value))
 
         return metadata
 
