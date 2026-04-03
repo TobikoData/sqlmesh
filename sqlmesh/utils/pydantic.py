@@ -265,9 +265,10 @@ def _get_fields(
     elif isinstance(v, exp.Expr):
         expressions = [v]
     else:
+        items: t.List[t.Any] = ensure_list(v)
         expressions = [
             parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry  # type: ignore[misc]
-            for entry in ensure_list(v)
+            for entry in items
         ]
 
     results = []
