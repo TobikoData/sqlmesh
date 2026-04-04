@@ -3,6 +3,8 @@
 </p>
 <p align="center">SQLMesh is a project of the <a href="https://www.linuxfoundation.org/">Linux Foundation</a>.</p>
 
+*English* | [简体中文](./docs/readme/README_zh-cn.md)
+
 SQLMesh is a next-generation data transformation framework designed to ship data quickly, efficiently, and without error. Data teams can run and deploy data transformations written in SQL or Python with visibility and control at any size.
 
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
