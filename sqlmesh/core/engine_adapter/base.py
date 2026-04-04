@@ -295,8 +295,8 @@ class EngineAdapter:
                         )
                         for c in target_columns_to_types
                     ]
-                    query_factory = (
-                        lambda: exp.Select()
+                    query_factory = lambda: (
+                        exp.Select()
                         .select(*select_columns)
                         .from_(query_or_df.subquery("select_source_columns"))
                     )
@@ -1077,10 +1077,11 @@ class EngineAdapter:
             raise NotImplementedError(f"Engine does not support cloning: {type(self)}")
 
         kwargs.pop("rendered_physical_properties", None)
+        table_kind = kwargs.pop("table_kind", "TABLE")
         self.execute(
             exp.Create(
                 this=exp.to_table(target_table_name),
-                kind="TABLE",
+                kind=table_kind,
                 replace=replace,
                 exists=exists,
                 clone=exp.Clone(
