@@ -2273,6 +2273,44 @@ def test_plan_selector_expression_no_match(sushi_context: Context) -> None:
         sushi_context.plan("prod", restate_models=["*missing*"])
 
 
+def test_plan_select_model_deleted_model(sushi_context: Context) -> None:
+    """Selecting a model that has been deleted locally but still exists in the deployed
+    environment should produce a valid plan with the deletion, not raise PlanError."""
+    # Pick a leaf model that can be safely deleted without breaking other models' rendering.
+    model_name = "sushi.top_waiters"
+    snapshot = sushi_context.get_snapshot(model_name)
+    assert snapshot is not None
+
+    # Delete the model file from disk.
+    model = sushi_context.get_model(model_name)
+    assert model._path.exists()
+    model._path.unlink()
+
+    # Reload the context so it no longer knows about the deleted model.
+    sushi_context.load()
+    assert model_name not in [m for m in sushi_context.models]
+
+    # Planning with select_models for the deleted model should succeed (not raise PlanError).
+    plan = sushi_context.plan("prod", select_models=[model_name], no_prompts=True)
+    assert plan is not None
+
+    # The deleted model should appear in removed_snapshots.
+    removed_names = {s.name for s in plan.context_diff.removed_snapshots.values()}
+    assert snapshot.name in removed_names
+
+
+def test_plan_select_model_deleted_model_still_rejects_nonexistent(
+    sushi_context: Context,
+) -> None:
+    """A model that neither exists locally nor in the deployed environment should still
+    raise PlanError."""
+    with pytest.raises(
+        PlanError,
+        match="Selector did not return any models. Please check your model selection and try again.",
+    ):
+        sushi_context.plan("prod", select_models=["sushi.completely_nonexistent"])
+
+
 def test_plan_on_virtual_update_this_model_in_macro(tmp_path: pathlib.Path):
     models_dir = pathlib.Path("models")
     macros_dir = pathlib.Path("macros")
